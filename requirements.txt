@@ -1,0 +1,10 @@
+auto-gptq
+optimum
+bitsandbytes
+accelerate
+transformers
+peft
+trl
+pyaudio
+SpeechRecognition
+#torch
