@@ -66,7 +66,6 @@ The GUI is good for basic testing, but since we're integrating this to an LLM it
 (Optional, only in case you want to do something specific):
 - Navigate to the `fast_inference_` branch: https://github.com/RVC-Boss/GPT-SoVITS/tree/fast_inference_
 - Download the zip
-- From the official guide's zip, copy the `ffmpeg.exe` and `ffprobe.exe` files.
 - navigate to `GPT-SoVITS-fast_inference_\GPT_SoVITS\pretrained_models` add the following files/folders (can be found in equivalent folder in `GPT-SoVITS-beta0217`)
 
 ```
@@ -108,7 +107,7 @@ http://127.0.0.1:9880/set_sovits_weights?weights_path=GPT_SoVITS/pretrained_mode
 :information_source: While this is fine to do, I recommend using TTS.py or brain.py
 Do inference:
 ```
-http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the credit people give it?&text_lang=en&ref_audio_path=../voiceAI/dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav&prompt_lang=en&prompt_text=But truly, is a simple piece of paper worth the credit people give it?&text_split_method=cut5&batch_size=1&media_type=wav&streaming_mode=true&top_k=5&top_p=1&temperature=1
+http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the credit people give it?&text_lang=en&ref_audio_path=../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav&prompt_lang=en&prompt_text=But truly, is a simple piece of paper worth the credit people give it?&text_split_method=cut5&batch_size=1&media_type=wav&streaming_mode=true&top_k=5&top_p=1&temperature=1
 ```
 
 # Acknowledgements
