@@ -8,7 +8,7 @@ def STT():
     while True:
         with sr.Microphone() as source:
             print("Speak something...")
-            audio_data = recognizer.listen(source, phrase_time_limit=7)
+            audio_data = recognizer.listen(source)
 
         # Perform speech recognition using Google Web Speech API
         try:
