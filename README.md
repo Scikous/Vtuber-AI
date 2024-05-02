@@ -66,6 +66,7 @@ The GUI is good for basic testing, but since we're integrating this to an LLM it
 (Optional, only in case you want to do something specific):
 - Navigate to the `fast_inference_` branch: https://github.com/RVC-Boss/GPT-SoVITS/tree/fast_inference_
 - Download the zip
+- Copy the `ffmpeg` and `ffprobe` files from `GPT-SoVITS-beta0217`
 - navigate to `GPT-SoVITS-fast_inference_\GPT_SoVITS\pretrained_models` add the following files/folders (can be found in equivalent folder in `GPT-SoVITS-beta0217`)
 
 ```
