@@ -2,16 +2,26 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, DataColla
 import datasets
 from peft import PeftModel, PeftConfig
 import re
-
+import numpy as np
 from transformers import AutoModelForCausalLM
+
+def get_rand_token_len(min_tokens=15, max_tokens=70):
+    tokens = np.arange(min_tokens, max_tokens)
+    token_weights = np.linspace(start=1.0, stop=0.05, num=max_tokens-min_tokens)
+    token_weights /= np.sum(token_weights)
+    token_len = np.random.choice(tokens, p=token_weights)
+    return token_len
 
 def dialogue_generator(model, tokenizer, comments, prompt_template, test_model="unnamed"):
     outputs = []
     #pipe = pipeline(task="text-generation", model=model, tokenizer=tokenizer, max_length=200, num_return_sequences=1)
+    max_new_tokens = get_rand_token_len()
+    print(max_new_tokens)
     for comment in comments:
         prompt = prompt_template(comment)
         inputs = tokenizer(prompt, return_tensors="pt")
-        results = model.generate(input_ids=inputs["input_ids"].to("cuda"), max_new_tokens=78)
+
+        results = model.generate(input_ids=inputs["input_ids"].to("cuda"), max_new_tokens=max_new_tokens)
         output = tokenizer.batch_decode(results)[0]
         #result = pipe(prompt)
         #print(output)
@@ -50,4 +60,5 @@ def character_reply_cleaner(reply):
     reply = match.group(0).strip() if match else "Womp Womp"
     print(reply)
     return reply
+
     
