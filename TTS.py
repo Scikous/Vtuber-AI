@@ -3,7 +3,8 @@ from gradio_client import Client
 import json, requests
 import sounddevice as sd
 import winsound
-
+import pyaudio
+from pynput import keyboard
 
 def send_tts_request(text="Super Elite Magnificent Agent John Smith!", text_lang="en",
                         ref_audio_path="../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav",
@@ -62,12 +63,58 @@ def send_tts_request(text="Super Elite Magnificent Agent John Smith!", text_lang
     url = "http://127.0.0.1:9880/tts"
 
     response = requests.post(url, json=input_data) #response will be a .wav type of bytes
-    winsound.PlaySound(response.content, winsound.SND_MEMORY) 
-    with open("audio_response/output.wav", "wb") as f:
-        f.write( response.content)
-    return response
+    # print(type(response.content))
+    # for cont in response.content:
+    #     print(cont)
+    #     winsound.PlaySound(cont, winsound.SND_MEMORY) 
+    #     break
+    #winsound.PlaySound(response.content, winsound.SND_MEMORY) 
+
+    # with open("audio_response/output.wav", "wb") as f:
+    #     f.write( response.content)
+    audio_playback(response.content)
 
 
+def audio_playback(audio_data):
+    paused = False
+    def on_press(key):
+        nonlocal paused  # Modify the 'paused' variable from the nested function
+        if key == keyboard.Key.f3:
+            paused = not paused
+
+    # Create a keyboard listener
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+    stop_requested = False
+
+    # Open an audio stream using pyaudio
+    p = pyaudio.PyAudio()
+    stream = p.open(format=pyaudio.paInt16,  # Assuming 16-bit signed integer PCM
+                    channels=1,               # Assuming mono audio
+                    rate=32000,               # Example framerate (replace with actual value)
+                    output=True)
+
+    # Write audio data to the stream in chunks
+    while not stop_requested:
+        if paused:
+            continue
+        if len(audio_data )== 0:
+            stop_requested = True
+        # Check for stop request (implementation depends on your program)
+        # ... (e.g., user input, flag set elsewhere)
+
+        # Write a chunk of audio data to the stream
+        data = audio_data[:4096]  # Write a buffer of 4096 bytes (adjust based on performance)
+        stream.write(data)
+        # Remove processed data from audio_data to avoid infinite loop
+        audio_data = audio_data[len(data):]
+
+    # Close the audio stream and PyAudio
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+    
 if __name__ == "__main__":
     # Example usage (replace with your Gradio interface URL)
     response = send_tts_request()

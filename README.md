@@ -18,7 +18,7 @@ Create env (the last `venv` is the folder name/path where the venv will be creat
 
 Activate env:
 ```
-venv\Scripts\activate.bat
+venv/Scripts/activate.bat
 ```
 
 Deactivate env: ```deactivate```
@@ -114,6 +114,7 @@ http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the c
 # Acknowledgements
 > I used a mix of my own and other people's code for the LLM training and evaluation. I can't remember who the people are, sorry. I would cite otherwise.
 
-This project uses the following tools:
+This project uses the following:
 
 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS/tree/main)
+[CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
