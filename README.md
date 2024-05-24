@@ -1,11 +1,43 @@
 # Vtuber-AI
-This project is meant to give a good starting point for others to create their own custom AI Vtubers (technically won't have to be a Vtuber). 
+The aim of this project is both to give a good starting point for anyone to create their own custom AI Vtubers (technically won't have to be a Vtuber), and be something fun for me to build and potentially have my work live on and be incorporated into numerous other projects for a long time to come.
 
-# Prompt Style
-> Dataset style is in LLM training section (WIP)
-```
-<|im_start|>system: character behaviour <|im_end|> <|im_start|>context: information about current situation (previous dialogue or description of situation) <|im_end|> <|im_start|>user: Question or Instruction <|im_end|> <|im_start|>assistant: Model Answer
-```
+# Features
+* Fine-tune an LLM
+* Train and use a custom voice model for TTS (see acknowledgements)
+* Speak to your LLM using STT (see acknowledgements)
+
+## Todo List
+  **Misc:**
+  - [ ] Refractor files, move LLM related files to its own directory
+  - [ ] Create a proper requirements.txt
+  - [ ] Create a function to create a dataset for LLM training from a .csv file
+  - [ ] modify train.py to either not use list of model names or to make it a separate function
+  - [ ] Improve README guide
+  - [ ] Write research.pdf
+  - [ ] Change character sheet to be a .json type of file
+  - [ ] Change LLM inference question sheet to be a .json type of file
+  - [ ] Create and publish proper custom LLM model to HuggingFace
+  - [ ] Create and publish proper custom voice model somewhere
+
+  **Features:**
+  - [ ] Send audio data to Discord or other, so anyone in call can hear
+  - [ ] Support for receiving and responding to YouTube live chat messages
+  - [ ] Support for receiving and responding to Twitch live chat messages
+  - [ ] Support for receiving and responding to Kick live chat messages
+  - [ ] Boolean for automatically stopping the model from speaking when user speaks at the same time
+  - [ ] On screen subtitles for OBS
+  - [ ] As LLM generates text, receive it and use TTS to speak it aloud for potentially better real-time conversation
+  - [ ] Vision capabilities, see what is on screen and commentate on it
+  - [ ] Gaming capabilities, play different types of games
+  - [ ] Vtuber model capabilities, movement, expressions and lipsync, etc
+  - [ ] RAG for enhanced conversational cohesion
+
+  **Unsure Features:**
+  - [ ] Drawing capability?
+  - [ ] Singing capability?
+  - [ ] Vector database for improved RAG?
+  - [ ] Different/Custom STT?
+
 # Virtual Environments
 The virtual environment simply helps to avoid package conflicts. Do note that this will take more space in the storage as each environment is its own.
 
@@ -23,6 +55,44 @@ venv/Scripts/activate.bat
 
 Deactivate env: ```deactivate```
 Then just delete the venv folder
+
+# Large Language Model (LLM)
+## Prompt Style
+
+>:information_source: This is the prompt styling for inference
+
+```
+<|im_start|>system <character behaviour> <|im_end|> <|im_start|>context <information about current situation (previous dialogue or description of situation)> <|im_end|> <|im_start|>user <Question or Instruction> <|im_end|> <|im_start|>assistant <Model Answer>
+```
+
+## Dataset preparation
+For the WIP dataset creator, the dataset will be expected to be in a .csv file format
+
+
+>:information_source: The following are examples for the dataset formatting (will be the end result of dataset creator later on as well)
+```
+<|im_start|>system assistant is a cocky snarky bastard<|im_end|><|im_start|>context assistant is at a coffee shop deciding which coffee to order.<|im_end|><|im_start|>user what are you doing?<|im_end|> <|im_start|>assistant Edging hard<|im_end|>
+```
+
+```
+<|im_start|>system assistant is a cocky snarky bastard<|im_end|><|im_start|>context assistant is at a coffee shop deciding which coffee to order. user: what are you doing here?<|im_end|><|im_start|>user<|im_end|> <|im_start|>assistant Hmm, perhaps a coffee<|im_end|>
+```
+Effectively a **System-Context-User-Assistant** format is being followed (**SCUA** referred to as **SICUEAC** in research.pdf [WIP]).
+
+## Training (Fine-tuning)
+> :warning: It is assumed that the model name and .txt file (containing the data in expected format) have the exact same names.
+> Example: Model name = johnsmith, .txt = johnsmith.txt
+
+*Fine-tuning* is the accurate term, however, I believe *training* is more universally understood.
+
+In the `train.py` file, for remove the other names in **model_names** variable and add your model name. If need be, the base model can be changed in the **model_preprocess** function, inside of the  **model_name** variable.
+
+Now, running `train.py` should train the model. I'm unsure if this works incase the base model is not a **quantized** model. Also, depending on your hardware, you may need to change some of the hyper parameters. 
+
+## Inference
+:exclamation: HEAVY WIP
+
+eval.py with modifications can be used for the inference, this is planned to change very soon.
 
 # Voice Model
 ## Training
@@ -118,3 +188,4 @@ This project uses the following:
 
 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS/tree/main)
 [CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
+[Speech_Recognition](https://github.com/Uberi/speech_recognition)
