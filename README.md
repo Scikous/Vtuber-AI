@@ -1,6 +1,28 @@
 # Vtuber-AI
 The aim of this project is both to give a good starting point for anyone to create their own custom AI Vtubers (technically won't have to be a Vtuber), and be something fun for me to build and potentially have my work live on and be incorporated into numerous other projects for a long time to come.
 
+## Table of Contents
+
+* [Vtuber-AI](#vtuber-ai)
+    * [Features](#features)
+    * [Todo List](#todo-list)
+* [Virtual Environments](#virtual-environments)
+* [Large Language Model (LLM)](#large-language-model-llm)
+    * [Prompt Style](#prompt-style)
+    * [Dataset preparation](#dataset-preparation)
+    * [Training (Fine-tuning)](#training-fine-tuning)
+    * [Inference](#inference)
+* [Voice Model](#voice-model)
+    * [Training](#training)
+        * [Official Guide](#official-guide)
+        * [Unofficial Guide (Windows Only)](#unofficial-guide-windows-only)
+            * [Dataset Creation](#dataset-creation)
+            * [Preprocessing Audio](#preprocessing-audio)
+            * [Audio Labelling](#audio-labelling)
+    * [Training](#training-1)
+    * [Inference](#inference-1)
+* [Acknowledgements](#acknowledgements)
+
 # Features
 * Fine-tune an LLM
 * Train and use a custom voice model for TTS (see acknowledgements)
@@ -184,8 +206,8 @@ http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the c
 # Acknowledgements
 > I used a mix of my own and other people's code for the LLM training and evaluation. I can't remember who the people are, sorry. I would cite otherwise.
 
-This project uses the following:
+This project makes use of the following projects:
 
-[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS/tree/main)
-[CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
-[Speech_Recognition](https://github.com/Uberi/speech_recognition)
+* [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS/tree/main)
+* [CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
+* [Speech_Recognition](https://github.com/Uberi/speech_recognition)
