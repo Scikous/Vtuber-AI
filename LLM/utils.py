@@ -3,7 +3,6 @@ import datasets
 from peft import PeftModel, PeftConfig
 import re
 import numpy as np
-from transformers import AutoModelForCausalLM
 
 def get_rand_token_len(min_tokens=15, max_tokens=70):
     tokens = np.arange(min_tokens, max_tokens)
@@ -12,29 +11,18 @@ def get_rand_token_len(min_tokens=15, max_tokens=70):
     token_len = np.random.choice(tokens, p=token_weights)
     return token_len
 
-def dialogue_generator(model, tokenizer, comments, prompt_template, test_model="unnamed"):
-    outputs = []
+def dialogue_generator(model, tokenizer, comment, prompt_template):
     #pipe = pipeline(task="text-generation", model=model, tokenizer=tokenizer, max_length=200, num_return_sequences=1)
     max_new_tokens = get_rand_token_len()
     print(max_new_tokens)
-    for comment in comments:
-        prompt = prompt_template(comment)
-        inputs = tokenizer(prompt, return_tensors="pt")
+    prompt = prompt_template(comment)
+    inputs = tokenizer(prompt, return_tensors="pt")
 
-        results = model.generate(input_ids=inputs["input_ids"].to("cuda"), max_new_tokens=max_new_tokens)
-        output = tokenizer.batch_decode(results)[0]
-        #result = pipe(prompt)
-        #print(output)
-        outputs.append(output)#result[0]['generated_text'])
-
-
-        #print(result[0]['generated_text'], "\n"*2, "#"*80)
-   # print(outputs[0])
-    # with open(f"{test_model}.txt", "w", encoding="utf-8") as f:
-    #     for line in outputs:
-    #         f.write(line)
+    results = model.generate(input_ids=inputs["input_ids"].to("cuda"), max_new_tokens=max_new_tokens)
+    output = tokenizer.batch_decode(results)[0]
+    #result = pipe(prompt)
     print("Text generation finished")
-    return outputs
+    return output
 
 def model_loader(base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name=""):
     model = AutoModelForCausalLM.from_pretrained(base_model_name,
@@ -54,6 +42,7 @@ def model_loader(base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", 
     return model, tokenizer
 
 def character_reply_cleaner(reply):
+    print(reply)
     pattern = r"(?<=<\|im_start\|> John\n)\s*(.+?)(?=\<\/|\<|im_end\||$)"
 
     match = re.search(pattern, reply, re.DOTALL)

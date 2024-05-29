@@ -40,9 +40,9 @@ def STT(callback):
         text = ""
         with sr.Microphone() as source:
             print("Speak something...")
-            recognizer.energy_threshold = 2200
+            recognizer.energy_threshold = 2800
             #print("Listening...")
-            audio_data = recognizer.listen(source, timeout=5)
+            audio_data = recognizer.listen(source)
             #print("Processing...")
 
         try:
@@ -58,7 +58,7 @@ def STT(callback):
 
     recognize_speech()
 
-    #threading.Thread(target=recognize_speech).start()
+    #threading.Thread(target=recognize_speech, daemon=True).start()
 
 if __name__ == "__main__":
     def print_callback(text):
