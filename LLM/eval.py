@@ -1,9 +1,30 @@
 # The full `train` s2lit and the full `test` split as two distinct datasets.
 # Split the dataset
+#deal with later
 
-
-from utils import model_loader, dialogue_generator
+from utils import model_loader
 import prompt_templates as pt
+
+def dialogue_generator(model, tokenizer, comments, prompt_template, test_model="unnamed"):
+    outputs = []
+    #pipe = pipeline(task="text-generation", model=model, tokenizer=tokenizer, max_length=200, num_return_sequences=1)
+    for comment in comments:
+        prompt = prompt_template(comment)
+        inputs = tokenizer(prompt, return_tensors="pt")
+        results = model.generate(input_ids=inputs["input_ids"].to("cuda"), max_new_tokens=120)
+        output = tokenizer.batch_decode(results)[0]
+        #result = pipe(prompt)
+        #print(output)
+        outputs.append(output)#result[0]['generated_text'])
+
+
+#        print(result[0]['generated_text'], "\n"*2, "#"*80)
+ #  print(outputs[0])
+    with open(f"{test_model}.txt", "w", encoding="utf-8") as f:
+        for line in outputs:
+            f.write(line)
+    print("Text generation finished")
+    return outputs
 
 
 model_names = [#"unnamedSICUA", "unnamedSICUCA","unnamedSICUEA",
@@ -73,7 +94,7 @@ with open("characters/character.txt", "r") as f:
     character_info = f.readline()
 instructions_string = f"""{character_info}"""
 print(instructions_string)
-#prompt_template = lambda comment: f'''[INST] {instructions_string} \n{comment} \n[/INST]'''
+
 comments = []
 
 try:
@@ -87,16 +108,6 @@ except OSError:
 print(comments)
 prompt_template= prompt_template_SIUA
 
-# lambda dialogue: f'''
-# <|im_start|>user
-# {dialogue}<|im_end|>
-# <|im_start|>John
-# '''
-# prompt_template= lambda dialogue: f'''
-# {instructions_string}
-# USER: {dialogue}
-# John:
-# '''
 base_models = ["TheBloke/Mistral-7B-Instruct-v0.2-GPTQ","TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"]
 base_model = base_models[1]
 

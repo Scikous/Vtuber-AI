@@ -1,8 +1,6 @@
 
 from gradio_client import Client
 import json, requests
-import sounddevice as sd
-import winsound
 import pyaudio
 from pynput import keyboard
 

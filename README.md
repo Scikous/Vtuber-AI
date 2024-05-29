@@ -6,7 +6,8 @@ The aim of this project is both to give a good starting point for anyone to crea
 * [Vtuber-AI](#vtuber-ai)
     * [Features](#features)
     * [Todo List](#todo-list)
-* [Virtual Environments](#virtual-environments)
+* [Setup](#setup)
+    * [Virtual Environments](#virtual-environments)
 * [Large Language Model (LLM)](#large-language-model-llm)
     * [Prompt Style](#prompt-style)
     * [Dataset preparation](#dataset-preparation)
@@ -30,10 +31,10 @@ The aim of this project is both to give a good starting point for anyone to crea
 
 ## Todo List
   **Misc:**
-  - [ ] Refractor files, move LLM related files to its own directory
-  - [ ] Create a proper requirements.txt
+  - [X] Refractor files, move LLM related files to its own directory
+  - [X] Create a proper requirements.txt
   - [ ] Create a function to create a dataset for LLM training from a .csv file
-  - [ ] modify train.py to either not use list of model names or to make it a separate function
+  - [X] modify train.py to either not use list of model names or to make it a separate function
   - [ ] Improve README guide
   - [ ] Write research.pdf
   - [ ] Change character sheet to be a .json type of file
@@ -53,14 +54,22 @@ The aim of this project is both to give a good starting point for anyone to crea
   - [ ] Gaming capabilities, play different types of games
   - [ ] Vtuber model capabilities, movement, expressions and lipsync, etc
   - [ ] RAG for enhanced conversational cohesion
+  - [ ] Recognition of separate speakers
 
   **Unsure Features:**
   - [ ] Drawing capability?
   - [ ] Singing capability?
   - [ ] Vector database for improved RAG?
   - [ ] Different/Custom STT?
+# Setup
+This is developed and tested on Python 3.11.8.
 
-# Virtual Environments
+In the root directory, install everything in the requirements.txt. All of the necessary packages are included in this file, no need to install anything anywhere else. (I highly suggest setting up a virtual environment up first).
+```
+pip install requirements.txt
+```
+
+## Virtual Environments
 The virtual environment simply helps to avoid package conflicts. Do note that this will take more space in the storage as each environment is its own.
 
 :information_source: Note that this is for CMD
@@ -72,10 +81,13 @@ Create env (the last `venv` is the folder name/path where the venv will be creat
 
 Activate env:
 ```
-venv/Scripts/activate.bat
+venv\Scripts\activate
 ```
 
-Deactivate env: ```deactivate```
+Deactivate env:
+```
+ deactivate
+```
 Then just delete the venv folder
 
 # Large Language Model (LLM)
@@ -125,12 +137,6 @@ user guide direct link (can change at any time, I'm not the creator nor maintain
 
 ### Unofficial Guide (Windows Only):
 Mostly the same info as in the official.
-
-Install the requirements
-```
-pip install -r requirements.txt
-```
-I needed to change `numba==0.56.4` to just `numba`.
 
 Place the `GPT-SoVITS-beta0217` into the voiceAI directory and then navigate inside of `GPT-SoVITS-beta0217` and run the `go-webui.bat`. Finally, navigate to the given HTTP address on a web browser.
 
