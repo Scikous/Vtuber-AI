@@ -66,7 +66,7 @@ This is developed and tested on Python 3.11.8.
 
 In the root directory, install everything in the requirements.txt. All of the necessary packages are included in this file, no need to install anything anywhere else. (I highly suggest setting up a virtual environment up first).
 ```
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Virtual Environments
