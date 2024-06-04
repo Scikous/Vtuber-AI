@@ -33,7 +33,6 @@ The aim of this project is both to give a good starting point for anyone to crea
   **Misc:**
   - [X] Refractor files, move LLM related files to its own directory
   - [X] Create a proper requirements.txt
-  - [ ] Create a function to create a dataset for LLM training from a .csv file
   - [X] modify train.py to either not use list of model names or to make it a separate function
   - [ ] Improve README guide
   - [ ] Write research.pdf
@@ -41,8 +40,15 @@ The aim of this project is both to give a good starting point for anyone to crea
   - [ ] Change LLM inference question sheet to be a .json type of file
   - [ ] Create and publish proper custom LLM model to HuggingFace
   - [ ] Create and publish proper custom voice model somewhere
+  - [ ] remove non-text from generated text (ex. <|im_start|>)
+  - [ ] STT queue should never append empty strings?
+  - [X] remove extra words after '.' '!' '?' and finish generation
+  - [ ] ^ is relatively expensive, look into improvements
+  - [ ] try out numba for potential performance boost
+
 
   **Features:**
+  - [ ] Create a function to create a dataset for LLM training from a .csv file
   - [ ] Send audio data to Discord or other, so anyone in call can hear
   - [ ] Support for receiving and responding to YouTube live chat messages
   - [ ] Support for receiving and responding to Twitch live chat messages
@@ -55,6 +61,7 @@ The aim of this project is both to give a good starting point for anyone to crea
   - [ ] Vtuber model capabilities, movement, expressions and lipsync, etc
   - [ ] RAG for enhanced conversational cohesion
   - [ ] Recognition of separate speakers
+  - [ ] run LLM and TTS on separate threads (benefits?)
 
   **Unsure Features:**
   - [ ] Drawing capability?
@@ -153,7 +160,7 @@ In `0-Fetch dataset` tab, using the `ASR` tool, `Faster Whisper` and language se
 ## Training
 First in the `1A-Dataset formatting` tab, give the model a name.
 
-IMPORTANT: You must only provide the that to the .list file for the `Text labelling file` (ex. `/path/to/test.list`). BUT, you musn't provide the path to the `Audio dataset folder`, otherwise during training you can/will run into `division by zero error`. There's no clear info as to why, I suspect it has to do with the fact that the .list file already contains the paths to the audio files.
+IMPORTANT: You must only provide the path to the `.list` file for the `Text labelling file` field (ex. `/path/to/test.list`). BUT, you musn't provide the path to the `Audio dataset folder`, otherwise during training you can/will run into `division by zero error`. There's no clear info as to why, I suspect it has to do with the fact that the .list file already contains the paths to the audio files.
 
 After this, in the `1B-Fine-tuned training` tab, train both the SoVITS and GPT. So far, I've left everything to default.
 
