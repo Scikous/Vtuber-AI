@@ -1,4 +1,4 @@
-import LLM.utils as utils, os
+import utils, os
 
 hps = utils.get_hparams(stage=2)
 os.environ["CUDA_VISIBLE_DEVICES"] = hps.train.gpu_numbers.replace("-", ",")

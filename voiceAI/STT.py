@@ -1,6 +1,5 @@
 import threading
 import speech_recognition as sr
-
 def STT(callback):
     def recognize_speech():
         recognizer = sr.Recognizer()

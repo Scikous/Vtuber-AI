@@ -36,16 +36,17 @@ def loop_function():
             #logging.debug(f"Speech queue: {speech_queue.queue}")
             comment = speech
             output = dialogue_generator(model, tokenizer, comment, prompt_template.capybaraChatML)
-            clean_reply = character_reply_cleaner(output).lower()
-            send_tts_request(clean_reply)
-            time.sleep(5)
+            print("THEOUTPUT IS", output)
+            #clean_reply = character_reply_cleaner(output).lower()
+            send_tts_request(output)
+            time.sleep(7)
         except ValueError:
             pass
         except Exception as e:
             logging.error(f"Unexpected error: {e}")
 
 if __name__ == "__main__":
-    custom_model = "unnamedSICUACCT"
+    custom_model = "LLM/unnamedSICUACCT"
     model, tokenizer = model_loader(custom_model_name=custom_model)
 
     with open("characters/character.txt", "r") as f:
