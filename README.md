@@ -37,14 +37,16 @@ The aim of this project is both to give a good starting point for anyone to crea
   - [ ] Improve README guide
   - [ ] Write research.pdf
   - [ ] Change character sheet to be a .json type of file
+  - [ ] Continuation instructions from character file
   - [ ] Change LLM inference question sheet to be a .json type of file
   - [ ] Create and publish proper custom LLM model to HuggingFace
   - [ ] Create and publish proper custom voice model somewhere
   - [ ] remove non-text from generated text (ex. <|im_start|>)
   - [ ] STT queue should never append empty strings?
   - [X] remove extra words after '.' '!' '?' and finish generation
-  - [ ] ^ is relatively expensive, look into improvements
+  - [ ] ^ is relatively wasteful, look into improvements
   - [ ] try out numba for potential performance boost
+  - [ ] more accurate STT
 
 
   **Features:**
@@ -96,6 +98,15 @@ Deactivate env:
  deactivate
 ```
 Then just delete the venv folder
+
+
+# Quick Start
+:exclamation: Heavy WIP
+
+after activating the venv, run the following in the root directory:
+```
+python run.py
+```
 
 # Large Language Model (LLM)
 ## Prompt Style
@@ -181,7 +192,7 @@ chinese-hubert-base
 chinese-roberta-wwm-ext-large
 s1bert25hz-2kh-longer-epoch=68e-step=50232
 ```
-You will also need to install `wordsegment` if not already installed
+You will also need to install `wordsegment` if not already installed (should be installed when using requirements.txt)
 ```
 pip install wordsegment
 ```
@@ -194,7 +205,7 @@ In the CMD run:
 python api_v2.py -a 127.0.0.1 -p 9880 -c GPT_SoVITS/configs/tts_infer.yaml
 ```
 
-:information_source: Weights only need to be set once, also done through browser
+:information_source: Weights only need to be set once, also this is done through the browser, CMD is also possible
 
 :heavy_exclamation_mark: This section is WIP, model weights will be uploaded to huggingface at a later date. For now, ignore the setting weights section
 
@@ -210,16 +221,15 @@ Set the SoVITS weights:
 http://127.0.0.1:9880/set_sovits_weights?weights_path=GPT_SoVITS/pretrained_models/custom_model/JohnSmith0_e8_s64.pth
 ```
 
-:information_source: While this is fine to do, I recommend using TTS.py or brain.py
-Do inference:
+Do basic inference through browser:
 ```
-http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the credit people give it?&text_lang=en&ref_audio_path=../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav&prompt_lang=en&prompt_text=But truly, is a simple piece of paper worth the credit people give it?&text_split_method=cut5&batch_size=1&media_type=wav&streaming_mode=true&top_k=5&top_p=1&temperature=1
+http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the credit people give it?&text_lang=en&ref_audio_path=../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav&prompt_lang=en&prompt_text=But truly, is a simple piece of paper worth the credit people give it?&text_split_method=cut5&batch_size=1&media_type=wav&streaming_mode=true&top_k=7&top_p=0.87&temperature=0.87
 ```
 
 # Acknowledgements
 > I used a mix of my own and other people's code for the LLM training and evaluation. I can't remember who the people are, sorry. I would cite otherwise.
 
-This project makes use of the following projects:
+This project makes use of the following:
 
 * [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS/tree/main)
 * [CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
