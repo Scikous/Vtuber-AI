@@ -192,11 +192,14 @@ tt.py
 LLM.py
 model_losses.txt
 audio_response/*
-dataset/*
+LLM/dataset/*
 voiceAI/dataset/*
 !voiceAI/dataset/inference_testing
-characters/*
+LLM/characters/*
 !.gitignore
+!LLM/characters/character.json
+!LLM/dataset/template.csv
+
 #ignore dataset related files and weight files
 voiceAI/GPT-SoVITS-beta0217/
 # voiceAI/GPT-SoVITS-beta0217/output/uvr5_opt/*

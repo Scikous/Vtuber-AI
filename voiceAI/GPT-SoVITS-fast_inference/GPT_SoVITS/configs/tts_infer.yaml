@@ -3,8 +3,8 @@ custom:
   cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
   device: cuda
   is_half: true
-  t2s_weights_path: GPT_SoVITS/pretrained_models/custom_model/JohnSmith0-e15.ckpt
-  vits_weights_path: GPT_SoVITS/pretrained_models/custom_model/JohnSmith0_e8_s64.pth
+  t2s_weights_path: GPT_SoVITS/pretrained_models/custom_model/johnsmithreal-e15.ckpt
+  vits_weights_path: GPT_SoVITS/pretrained_models/custom_model/johnsmithreal_e8_s80.pth
 default:
   bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large
   cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
