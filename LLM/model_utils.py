@@ -4,8 +4,6 @@ import re
 from peft import PeftModel, PeftConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, DataCollatorForLanguageModeling, TrainingArguments, pipeline
 # import datasets
-from llm_templates import DataTemplate as dt
-
 # from difflib import SequenceMatcher
 
 # responses are shorter or longer to create a more natural way of responding
