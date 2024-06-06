@@ -50,7 +50,7 @@ The aim of this project is both to give a good starting point for anyone to crea
 
 
   **Features:**
-  - [ ] Create a function to create a dataset for LLM training from a .csv file
+  - [X] Create a function to create a dataset for LLM training from a .csv file
   - [ ] Send audio data to Discord or other, so anyone in call can hear
   - [ ] Support for receiving and responding to YouTube live chat messages
   - [ ] Support for receiving and responding to Twitch live chat messages

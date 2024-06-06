@@ -2,11 +2,10 @@ import pandas as pd
 from datasets import load_dataset, DatasetDict
 from model_utils import character_loader  # character_loader
 from llm_templates import DataTemplate as dt
-# Define a function to apply the template
 
-
+#apply a dataset 
 def apply_template(row, template):
-    return template.capybaraChatML(
+    return template(
         user_str=row['user'],
         context_str=row['context'],
         character_str=row['character']
@@ -19,10 +18,7 @@ def pandas_to_parquet(data, parquet_output_path):
     print(data['train'][0]['formatted_data'])
 
 
-def csv_to_parquet(csv_path, parquet_output_path, character_info_json=""):
-    # use custom instructions, user and character names if provided
-    instructions, user_name, character_name = character_loader(character_info_json)
-    data_template = dt(instructions_str=instructions, user_name=user_name, character_name=character_name)
+def csv_to_parquet(csv_path, parquet_output_path, data_template):
     df = pd.read_csv(csv_path)
 
     # reformat data to follow a template
@@ -35,8 +31,10 @@ def csv_to_parquet(csv_path, parquet_output_path, character_info_json=""):
 def main():
     pq_path = "LLM/dataset/template.parquet"
     csv_path = "LLM/dataset/template.csv"
-    csv_to_parquet(csv_path, pq_path,
-                   character_info_json='LLM/characters/character.json')
+    # use custom instructions, user and character names if provided
+    instructions, user_name, character_name = character_loader(character_info_json='LLM/characters/character.json')
+    data_template = dt(instructions_str=instructions, user_name=user_name, character_name=character_name)
+    csv_to_parquet(csv_path, pq_path, data_template= data_template.capybaraChatML)
 
     # print(data, data["train"][0])
 if __name__ == "__main__":
