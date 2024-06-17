@@ -219,3 +219,5 @@ voiceAI/GPT-SoVITS-fast_inference/GPT_SoVITS/pretrained_models/*
 voiceAI/GPT-SoVITS-fast_inference/venv
 voiceAI/GPT-SoVITS-fast_inference/ffmpeg.exe
 voiceAI/GPT-SoVITS-fast_inference/ffprobe.exe
+livechatAPI/credentials/*
+!livechatAPI/credentials/.gitignore

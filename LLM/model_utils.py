@@ -30,7 +30,7 @@ def sentence_reducer(output_clean):
     if match:
         # Position of the last sentence stopper
         pos = match.end()
-        print("I AM EHEREREE"*10, pos)
+        #print("I AM EHEREREE"*10, pos)
         # Truncate the text at the position after the last stopper
         output_clean = output_clean[:pos].strip()
     return output_clean
@@ -59,11 +59,13 @@ def dialogue_generator(model, tokenizer, comment, PromptTemplate):
         max_new_tokens = get_rand_token_len(
             input_len=len(comment_tokenized["input_ids"][0]))
         results = model.generate(input_ids=inputs["input_ids"].to(
-            "cuda"), max_new_tokens=max_new_tokens)
-        output = tokenizer.batch_decode(results)[0]
-        print(output)
+            "cuda"), max_new_tokens=max_new_tokens, top_p=0.8, top_k=50, temperature=1.1, repetition_penalty=1.2, do_sample=True)
+        output = tokenizer.batch_decode(results, skip_special_tokens=True)[0]
+        # print(output)
         # only add new unique responses to final output
+        print(f"{'#'*30}\n{output}\n{'#'*30}")
         output_clean = character_reply_cleaner(output).lower()
+        print(f"{'#'*30}\n{output_clean}\n{'#'*30}")
         generated_text = output_clean
         # if attempt == 0:
         #     generated_text = output_clean
@@ -94,22 +96,32 @@ def dialogue_generator(model, tokenizer, comment, PromptTemplate):
 
 
 def character_reply_cleaner(reply):
-    # print("w"*30, '\n\n', reply, '\n\n',"w"*30, '\n\n')
-    try:
-        pattern = r"(?<=<\|im_start\|> John\n)\s*(.+?)(?=\<\/|\<|im_end\||$)"
+    character = "John\n"
+    character_index = reply.find(character)
 
-        match = re.search(pattern, reply, re.DOTALL)
-        clean_reply = match.group(0).strip() if match else "Womp Womp"
-        if clean_reply == "Womp Womp":
-            raise ValueError(" Womp Womp")
-        print("hmmm")
-    except ValueError:  # not sure if getting triggered ever.
-        pattern = r"(?<=<\|im_start\|> John\n)\s*(.+?)(?:\n|$)"
-        match = re.search(pattern, reply, re.DOTALL)
-        clean_reply = match.group(1).strip() if match else "Womp Womp sequel"
-        print('ffff', clean_reply, 'ffffff')
-    clean_reply = sentence_reducer(clean_reply)
-    return clean_reply
+    if character_index != -1:
+        reply = reply[character_index + len("John\n"):]
+    else:
+        print("Womp womp", reply)
+    # print("w"*30, '\n\n', reply, '\n\n',"w"*30, '\n\n')
+
+    #########################################################
+    # try:
+    #     pattern = r"(?<=<\|im_start\|> John\n)\s*(.+?)(?=\<\/|\<|im_end\||$)"
+
+    #     match = re.search(pattern, reply, re.DOTALL)
+    #     clean_reply = match.group(0).strip() if match else "Womp Womp"
+    #     if clean_reply == "Womp Womp":
+    #         raise ValueError(" Womp Womp")
+    #     print("hmmm")
+    # except ValueError:  # not sure if getting triggered ever.
+    #     pattern = r"(?<=<\|im_start\|> John\n)\s*(.+?)(?:\n|$)"
+    #     match = re.search(pattern, reply, re.DOTALL)
+    #     clean_reply = match.group(1).strip() if match else "Womp Womp sequel"
+    #     print('ffff', clean_reply, 'ffffff')
+    ##########################################################
+    reply = sentence_reducer(reply)
+    return reply
 
 
 def model_loader(base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name=""):
@@ -124,6 +136,9 @@ def model_loader(base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", 
         config = PeftConfig.from_pretrained(custom_model_name)
         model = PeftModel.from_pretrained(
             model, custom_model_name, offload_folder="LLM/offload")
+        # config.init_lora_weights = False
+        # model.add_adapter(peft_config=config)
+        # model.enable_adapters()
 
     model.eval()
     # load tokenizer

@@ -56,8 +56,8 @@ if __name__ == "__main__":
     character_info_json = "LLM/characters/character.json"
     character_info = character_loader(character_info_json)
     
-    with open("LLM/characters/character.txt", "r") as f:
-        character_info = f.readline()
+    # with open("LLM/characters/character.txt", "r") as f:
+    #     character_info = f.readline()
     instructions_string = f"""{character_info}"""
     PromptTemplate = pt(
         instructions_str=instructions_string, character_name="John")
