@@ -8,7 +8,10 @@ def STT(callback):
             print("Speak something...")
             recognizer.energy_threshold = 2800
             #print("Listening...")
-            audio_data = recognizer.listen(source)
+            try:
+                audio_data = recognizer.listen(source, timeout=5)
+            except Exception as e:
+                print("har har har", e)
             #print("Processing...")
 
         try:
