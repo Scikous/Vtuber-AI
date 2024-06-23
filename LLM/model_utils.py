@@ -163,6 +163,9 @@ import numpy as np
 import re
 from peft import PeftModel, PeftConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+import torch
+from optimum.onnxruntime import ORTModelForSequenceClassification
+
 
 class LLMUtils:
     @staticmethod
@@ -219,6 +222,55 @@ class LLMUtils:
         else:
             instructions, user_name, character_name = "", "user", "assistant"
         return instructions, user_name, character_name
+    
+    @staticmethod
+    def convert_model_to_Onnx(model_name):
+        base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"
+        model = AutoModelForCausalLM.from_pretrained(base_model_name,
+                                                     device_map="cuda",
+                                                     trust_remote_code=False,
+                                                     revision="main"
+                                                     #attn_implementation="eager"
+                                                     )
+        config = PeftConfig.from_pretrained(model_name)
+        model = PeftModel.from_pretrained(
+        model, model_name , offload_folder="LLM/offload")
+
+        # Load your model and tokenizer
+        #model = LLMUtils.load_model(custom_model_name=model_name)
+        #model_name = "TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"
+        #model = AutoModelForCausalLM.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+
+
+        # Dummy input for the model (required for export)
+        dummy_input = tokenizer("Hello, how are you?", return_tensors="pt")
+        dummy_input = dummy_input.to("cuda")
+        # ort_model = ORTModelForSequenceClassification.from_pretrained(model, export=True)
+        # #ort_model = ort_model.to("cuda")
+        # ort_model.save_pretrained("LLM/onnx")
+        # dummy_input = torch.tensor([tokenizer.encode("Hello, how are you?")])
+        # dummy_input = dummy_input.to("cuda")
+        # attention_mask = torch.ones((1, len(tokenizer.encode("Hello, how are you?"))))
+        # attention_mask = attention_mask.to("cuda")
+        # Trace the model with the attention mask
+        # traced_model = torch.jit.trace(model, (dummy_input, attention_mask))
+        # Export the model to ONNX
+        attention_mask = dummy_input["attention_mask"]
+        attention_mask = attention_mask.to("cuda")
+
+        # torch.onnx.export(model, (dummy_input["input_ids"], attention_mask), "LLM/model.onnx",
+        #           input_names=["input_ids", "attention_mask"], output_names=["output"], opset_version=18)
+        # torch.onnx.dynamo_export(model, dummy_input, "tmodel.onnx")
+        # try:
+        #     with torch.no_grad():
+        #     print("Model successfully exported to ONNX.")
+        # except torch.onnx.OnnxExporterError as e:
+        #     print(f"Failed to export the model to ONNX. Error: {e}")
+        #     with open("report_dynamo_export.sarif", "r") as file:
+        #         sarif_report = file.read()
+        #     print(sarif_report)
+
 
 class VtuberLLM:
     def __init__(self, model, tokenizer, character_name):
