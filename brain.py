@@ -1,3 +1,4 @@
+from LLM.VtuberExllamav2 import VtuberExllamav2
 from LLM.model_utils import VtuberLLM, LLMUtils
 from voiceAI.TTS import send_tts_request
 from LLM.llm_templates import PromptTemplate as pt   # PromptTemplate as pt
@@ -122,7 +123,11 @@ if __name__ == "__main__":
     #     character_info = f.readline()
     instructions_string = f"""{instructions}"""
     PromptTemplate = pt(instructions_string, user_name, character_name)
-    Character = VtuberLLM(model, tokenizer, character_name)  
+    # Character = VtuberLLM(model, tokenizer, character_name)  
+    
+    #exllamav2 model
+    generator, gen_settings, tokenizer = LLMUtils.load_model_exllama()
+    Character = VtuberExllamav2(generator, gen_settings, tokenizer, character_name)
 
     speech_queue = Queue(maxsize=5)
     tts_queue = Queue()

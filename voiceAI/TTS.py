@@ -4,9 +4,10 @@ import json, requests
 import pyaudio
 from pynput import keyboard
 
-def send_tts_request(text="Super Elite Magnificent Agent John Smith!", text_lang="en",
+#prompt_text example, causes issues: But truly, is a simple piece of paper worth the credit people give it?
+def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_lang="en",
                         ref_audio_path="../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav",
-                          prompt_text="But truly, is a simple piece of paper worth the credit people give it?", prompt_lang="en",
+                          prompt_text="", prompt_lang="en",
                           top_k=7, top_p=.87, temperature=0.87,
                           text_split_method="cut5",
                           batch_size=1, batch_threshold=0.75, split_bucket=True,
