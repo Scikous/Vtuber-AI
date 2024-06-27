@@ -1,5 +1,4 @@
 import os
-import time
 from threading import Thread
 import subprocess
 # Define the paths to your Python files
@@ -18,7 +17,6 @@ def run_TTS():
 
 def run_brain():
     os.system(f"python {script2_path}")
-
 
 if __name__ == "__main__":
     tts_thread = Thread(target=run_brain, daemon=True)

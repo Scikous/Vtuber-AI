@@ -90,18 +90,18 @@
 # #         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
 
 
-from LLM.VtuberExllamav2 import VtuberExllamav2
+from LLM.models import VtuberLLM
 from model_utils import LLMUtils
 from llm_templates import PromptTemplate as pt
         
 character_info_json = "LLM/characters/character.json"
 instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
 
-generator, gen_settings, tokenizer = LLMUtils.load_model_exllama()
+generator, gen_settings, tokenizer = LLMUtils.load_model()
 
 PromptTemplate = pt(instructions, user_name, character_name)
-Character = VtuberExllamav2(generator, gen_settings, tokenizer, character_name)  
+# Character = VtuberExllamav2(generator, gen_settings, tokenizer, character_name)  
 
-response = Character.dialogue_generator_experimental(prompt="Good day JOhn", PromptTemplate=PromptTemplate.capybaraChatML)
+# response = Character.dialogue_generator_experimental(prompt="Good day JOhn", PromptTemplate=PromptTemplate.capybaraChatML)
 
-print(response)
+# print(response)
