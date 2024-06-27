@@ -29,26 +29,6 @@ The aim of this project is both to give a good starting point for anyone to crea
 * Train and use a custom voice model for TTS (see acknowledgements)
 * Speak to your LLM using STT (see acknowledgements)
 
-## Todo List
-  **Misc:**
-  - [X] Refractor files, move LLM related files to its own directory
-  - [X] Create a proper requirements.txt
-  - [X] modify train.py to either not use list of model names or to make it a separate function
-  - [ ] Improve README guide
-  - [ ] Write research.pdf
-  - [ ] Change character sheet to be a .json type of file
-  - [ ] Continuation instructions from character file
-  - [ ] Change LLM inference question sheet to be a .json type of file
-  - [ ] Create and publish proper custom LLM model to HuggingFace
-  - [ ] Create and publish proper custom voice model somewhere
-  - [ ] remove non-text from generated text (ex. <|im_start|>)
-  - [ ] STT queue should never append empty strings?
-  - [X] remove extra words after '.' '!' '?' and finish generation
-  - [ ] ^ is relatively wasteful, look into improvements
-  - [ ] try out numba for potential performance boost
-  - [ ] more accurate STT
-
-
   **Features:**
   - [X] Create a function to create a dataset for LLM training from a .csv file
   - [ ] Send audio data to Discord or other, so anyone in call can hear
