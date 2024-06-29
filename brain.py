@@ -1,6 +1,6 @@
 from LLM.models import VtuberExllamav2, VtuberLLM
 from LLM.model_utils import LLMUtils
-from voiceAI.TTS import send_tts_request
+from voiceAI.TTS import send_tts_request, tts_queue
 from LLM.llm_templates import PromptTemplate as pt   # PromptTemplate as pt
 from voiceAI.STT import STT, SpeechToText
 import time
@@ -12,11 +12,6 @@ import threading
 def stt_worker():
     def stt_callback(speech):
         # keep conversation on the most recent topic - ex. too long of a queue = model is responding to something 5 minutes ago and not current topic
-        if speech_queue.full():
-            speech_queue.get()
-            speech_queue.get()
-            speech_queue.get()
-            # speech_queue.queue.clear()
         if speech and speech.strip() != "Thank you.":
             speech_queue.put(speech.strip())
         print(speech_queue.queue)
@@ -38,10 +33,13 @@ def loop_function():
             # print(speech_queue.queue)
             # logging.debug(f"Speech queue: {speech_queue.queue}")
             comment = speech
-            output = Character.dialogue_generator(comment, PromptTemplate.capybaraChatML)
-            print("THEOUTPUT IS", output)
-            # clean_reply = character_reply_cleaner(output).lower()
-            send_tts_request(output)
+            if not tts_queue.full():
+                output = Character.dialogue_generator(comment, PromptTemplate.capybaraChatML, max_tokens=100)
+                print("THEOUTPUT IS", output)
+                # clean_reply = character_reply_cleaner(output).lower()
+                send_tts_request(output)
+            else:
+                print("TTS queue is full, skipping generation.")
             # time.sleep(7)
         except ValueError:
             pass
@@ -129,8 +127,9 @@ if __name__ == "__main__":
     generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2()
     Character = VtuberExllamav2(generator, gen_settings, tokenizer, character_name)
 
-    speech_queue = Queue(maxsize=5)
-    tts_queue = Queue()
+    speech_queue = Queue(maxsize=2)
+    loop_function()
+# tts_queue = Queue(maxsize=2)
 
     # stt_worker = STTWorker(speech_queue)
     # dialogue_worker = DialogueWorker(Character, speech_queue, tts_queue, PromptTemplate.capybaraChatML)
