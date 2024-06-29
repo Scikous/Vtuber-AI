@@ -1,4 +1,4 @@
-from LLM.model_utils import LLMUtils
+from model_utils import LLMUtils
 
 #current, lowest latency
 class VtuberExllamav2:
