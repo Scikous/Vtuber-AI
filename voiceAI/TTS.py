@@ -8,7 +8,7 @@ import threading
 import time
 
 
-tts_queue = Queue(maxsize=2)
+tts_queue = Queue(maxsize=3)
 
 #prompt_text example, causes issues: But truly, is a simple piece of paper worth the credit people give it?
 def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_lang="en",

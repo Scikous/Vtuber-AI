@@ -29,7 +29,7 @@ class VtuberLLM:
         self.tokenizer = tokenizer
         self.character_name = character_name
 
-    def dialogue_generator(self, comment, PromptTemplate):
+    def dialogue_generator(self, prompt, PromptTemplate):
         """
         Generates character's response to a given input (TTS/Comment)
         """
@@ -37,8 +37,8 @@ class VtuberLLM:
             return text.strip()[-1] not in {'.', '!', '?'}
 
         max_attempts = 7
-        prompt = PromptTemplate(user_str=comment)
-        comment_tokenized = self.tokenizer(comment, return_tensors="pt")
+        prompt = PromptTemplate(user_str=prompt)
+        comment_tokenized = self.tokenizer(prompt, return_tensors="pt")
         inputs = self.tokenizer(prompt, return_tensors="pt")
 
         generated_text = ""
@@ -49,12 +49,12 @@ class VtuberLLM:
                                           top_p=0.8, top_k=50, temperature=1.1,
                                           repetition_penalty=1.2, do_sample=True)
             output = self.tokenizer.batch_decode(results, skip_special_tokens=True)[0]
-            print(f"{'#' * 30}\n{output}\n{'#' * 30}")
+            # print(f"{'#' * 30}\n{output}\n{'#' * 30}")
             output_clean = LLMUtils.character_reply_cleaner(output, self.character_name).lower()
-            print(f"{'#' * 30}\n{output_clean}\n{'#' * 30}")
+            # print(f"{'#' * 30}\n{output_clean}\n{'#' * 30}")
             generated_text = output_clean
             if not is_incomplete_sentence(generated_text) or attempt == max_attempts:
                 break
 
-        print("Text generation finished")
+        # print("Text generation finished")
         return generated_text
