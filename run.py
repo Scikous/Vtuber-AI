@@ -6,7 +6,7 @@ import subprocess
 
 
 def run_TTS():
-    venv_path = "..\\..\\venv2\\"
+    venv_path = "..\\..\\venv\\"
     script1_path = "./api_v2.py"
     new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
     # Activate virtual environment and run the script
@@ -19,7 +19,7 @@ def run_TTS():
 
 def run_brain():
     script2_path = "./brain.py"
-    venv_path = ".\\venv2\\"
+    venv_path = ".\\venv\\"
     # Activate virtual environment and run the script
     activate_script = os.path.join(venv_path, 'Scripts', 'activate.bat')
     command = f"{activate_script} && python {script2_path}"
