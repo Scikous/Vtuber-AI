@@ -1,4 +1,3 @@
-
 from gradio_client import Client
 import json, requests
 import pyaudio
@@ -38,8 +37,6 @@ def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_la
         dict or bytes: Response from the Gradio interface. The format depends on the interface's output.
     """
 
-    #client = Client(interface_url)
-
     input_data = {
     "text": text,#"But truly, is a simple piece of paper worth the credit people give it?",                   # str.(required) text to be synthesized
     "text_lang": text_lang,              # str.(required) language of the text to be synthesized
@@ -63,7 +60,6 @@ def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_la
 }
     url = "http://127.0.0.1:9880/tts"
 
-    print("hello from sendtts", tts_queue.qsize())
     response = requests.post(url, json=input_data) #response will be a .wav type of bytes
     tts_queue.put(response.content)  # Enqueue the audio data
     # audio_playback(response.content)
@@ -98,7 +94,6 @@ def audio_playback(audio_data=None):
             time.sleep(0.1)
             continue
         try:
-            print("hello from playback", tts_queue.qsize())
             audio_data = tts_queue.get(timeout=1)  # Get audio data from the queue
             audio_data = audio_data[64:]#skip first 64 bytes to avoid popping sound
             time.sleep(0.1)
@@ -129,12 +124,34 @@ def audio_playback(audio_data=None):
 
 playback_thread = threading.Thread(target=audio_playback, daemon=True)
 
-# #only for testing
+# #only for testing, requires GPT-SoVITTS to be up and running
 # if __name__ == "__main__":
-#     # Example usage (replace with your Gradio interface URL)
+#     import subprocess
+#     import os
+#     print(os.getcwd())
+#     script1_path = "./api_v2.py"
+#     # venv_path = "venv2\\scripts\\activate"
+#     venv_path = "..\\..\\venv2\\"
+#     def is_server_ready(url):#abuses the fact that an unready server won't work at
+#         try:
+#             requests.get(url, timeout=5)  # Set a timeout for the health check request
+#             print("Server up and running")
+#             return True
+#         except requests.exceptions.RequestException as e:
+#             print(f"Error checking server health: {e}")
+#             return False
+#     def run_TTS():
+#         new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
+#         # Activate virtual environment and run the script in background
+#         activate_script = os.path.join(venv_path, 'Scripts', 'activate.bat')
+#         command = f"{activate_script} && python {script1_path}"
+#         subprocess.Popen(command, shell=True, cwd=new_dir)
+#         print("TTS server started in background")
+#         server_health_check_url = "http://localhost:9880"  # Replace with your actual URL
+#         while not is_server_ready(server_health_check_url):
+#             print("Waiting for TTS server to be ready...")
+#             time.sleep(2)
+#     run_TTS()
 #     response = send_tts_request()
-
-#     # Process the response based on the Gradio interface's output format
-#     # (e.g., extract audio data, handle errors)
-#     print(f"Response: {response}")
-#. The playback_thread does not get terminated when the main thread is terminated
+#     while True:
+#         continue

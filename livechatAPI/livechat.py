@@ -57,8 +57,8 @@ def fetch_chat_msgs():
 
 ###################################################
 ####get oauth token WIP
-# from requests_oauthlib import OAuth2Session
-# import webbrowser
+from requests_oauthlib import OAuth2Session
+import webbrowser
 
 # def twitch_auth_loader(cred_file):
 #     with open(cred_file, 'r') as credentials:
@@ -102,7 +102,7 @@ def fetch_chat_msgs():
 
 # token = twit()
 
-# from twitchio.ext import commands
+from twitchio.ext import commands
 # # Replace with your Twitch token and channel
 # TOKEN = token
 # CHANNEL = 'scikous'
@@ -132,6 +132,6 @@ def fetch_chat_msgs():
 ##kick api
 from kick_chat import client
 
-p = client.Client(username="scikous")
+p = client.Client(username="username")
 print(p.listen())
 
