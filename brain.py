@@ -29,6 +29,7 @@ def loop_function():
 
     while True:
         try:
+            start = time.perf_counter()
             speech = speech_queue.get(timeout=1)
             # print(speech_queue.queue)
             # logging.debug(f"Speech queue: {speech_queue.queue}")
@@ -40,6 +41,8 @@ def loop_function():
                 send_tts_request(output)
             else:
                 print("TTS queue is full, skipping generation.")
+            end = time.perf_counter()
+            print(f"Time taken {end-start}")
             # time.sleep(7)
         except ValueError:
             pass

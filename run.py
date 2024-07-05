@@ -3,10 +3,11 @@ from threading import Thread
 import subprocess
 # Define the paths to your Python files
 # venv_path = "venv2\\scripts\\activate"
+VENV = 'venv'
 
-
+#windows venv implementation
 def run_TTS():
-    venv_path = "..\\..\\venv\\"
+    venv_path = f"..\\..\\{VENV}\\"
     script1_path = "./api_v2.py"
     new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
     # Activate virtual environment and run the script
@@ -19,7 +20,7 @@ def run_TTS():
 
 def run_brain():
     script2_path = "./brain.py"
-    venv_path = ".\\venv\\"
+    venv_path = f".\\{VENV}\\"
     # Activate virtual environment and run the script
     activate_script = os.path.join(venv_path, 'Scripts', 'activate.bat')
     command = f"{activate_script} && python {script2_path}"
@@ -32,7 +33,7 @@ if __name__ == "__main__":
 
 
 
-#linux version??? untested
+#linux venv version??? untested
 # def run_TTS():
 #     new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
 #     # Activate virtual environment and run the script
