@@ -1,5 +1,4 @@
 from model_utils import LLMUtils
-
 #current, lowest latency
 class VtuberExllamav2:
     def __init__(self, generator, gen_settings, tokenizer, character_name):
@@ -8,7 +7,7 @@ class VtuberExllamav2:
         self.tokenizer = tokenizer
         self.character_name = character_name
 
-    def dialogue_generator(self, prompt, PromptTemplate, max_tokens=200):
+    async def dialogue_generator(self, prompt, PromptTemplate, max_tokens=200):
         prompt = PromptTemplate(user_str=prompt)
         max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
         #prompt = ["Five good reasons to adopt a cat:","Tell 5 simple jokes:", "how much is 8 + 19?"],
