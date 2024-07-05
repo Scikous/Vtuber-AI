@@ -1,7 +1,7 @@
 import threading
 import speech_recognition as sr
-def STT(callback):
-    def recognize_speech():
+async def STT(callback):
+    async def recognize_speech():
         recognizer = sr.Recognizer()
         text = ""
         with sr.Microphone() as source:
@@ -14,15 +14,15 @@ def STT(callback):
         try:
             text = recognizer.recognize_whisper(audio_data, language='english')
             print("You said:", text)
-            callback(text)
+            await callback(text)
         except sr.UnknownValueError:
             print("Sorry, could not understand audio.")
         except sr.RequestError as e:
             print("Error: Could not request results from Whisper service;")
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            print(f"Unexpected error at STT: {e}")
 
-    recognize_speech()
+    await recognize_speech()
 
 class SpeechToText:
     def __init__(self):

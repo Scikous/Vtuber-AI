@@ -8,9 +8,56 @@ import time
 
 
 tts_queue = Queue(maxsize=3)
+# Lock for thread-safe operations
+lock = threading.Lock()
+
+
+def audio_playback(audio_data=None):
+
+    paused = False
+    def on_press(key):
+        nonlocal paused  # Modify the 'paused' variable from the nested function
+        if key == keyboard.Key.f3:
+            paused = not paused
+
+    # Create a keyboard listener
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+    stop_requested = False
+
+    # Open an audio stream using pyaudio
+    p = pyaudio.PyAudio()
+    stream = p.open(format=pyaudio.paInt16,  # Assuming 16-bit signed integer PCM
+                    channels=1,               # Assuming mono audio
+                    rate=32000,               # Example framerate (replace with actual value)
+                    output=True)
+
+    # Write audio data to the stream in chunks
+    while not stop_requested:
+        # Initialize audio buffer with silence padding to avoid popping sound
+        if paused:
+            time.sleep(0.1)
+            continue
+        try:
+            audio_data = tts_queue.get(timeout=1)  # Get audio data from the queue
+            audio_data = audio_data[64:]#skip first 64 bytes to avoid popping sound
+            time.sleep(0.1)
+        except Exception as e:
+            print(f"Error: {e}")
+            continue
+        while audio_data:
+            if not paused:
+                data = audio_data[:1024]
+                stream.write(data)
+                audio_data = audio_data[len(data):]
+
+    # Close the audio stream and PyAudio
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
 #prompt_text example, causes issues: But truly, is a simple piece of paper worth the credit people give it?
-def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_lang="en",
+async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_lang="en",
                         ref_audio_path="../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav",
                           prompt_text="", prompt_lang="en",
                           top_k=7, top_p=.87, temperature=0.87,
@@ -59,72 +106,15 @@ def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_la
     "repetition_penalty": repetition_penalty    # float.(optional) repetition penalty for T2S model.
 }
     url = "http://127.0.0.1:9880/tts"
-
     response = requests.post(url, json=input_data) #response will be a .wav type of bytes
-    tts_queue.put(response.content)  # Enqueue the audio data
-    # audio_playback(response.content)
-    if not playback_thread.is_alive():
-        playback_thread.start()
 
-
-def audio_playback(audio_data=None):
-
-    paused = False
-    def on_press(key):
-        nonlocal paused  # Modify the 'paused' variable from the nested function
-        if key == keyboard.Key.f3:
-            paused = not paused
-
-    # Create a keyboard listener
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
-    stop_requested = False
-
-    # Open an audio stream using pyaudio
-    p = pyaudio.PyAudio()
-    stream = p.open(format=pyaudio.paInt16,  # Assuming 16-bit signed integer PCM
-                    channels=1,               # Assuming mono audio
-                    rate=32000,               # Example framerate (replace with actual value)
-                    output=True)
-
-    # Write audio data to the stream in chunks
-    while not stop_requested:
-        # Initialize audio buffer with silence padding to avoid popping sound
-        if paused:
-            time.sleep(0.1)
-            continue
-        try:
-            audio_data = tts_queue.get(timeout=1)  # Get audio data from the queue
-            audio_data = audio_data[64:]#skip first 64 bytes to avoid popping sound
-            time.sleep(0.1)
-        except Exception as e:
-            print(f"Error: {e}")
-            continue
-        while audio_data:
-            if not paused:
-                data = audio_data[:1024]
-                stream.write(data)
-                audio_data = audio_data[len(data):]
-
-        # if len(audio_data )== 0:
-        #     stop_requested = True
-        # # Check for stop request (implementation depends on your program)
-        # # ... (e.g., user input, flag set elsewhere)
-
-        # # Write a chunk of audio data to the stream
-        # data = audio_data[:4096]  # Write a buffer of 4096 bytes (adjust based on performance)
-        # stream.write(data)
-        # # Remove processed data from audio_data to avoid infinite loop
-        # audio_data = audio_data[len(data):]
-
-    # Close the audio stream and PyAudio
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
+    with lock:
+        tts_queue.put(response.content)  # Enqueue the audio data
 
 playback_thread = threading.Thread(target=audio_playback, daemon=True)
+playback_thread.start()
 
-# #only for testing, requires GPT-SoVITTS to be up and running
+#######only for testing, requires GPT-SoVITTS to be up and running, WIP, needs to be fixed up
 # if __name__ == "__main__":
 #     import subprocess
 #     import os
