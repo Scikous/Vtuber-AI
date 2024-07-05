@@ -54,14 +54,17 @@ The aim of this project is both to give a good starting point for anyone to crea
 This is developed and tested on Python 3.11.8.
 
 In the root directory, install everything in the requirements.txt. All of the necessary packages are included in this file, no need to install anything anywhere else. (I highly suggest setting up a virtual environment up first).
+
+Download PyTorch first and foremost (assumes you are using CudaToolkit 12.1)
+```
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+Next, install requirements.
 ```
 pip install -r requirements.txt
 ```
 
-Use the following for PyTorch (assumes you are using CudaToolkit 12.1)
-```
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
 ## Virtual Environments
 The virtual environment simply helps to avoid package conflicts. Do note that this will take more space in the storage as each environment is its own.
 
