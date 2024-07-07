@@ -6,6 +6,7 @@ from voiceAI.STT import STT
 import logging
 import asyncio
 import time
+# from livechatAPI.livechat import fetch_chat_msgs
 
 async def stt_worker():
     async def stt_callback(speech):
@@ -17,12 +18,12 @@ async def stt_worker():
         await STT(stt_callback)
         await asyncio.sleep(0.1)
 
-
 async def dialogue_worker():
     while True:
         try:
             speech = await speech_queue.get()
-            comment = speech
+            comment = speech#await fetch_chat_msgs()#speech
+            print(comment)
             if not tts_queue.full():
                 output = await Character.dialogue_generator(comment, PromptTemplate.capybaraChatML, max_tokens=100)
                 # await asyncio.sleep(5)
@@ -36,6 +37,7 @@ async def dialogue_worker():
             pass
         except Exception as e:
             logging.error(f"Unexpected error at worker: {e}")
+
 async def tts_worker():
     while True:
         output = await output_queue.get()
@@ -55,7 +57,7 @@ if __name__ == "__main__":
     
     character_info_json = "LLM/characters/character.json"
     instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
-    
+
     instructions_string = f"""{instructions}"""
     PromptTemplate = pt(instructions_string, user_name, character_name)
     # Character = VtuberLLM(model, tokenizer, character_name)  
