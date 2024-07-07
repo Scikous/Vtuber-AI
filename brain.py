@@ -6,6 +6,7 @@ from voiceAI.STT import STT
 import logging
 import asyncio
 import time
+# from livechatAPI.livechat import fetch_chat_msgs
 
 async def stt_worker():
     async def stt_callback(speech):
@@ -17,21 +18,18 @@ async def stt_worker():
         await STT(stt_callback)
         await asyncio.sleep(0.1)
 
-
 async def dialogue_worker():
     while True:
         try:
             speech = await speech_queue.get()
-            comment = speech
+            comment = speech#await fetch_chat_msgs()#speech
+            print(comment)
             if not tts_queue.full():
-                start = time.perf_counter()
                 output = await Character.dialogue_generator(comment, PromptTemplate.capybaraChatML, max_tokens=100)
                 # await asyncio.sleep(5)
                 # await send_tts_request(output)
-                print("THE OUTPUT IS", output)
+                # print("THE OUTPUT IS", output)
                 await output_queue.put(output)
-                end = time.perf_counter()
-                print("LLMTIME",end-start)
                 # await send_tts_request(output)
             else:
                 print("TTS queue is full, skipping generation.")
@@ -39,13 +37,11 @@ async def dialogue_worker():
             pass
         except Exception as e:
             logging.error(f"Unexpected error at worker: {e}")
+
 async def tts_worker():
     while True:
         output = await output_queue.get()
-        start = time.perf_counter()
         await send_tts_request(output)
-        end = time.perf_counter()
-        print("TTSTIME",end-start)
         await asyncio.sleep(0.1)
 
 async def loop_function():
@@ -54,7 +50,6 @@ async def loop_function():
     tts_task = asyncio.create_task(tts_worker())
 
     await asyncio.gather(*[stt_task, dialogue_task, tts_task])
-#11.5-12.1gb ram 10-11% cpu, baseline= 7.8gb, 11%cpu
 
 if __name__ == "__main__":
     custom_model = "LLM/unnamedSICUACCT"
@@ -62,9 +57,7 @@ if __name__ == "__main__":
     
     character_info_json = "LLM/characters/character.json"
     instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
-    
-    # with open("LLM/characters/character.txt", "r") as f:
-    #     character_info = f.readline()
+
     instructions_string = f"""{instructions}"""
     PromptTemplate = pt(instructions_string, user_name, character_name)
     # Character = VtuberLLM(model, tokenizer, character_name)  

@@ -9,8 +9,8 @@ import time
 
 tts_queue = Queue(maxsize=3)
 # Lock for thread-safe operations
-lock = threading.Lock()
-
+LOCK = threading.Lock()
+CONDITION = threading.Condition(LOCK)
 
 def audio_playback(audio_data=None):
 
@@ -34,22 +34,24 @@ def audio_playback(audio_data=None):
 
     # Write audio data to the stream in chunks
     while not stop_requested:
-        # Initialize audio buffer with silence padding to avoid popping sound
-        if paused:
-            time.sleep(0.1)
-            continue
-        try:
-            audio_data = tts_queue.get(timeout=1)  # Get audio data from the queue
-            audio_data = audio_data[64:]#skip first 64 bytes to avoid popping sound
-            time.sleep(0.1)
-        except Exception as e:
-            print(f"Error: {e}")
-            continue
-        while audio_data:
-            if not paused:
-                data = audio_data[:1024]
-                stream.write(data)
-                audio_data = audio_data[len(data):]
+        with CONDITION:
+            while tts_queue.empty():
+                CONDITION.wait()
+            # Initialize audio buffer with silence padding to avoid popping sound
+            if paused:
+                time.sleep(0.1)
+                continue
+            try:
+                audio_data = tts_queue.get(timeout=1)  # Get audio data from the queue
+                audio_data = audio_data[64:]#skip first 64 bytes to avoid popping sound
+                while audio_data:
+                    if not paused:
+                        data = audio_data[:1024]
+                        stream.write(data)
+                        audio_data = audio_data[len(data):]
+            except Exception as e:
+                print(f"Error: {e}")
+                continue
 
     # Close the audio stream and PyAudio
     stream.stop_stream()
@@ -108,8 +110,9 @@ async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", t
     url = "http://127.0.0.1:9880/tts"
     response = requests.post(url, json=input_data) #response will be a .wav type of bytes
 
-    with lock:
+    with LOCK:
         tts_queue.put(response.content)  # Enqueue the audio data
+        CONDITION.notify()
 
 playback_thread = threading.Thread(target=audio_playback, daemon=True)
 playback_thread.start()
