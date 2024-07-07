@@ -220,4 +220,6 @@ This project makes use of the following:
 
 * [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS/tree/main)
 * [CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
+* [NousResearch/Hermes-2-Theta-Llama-3-8B](https://huggingface.co/NousResearch/Hermes-2-Theta-Llama-3-8B/tree/main)
 * [Speech_Recognition](https://github.com/Uberi/speech_recognition)
+* [curiosily](https://github.com/curiousily/AI-Bootcamp/tree/master)
