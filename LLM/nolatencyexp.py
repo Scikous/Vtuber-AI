@@ -94,6 +94,7 @@ from models import VtuberExllamav2, VtuberLLM
 from model_utils import LLMUtils
 from llm_templates import PromptTemplate as pt
 from time import perf_counter
+import asyncio
 
 character_info_json = "LLM/characters/character.json"
 instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
@@ -102,16 +103,24 @@ dummy_data = ["Good day, state your name.", "What is your favorite drink?", "Do 
 
 PromptTemplate = pt(instructions, user_name, character_name)
 
-generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2()
+generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2('LLM/Hermes-Local')
 Character = VtuberExllamav2(generator, gen_settings, tokenizer, character_name)  
 # custom_model = "LLM/unnamedSICUACCT"
 # model, tokenizer = LLMUtils.load_model(custom_model_name=custom_model)
 # Character = VtuberLLM(model, tokenizer, character_name)  
 
-start = perf_counter()
-response = Character.dialogue_generator(prompt=dummy_data[0], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
-response1 = Character.dialogue_generator(prompt=dummy_data[1], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
-response2 = Character.dialogue_generator(prompt=dummy_data[2], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
-end = perf_counter()
+print("The padded token is", tokenizer.pad_token, tokenizer.pad_token_id, tokenizer.eos_token, tokenizer.bos_token)
 
-print(f"Prompts: {dummy_data}\nResponses:\n{response}\n\n{response1}\n\n{response2}\n\nTime Taken (Seconds): {end-start}")
+
+p = tokenizer.encode(dummy_data[2])
+print(p)
+
+async def gen_test():
+    start = perf_counter()
+    # response = await Character.dialogue_generator(prompt=dummy_data[0], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
+    # response1 = await Character.dialogue_generator(prompt=dummy_data[1], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
+    response2 = await Character.dialogue_generator(prompt=dummy_data[2], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
+    end = perf_counter()
+    # print(f"Prompts: {dummy_data}\nResponses:\n{response}\n\n{response1}\n\n{response2}\n\nTime Taken (Seconds): {end-start}")
+    print(f"TimeTaken: {end-start}\n Response: {response2}")
+asyncio.run(gen_test())
