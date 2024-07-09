@@ -9,20 +9,20 @@
 #                 #"unnamedSICUAC", "unnamedSICUACC", "unnamedSICUACCC",
 #                 #"unnamedSIUAC",
 #                 #"unnamedSIUCA", "unnamedSIUEA",
-#                 #"unnamedSIUA"
-#                 "unnamedSICUACCT", "unnamedSICUACCTT",
-#                 "unnamedSICUACCTTT"
+#                 "unnamedSIUA"
+#                 #"unnamedSICUACCT", "unnamedSICUACCTT",
+#                 #"unnamedSICUACCTTT"
 #                 ]
 
 # def model_preprocess(test_model):
-#     model_name = ["TheBloke/Mistral-7B-Instruct-v0.2-GPTQ", "TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"]
+#     model_name = ["TheBloke/Mistral-7B-Instruct-v0.2-GPTQ", "TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", "NousResearch/Hermes-2-Theta-Llama-3-8B-GGUF"]
 #     print(model_name[1])
-#     model = AutoModelForCausalLM.from_pretrained(model_name[1],
+#     model = AutoModelForCausalLM.from_pretrained(model_name[2],
 #                                                 device_map="auto", # automatically figures out how to best use CPU + GPU for loading model
 #                                                 trust_remote_code=False, # prevents running custom model files on your machine
 #                                                 revision="main") # which version of model to use in repo
 
-#     tokenizer = AutoTokenizer.from_pretrained(model_name[1], use_fast=True)
+#     tokenizer = AutoTokenizer.from_pretrained(model_name[2], use_fast=True)
 
 
 #     model.train() # model in training mode (dropout modules are activated)
@@ -52,7 +52,7 @@
 
 
 #     # load dataset
-#     data = load_dataset("text", data_files=f"dataset/{test_model}.txt")
+#     data = load_dataset("text", data_files=f"LLM/dataset/unnamedSIUAC.txt")
 
 
 #     #load dataset into train and test
@@ -158,25 +158,27 @@
 
 
 
-
+##
 ###################################################
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments, DataCollatorForLanguageModeling
-from datasets import load_dataset
+# import torch
+# from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments, DataCollatorForLanguageModeling
+# from datasets import load_dataset
 
-# Load the model and tokenizer
-base_model_name = "TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"
-model = AutoModelForCausalLM.from_pretrained(base_model_name, device_map="auto", trust_remote_code=False)
-tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+# # Load the model and tokenizer
+# base_model_name = "TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"
+# model = AutoModelForCausalLM.from_pretrained(base_model_name, device_map="auto", trust_remote_code=False)
+# tokenizer = AutoTokenizer.from_pretrained(base_model_name)
 
-# Load your dataset
-dataset = load_dataset("text", data_files=f"LLM/dataset/unnamedSIUAC.txt")#load_dataset('your_dataset_name')  # Replace with your dataset
-#     data = load_dataset("text", data_files=f"dataset/{test_model}.txt")
-# Tokenize the dataset
-def tokenize_function(examples):
-    return tokenizer(examples['text'], truncation=True, padding='max_length', max_length=512)
+# # Load your dataset
+# dataset = load_dataset("text", data_files=f"LLM/dataset/unnamedSIUAC.txt")#load_dataset('your_dataset_name')  # Replace with your dataset
+# #     data = load_dataset("text", data_files=f"dataset/{test_model}.txt")
+# # Tokenize the dataset
+# # def tokenize_function(examples):
+# #     return tokenizer(examples['text'], truncation=True, padding='max_length', max_length=512)
+
+# create tokenize function
+
 #######################################################################################################
-# tokenized_dataset = dataset.map(tokenize_function, batched=True)
 # print(tokenized_dataset, dataset)
 
 # # Create data collator
@@ -209,6 +211,18 @@ def tokenize_function(examples):
 # # Save the fine-tuned model
 # model.save_pretrained('./fine_tuned_model')
 # tokenizer.save_pretrained('./fine_tuned_model')
+
+
+
+
+
+
+
+
+
+
+
+
 ##########################################################################################
 
 import random
@@ -262,6 +276,7 @@ quantization_config = BitsAndBytesConfig(
     load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16
 )
 
+
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
 tokenizer.add_special_tokens({"pad_token": PAD_TOKEN})
 tokenizer.padding_side = "right"
@@ -298,89 +313,111 @@ dataset = DatasetDict({
     'val': val
 })
 
-# print(dataset, dataset["train"][0])
+print(dataset, dataset["train"][0],'\n', dataset["train"][1])
 
-response_template = "<|im_end|>"
+response_template =  "<|end_header_id|>"#"<|im_end|>"
 collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
-
 examples = [dataset["train"][0]["text"]]
 encodings = [tokenizer(e) for e in examples]
+# print(encodings)
 
 dataloader = DataLoader(encodings, collate_fn=collator, batch_size=1)
 
+# print(dataloader, encodings)
+
+batch = next(iter(dataloader))
+print(batch.keys(), batch["labels"])
 
 
-lora_config = LoraConfig(
-    r=32,
-    lora_alpha=16,
-    target_modules=[
-        "self_attn.q_proj",
-        "self_attn.k_proj",
-        "self_attn.v_proj",
-        "self_attn.o_proj",
-        "mlp.gate_proj",
-        "mlp.up_proj",
-        "mlp.down_proj",
-    ],
-    lora_dropout=0.05,
-    bias="none",
-    task_type=TaskType.CAUSAL_LM,
-)
-model = prepare_model_for_kbit_training(model)
-model = get_peft_model(model, lora_config)
+# lora_config = LoraConfig(
+#     r=32,
+#     lora_alpha=16,
+#     target_modules=[
+#         "self_attn.q_proj",
+#         "self_attn.k_proj",
+#         "self_attn.v_proj",
+#         "self_attn.o_proj",
+#         "mlp.gate_proj",
+#         "mlp.up_proj",
+#         "mlp.down_proj",
+#     ],
+#     lora_dropout=0.05,
+#     bias="none",
+#     task_type=TaskType.CAUSAL_LM,
+# )
+# model = prepare_model_for_kbit_training(model)
+# model = get_peft_model(model, lora_config)
      
 
-OUTPUT_DIR = "Hermes-Test"
+# OUTPUT_DIR = "LLM/Hermes-Test"
 
-sft_config = SFTConfig(
-    output_dir=OUTPUT_DIR,
-    dataset_text_field="text",
-    max_seq_length=512,
-    num_train_epochs=1,
-    per_device_train_batch_size=2,
-    per_device_eval_batch_size=2,
-    gradient_accumulation_steps=4,
-    optim="paged_adamw_8bit",
-    eval_strategy="steps",
-    eval_steps=0.2,
-    save_steps=0.2,
-    logging_steps=10,
-    learning_rate=1e-4,
-    fp16=True,  # or bf16=True,
-    save_strategy="steps",
-    warmup_ratio=0.1,
-    save_total_limit=2,
-    lr_scheduler_type="constant",
-    report_to="tensorboard",
-    save_safetensors=True,
-    dataset_kwargs={
-        "add_special_tokens": False,  # We template with special tokens
-        "append_concat_token": False,  # No need to add additional separator token
-    },
-    seed=SEED,
-)
+# sft_config = SFTConfig(
+#     output_dir=OUTPUT_DIR,
+#     dataset_text_field="text",
+#     max_seq_length=512,
+#     num_train_epochs=1,
+#     per_device_train_batch_size=2,
+#     per_device_eval_batch_size=2,
+#     gradient_accumulation_steps=4,
+#     optim="paged_adamw_8bit",
+#     eval_strategy="steps",
+#     eval_steps=0.2,
+#     save_steps=0.2,
+#     logging_steps=10,
+#     learning_rate=1e-4,
+#     fp16=True,  # or bf16=True,
+#     save_strategy="steps",
+#     warmup_ratio=0.1,
+#     save_total_limit=2,
+#     lr_scheduler_type="constant",
+#     report_to="tensorboard",
+#     save_safetensors=True,
+#     dataset_kwargs={
+#         "add_special_tokens": False,  # We template with special tokens
+#         "append_concat_token": False,  # No need to add additional separator token
+#     },
+#     seed=SEED,
+# )
 
-trainer = SFTTrainer(
-    model=model,
-    args=sft_config,
-    train_dataset=dataset["train"],
-    eval_dataset=dataset["val"],
-    tokenizer=tokenizer,
-    data_collator=collator,
-)
-trainer.train()
+# trainer = SFTTrainer(
+#     model=model,
+#     args=sft_config,
+#     train_dataset=dataset["train"],
+#     eval_dataset=dataset["val"],
+#     tokenizer=tokenizer,
+#     data_collator=collator,
+# )
+# trainer.train()
+
+# trainer.save_model(NEW_MODEL)
+
+# ######
+# tokenizer = AutoTokenizer.from_pretrained(NEW_MODEL)
+
+# model = AutoModelForCausalLM.from_pretrained(
+#     MODEL_NAME,
+#     torch_dtype=torch.float16,
+#     device_map="cuda:0",
+# )
+
+# model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=8)
+# model = PeftModel.from_pretrained(model, NEW_MODEL, offload_folder="LLM/offload")
+# model = model.merge_and_unload()
+
+# model.save_pretrained("LLM/Hermes-Local")
+# tokenizer.save_pretrained("LLM/Hermes-Local")
 
 
-    # print(data, data["train"][0])
 
-# rows = []
-# for item in dataset["train"]:
-#     rows.append(
-#         {
-#             "question": item["question"],
-#             "context": item["context"],
-#             "answer": item["answer"],
-#         }
-#     )
-# df = pd.DataFrame(rows)
-# print(df.head())
+###############################
+#a way to apply a template to data -- similar functionality handled by dataset_creator.py
+# d = dataset["train"][0]["text"]
+# msg = [
+#     {"role": "system", "content": "Wow this sure is a test"},
+#     {"role": "context", "content": "Wow this sure is a test"},
+#     {"role": "user", "content": "hello frellnd"},
+#     {"role": "assistant", "content": "hello my friends"}
+# ]
+# print(d+'\n')
+# b = tokenizer.apply_chat_template(msg, tokenize=False)
+# print(b)

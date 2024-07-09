@@ -8,17 +8,20 @@ class VtuberExllamav2:
         self.character_name = character_name
 
     async def dialogue_generator(self, prompt, PromptTemplate, max_tokens=200):
-        prompt = PromptTemplate(user_str=prompt)
+        # prompt = PromptTemplate(user_str=prompt)
         max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
         #prompt = ["Five good reasons to adopt a cat:","Tell 5 simple jokes:", "how much is 8 + 19?"],
         output = self.generator.generate(
             prompt = prompt,
             encode_special_tokens=True,
+            decode_special_tokens=True,
+            completion_only=True,
             max_new_tokens = max_tokens,
             stop_conditions = [self.tokenizer.eos_token_id],
             gen_settings = self.gen_settings,
             add_bos = True)
-        output = LLMUtils.character_reply_cleaner(output, self.character_name)
+        print("Out:", output,'\n\n',self.tokenizer.bos_token)
+        # output = LLMUtils.character_reply_cleaner(output, self.character_name)
         return output
 
 #legacy model, high latency
