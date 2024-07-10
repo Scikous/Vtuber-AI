@@ -16,9 +16,10 @@ class VtuberExllamav2:
             encode_special_tokens=True,
             max_new_tokens = max_tokens,
             stop_conditions = [self.tokenizer.eos_token_id],
+            completion_only=True,
             gen_settings = self.gen_settings,
             add_bos = True)
-        output = LLMUtils.character_reply_cleaner(output, self.character_name)
+        # output = LLMUtils.character_reply_cleaner(output, self.character_name)
         return output
 
 #legacy model, high latency
