@@ -11,7 +11,8 @@ The aim of this project is both to give a good starting point for anyone to crea
 * [Large Language Model (LLM)](#large-language-model-llm)
     * [Prompt Style](#prompt-style)
     * [Dataset preparation](#dataset-preparation)
-    * [Training (Fine-tuning)](#training-fine-tuning)
+    * [Fine-tuning](#training-fine-tuning)
+    * [Quantization](#training-fine-tuning)
     * [Inference](#inference)
 * [Voice Model](#voice-model)
     * [Training](#training)
@@ -105,7 +106,7 @@ python run.py
 ```
 
 ## Dataset preparation
-For the WIP dataset creator, the dataset will be expected to be in a .csv file format
+For the WIP dataset creator, the base dataset will be expected to be in a .csv file format
 
 
 >:information_source: The following are examples for the dataset formatting (will be the end result of dataset creator later on as well)
@@ -118,15 +119,17 @@ For the WIP dataset creator, the dataset will be expected to be in a .csv file f
 ```
 Effectively a **System-Context-User-Assistant** format is being followed (**SCUA** referred to as **SICUEAC** in research.pdf [WIP]).
 
-## Training (Fine-tuning)
-> :warning: It is assumed that the model name and .txt file (containing the data in expected format) have the exact same names.
-> Example: Model name = johnsmith, .txt = johnsmith.txt
+## Fine-tuning
+> :warning: Still slightly WIP, also fine-tuned model != quantized model
 
-*Fine-tuning* is the accurate term, however, I believe *training* is more universally understood.
+In the `finetune.py` file, only the **DATASET_PATH** must be changed:
+- **BASE_MODEL**: the base model that is to be fine-tuned -- currently uses [NousResearch/Hermes-2-Theta-Llama-3-8B](#acknowledgements)
+- **NEW_MODEL**: the fine-tuned model's name -- technically the output directory for it
+- **OUTPUT_DIR**: fine-tuning process' output directory
+- **DATASET_PATH**: path to the dataset file -- currently .txt, soon .parquet
 
-In the `train.py` file, for remove the other names in **model_names** variable and add your model name. If need be, the base model can be changed in the **model_preprocess** function, inside of the  **model_name** variable.
-
-Now, running `train.py` should train the model. I'm unsure if this works incase the base model is not a **quantized** model. Also, depending on your hardware, you may need to change some of the hyper parameters. 
+## Quantization
+WIP
 
 ## Inference
 :exclamation: HEAVY WIP
@@ -222,4 +225,4 @@ This project makes use of the following:
 * [CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
 * [NousResearch/Hermes-2-Theta-Llama-3-8B](https://huggingface.co/NousResearch/Hermes-2-Theta-Llama-3-8B/tree/main)
 * [Speech_Recognition](https://github.com/Uberi/speech_recognition)
-* [curiosily](https://github.com/curiousily/AI-Bootcamp/tree/master)
+* [curiosily](https://github.com/curiousily/AI-Bootcamp/blob/master/15.fine-tuning-llama-3-llm-for-rag.ipynb)
