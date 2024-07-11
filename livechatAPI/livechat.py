@@ -100,82 +100,25 @@ from googleapiclient.discovery import build
 # }
 
 
+############################
+from twitch import TwitchTools, TwitchAuth, Bot
+import threading
+TWTools = TwitchTools()
+CLIENT_ID, CLIENT_SECRET = TWTools.twitch_auth_loader("livechatAPI/credentials/twitch.json")
+CHANNEL = 'scikous'
+BOT_NICK = 'Botty'
 
-###################################################
-####get oauth token WIP
-from requests_oauthlib import OAuth2Session
-import webbrowser
-
-def twitch_auth_loader(cred_file):
-    with open(cred_file, 'r') as credentials:
-        creds = json.load(credentials)
-        CLIENT_ID = creds["client-id"]
-        CLIENT_SECRET = creds["client-secret"]
-    return CLIENT_ID, CLIENT_SECRET
+TW_Auth = TwitchAuth(CLIENT_ID, CLIENT_SECRET)
 
 
-CLIENT_ID, CLIENT_SECRET = twitch_auth_loader("livechatAPI/credentials/twitch.json")
-def twit():
-    REDIRECT_URI = 'https://localhost:8080'
-    AUTHORIZATION_BASE_URL = 'https://id.twitch.tv/oauth2/authorize'
-    TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
+# Replace with your Twitch token and channel
+TOKEN = TW_Auth.auth_access_token()
+# bot = Bot(TOKEN,CLIENT_ID, BOT_NICK, CHANNEL)
+# twitch_thread = threading.Thread(target=bot.run, daemon=True)
+# twitch_thread.start()
 
-    try:
-        # Create an OAuth2 session object
-        oauth = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URI, scope=["chat:read", "chat:edit"])
+##kick api
+from kick_chat import client
 
-        # Get the authorization URL and state parameter
-        authorization_url, state = oauth.authorization_url(AUTHORIZATION_BASE_URL)
-
-        # Open the authorization URL in the browser
-        webbrowser.open(authorization_url)
-        print(authorization_url)
-        # print(f'Please go to {authorization_url} and authorize access.')
-        # Get the full redirect URL after authorization
-        redirect_response = input('Paste the full redirect URL here: ')
-        # Fetch the access token
-        token = oauth.fetch_token(TOKEN_URL, client_id=CLIENT_ID, client_secret=CLIENT_SECRET,include_client_id=True, authorization_response=redirect_response)
-        # print('Access Token:', token)
-        print('\n'*25+'#'*30)
-        return token["access_token"]
-    except Exception as e:
-        print(f'HTTPError: {e}')
-    # except Exception as e:
-    #     print(f'Error: {e}')
-    #####
-
-token = twit()
-
-# from twitchio.ext import commands
-# # # Replace with your Twitch token and channel
-# # TOKEN = token
-# # CHANNEL = 'scikous'
-# # BOT_NICK = 'Botty'
-# # class Bot(commands.Bot):
-
-# #     def __init__(self):
-# #         super().__init__(token=TOKEN, client_id=CLIENT_ID, nick=BOT_NICK, prefix='!', initial_channels=[CHANNEL])
-
-# #     async def event_ready(self):
-# #         print(f'Ready | {self.nick}')
-
-# #     async def event_message(self, message):
-# #         print(f'{message.author.name}: {message.content}')
-# #         await self.handle_commands(message)
-
-# #     @commands.command(name='hello')
-# #     async def hello(self, ctx):
-# #         await ctx.send(f'Hello {ctx.author.name}!')
-
-# # if __name__ == "__main__":
-# #     bot = Bot()
-# #     bot.run()
-# #############################
-
-
-# # ##kick api
-# # from kick_chat import client
-
-# # p = client.Client(username="username")
-# # print(p.listen())
-
+p = client.Client(username="scikous")
+print(p.listen())
