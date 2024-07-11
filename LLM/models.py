@@ -18,9 +18,9 @@ class VtuberExllamav2:
             completion_only=True,
             max_new_tokens = max_tokens,
             stop_conditions = [self.tokenizer.eos_token_id],
+            completion_only=True,
             gen_settings = self.gen_settings,
             add_bos = True)
-        print("Out:", output,'\n\n',self.tokenizer.bos_token)
         # output = LLMUtils.character_reply_cleaner(output, self.character_name)
         return output
 
