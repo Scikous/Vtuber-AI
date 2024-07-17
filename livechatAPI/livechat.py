@@ -1,70 +1,32 @@
-import json
-import time
-from googleapiclient.discovery import build
-################### youtube api working as expected
-# def api_key_loader(cred_file):
-#     with open(cred_file, 'r') as credentials:
-#         creds = json.load(credentials)
-#         api_key = creds["api_key"]
-#     return api_key
+from youtube import YTLive, api_key_loader
+from livechat_utils import ChatPicker, twitch_chat_msgs
 
-# youtube_creds = api_key_loader('livechatAPI/credentials/youtube.json')
+youtube_creds = api_key_loader('livechatAPI/credentials/youtube.json')
+api_key = youtube_creds
 
+video_id = ''
+YTLIVE = YTLive(api_key=youtube_creds) 
+live_chat_id = YTLIVE.get_live_chat_id(video_id)
 
-# ##wip
+async def fetch_chat_msgs():
+    yt_messages, next_page_token = YTLIVE.get_live_chat_messages(live_chat_id)
+    print(twitch_chat_msgs)
+    kick = []
+    picker = ChatPicker(yt_messages, twitch_chat_msgs, kick)
 
-# # Set your API key here
-
-
-
-# api_key = youtube_creds
-
-# class YTLive():
-#     def __init__(self, api_key):
-#         self.api_key = api_key
-#         self.youtube = build('youtube', 'v3', developerKey=api_key)
-
-#     def get_live_chat_id(self, video_id):
-#         response = self.youtube.videos().list(
-#             part='liveStreamingDetails',
-#             id=video_id
-#         ).execute()
-#         live_chat_id = response['items'][0]['liveStreamingDetails']['activeLiveChatId']
-#         return live_chat_id
-
-#     def get_live_chat_messages(self, live_chat_id, pageToken=None):
-#         response = self.youtube.liveChatMessages().list(
-#             liveChatId=live_chat_id,
-#             part='snippet,authorDetails',
-#             pageToken=pageToken
-#         ).execute()
-#         messages = response.get('items', [])
-#         if messages:
-#             yt_messages = tuple((message['authorDetails']['displayName'],message['snippet']['displayMessage']) for message in messages )
-#             next_page_token = response.get('nextPageToken')
-#             return yt_messages, next_page_token
-#         return None, None
-#         # return messages
-#         # for message in messages:
-#         #     print(f"{message['authorDetails']['displayName']}: {message['snippet']['displayMessage']}")
-
-#     # Replace with your YouTube live video ID
-
-# video_id = ''
-# YTLIVE = YTLive(api_key=youtube_creds) 
-# live_chat_id = YTLIVE.get_live_chat_id(video_id)
-# async def fetch_chat_msgs():
-#     yt_messages, next_page_token = YTLIVE.get_live_chat_messages(live_chat_id)
-#     if yt_messages:
-#         return yt_messages[0][1], next_page_token
-#     else:
-#         return None, None
+    message = picker.pick_rand_message()
+    print(message)
+    if yt_messages:
+        return yt_messages[0][1], next_page_token
+    else:
+        return None, None
     
 
+import asyncio
+msg = asyncio.run(fetch_chat_msgs())
+print(msg[0])
 
-# import asyncio
-# msg = asyncio.run(fetch_chat_msgs())
-# print(msg[0])
+
 
 ##################################
 # {
@@ -99,26 +61,37 @@ from googleapiclient.discovery import build
 #     )
 # }
 
-
-############################
-from twitch import TwitchTools, TwitchAuth, Bot
-import threading
-TWTools = TwitchTools()
-CLIENT_ID, CLIENT_SECRET = TWTools.twitch_auth_loader("livechatAPI/credentials/twitch.json")
-CHANNEL = 'scikous'
-BOT_NICK = 'Botty'
-
-TW_Auth = TwitchAuth(CLIENT_ID, CLIENT_SECRET)
+#########
+    #     csv_reader = csv.reader(file)
+    #     messages = tuple((tuple(row) for row in csv_reader))
+    # return messages[-num_messages:]
 
 
-# Replace with your Twitch token and channel
-TOKEN = TW_Auth.auth_access_token()
+# file = 'livechatAPI/data/kick_chat.csv'
+# # messages_to_csv(file, (("john", "msg0"), ("bob","msg")))
+# messages = read_messages_csv(file)
+# print(messages)
+
+
+# ############################
+# from twitch import TwitchTools, TwitchAuth, Bot
+# import threading
+# TWTools = TwitchTools()
+# CLIENT_ID, CLIENT_SECRET = TWTools.twitch_auth_loader("livechatAPI/credentials/twitch.json")
+# CHANNEL = 'scikous'
+# BOT_NICK = 'Botty'
+
+# TW_Auth = TwitchAuth(CLIENT_ID, CLIENT_SECRET)
+
+
+# # Replace with your Twitch token and channel
+# TOKEN = TW_Auth.auth_access_token()
 # bot = Bot(TOKEN,CLIENT_ID, BOT_NICK, CHANNEL)
 # twitch_thread = threading.Thread(target=bot.run, daemon=True)
 # twitch_thread.start()
 
-##kick api
-from kick_chat import client
+# # ##kick api
+# from kick_chat import client
 
-p = client.Client(username="scikous")
-print(p.listen())
+# p = client.Client(username="scikous")
+# print(p.listen())
