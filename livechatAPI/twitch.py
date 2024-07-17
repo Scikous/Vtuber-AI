@@ -3,8 +3,7 @@ from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import os, time
 import threading
-
-twitch_chat_msgs = []
+from livechat_utils import append_message, twitch_chat_msgs
 
 CHANNEL = 'scikous'
 BOT_NICK = 'Botty'
@@ -50,10 +49,16 @@ class TwitchAuth():
         if expiration - current_time < 500:
             return True
         return False
+    def token_from_file(self, file_path):
+        with open('token.json', 'r') as token_file:
+            token_data = json.load(token_file)
+            expired = self.validate_token(token_data['expires_at'])
+            token = token_data["access_token"] if not expired else None
+        return token
     
     @staticmethod
     def run_flask(stop_flask):
-        while not stop_flask:
+        while not stop_flask.is_set():
             # Start the Flask server
             app.run(port=8080, ssl_context='adhoc')
     @staticmethod
@@ -61,14 +66,11 @@ class TwitchAuth():
         print("Shutting down flask server")
         stop_event.set()
 
+
     def auth_access_token(self):
             # Load the token from the file
         try:
-            with open('token.json', 'r') as token_file:
-                token_data = json.load(token_file)
-                expired = self.validate_token(token_data['expires_at'])
-                token = token_data["access_token"] if not expired else None
-                
+            token = self.token_from_file('token.json')
             if not token:
                 stop_event = threading.Event()
                 flask_thread = threading.Thread(target=self.run_flask, args=(stop_event,), daemon=True)
@@ -76,13 +78,14 @@ class TwitchAuth():
                 # Open the authorization URL in the browser
                 webbrowser.open(f'https://localhost:8080')
                 # Wait for the Flask server to handle the redirect and save the token
-                time.sleep(5)  # Adjust the sleep time if necessary
+                time.sleep(15)  # Adjust the sleep time if necessary
 
 
                 # Print the access token
                 print('\n' * 25 + '#' * 30)
                 self.stop_flask(stop_event)
                 flask_thread.join()
+                token = self.token_from_file('token.json')
             return token
         
         except Exception as e:
@@ -141,7 +144,9 @@ class Bot(commands.Bot):
         print(f'{message.author.name}: {message.content}')
         if '!' in message.content:
             await self.handle_commands(message)
-        twitch_chat_msgs.append((message.author.name, message.content))
+        user_msg = (message.author.name, message.content)
+        append_message(twitch_chat_msgs, user_msg)
+        print(twitch_chat_msgs)
         
     @commands.command(name='hello')
     async def hello(self, ctx):
@@ -154,7 +159,7 @@ if __name__ == "__main__":
     CLIENT_ID, CLIENT_SECRET = TWTools.twitch_auth_loader("livechatAPI/credentials/twitch.json")
     TW_Auth = TwitchAuth(CLIENT_ID, CLIENT_SECRET)
 
-    # Replace with your Twitch token and channel
+    # # Replace with your Twitch token and channel
     TOKEN = TW_Auth.auth_access_token()
     bot = Bot(TOKEN,CLIENT_ID, BOT_NICK, CHANNEL)
     bot.run()
