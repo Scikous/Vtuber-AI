@@ -6,6 +6,9 @@ from voiceAI.STT import STT
 import logging
 import asyncio
 import time
+
+from livechatAPI.livechat import LiveChatSetup
+
 # from livechatAPI.livechat import fetch_chat_msgs
 
 async def stt_worker():
@@ -21,8 +24,15 @@ async def stt_worker():
 async def dialogue_worker():
     while True:
         try:
+            # live_chat_msg = await live_chat_setup.fetch_chat_message()
+            # if live_chat_msg:
+            #     live_chat_msg = f"{live_chat_msg[0]}: {live_chat_msg[1]}"
+            # else:
+            #     speech = await speech_queue.get()
+            # comment = live_chat_msg if live_chat_msg else speech
+
             speech = await speech_queue.get()
-            comment = speech#await fetch_chat_msgs()#speech
+            comment = speech
             print(comment)
             if not tts_queue.full():
                 output = await Character.dialogue_generator(comment, PromptTemplate.capybaraChatML, max_tokens=100)
@@ -68,4 +78,13 @@ if __name__ == "__main__":
 
     speech_queue = asyncio.Queue(maxsize=2)
     output_queue = asyncio.Queue(maxsize=2)
+
+    # fetch_twitch = True
+    # fetch_youtube = True
+    # kick = []  # Placeholder for Kick messages
+    # live_chat_setup = LiveChatSetup(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube)
+
     asyncio.run(loop_function())
+
+
+

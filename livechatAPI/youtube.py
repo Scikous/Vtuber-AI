@@ -1,23 +1,24 @@
 import json
-import time
 from googleapiclient.discovery import build
 
+yt_messages = []
 
 
+class YTTools():
+    @staticmethod
+    def api_key_loader(cred_file):
+        with open(cred_file, 'r') as credentials:
+            creds = json.load(credentials)
+            api_key = creds["api_key"]
+        return api_key
+    
 
-##wip
-
-# Set your API key here
-def api_key_loader(cred_file):
-    with open(cred_file, 'r') as credentials:
-        creds = json.load(credentials)
-        api_key = creds["api_key"]
-    return api_key
 
 class YTLive():
-    def __init__(self, api_key):
+    def __init__(self, api_key, video_id):
         self.api_key = api_key
         self.youtube = build('youtube', 'v3', developerKey=api_key)
+        self.live_chat_id = self.get_live_chat_id(video_id)
 
     def get_live_chat_id(self, video_id):
         response = self.youtube.videos().list(
@@ -26,19 +27,19 @@ class YTLive():
         ).execute()
         live_chat_id = response['items'][0]['liveStreamingDetails']['activeLiveChatId']
         return live_chat_id
-
-    def get_live_chat_messages(self, live_chat_id, pageToken=None):
+    
+    def get_live_chat_messages(self, pageToken=None):
         response = self.youtube.liveChatMessages().list(
-            liveChatId=live_chat_id,
+            liveChatId=self.live_chat_id,
             part='snippet,authorDetails',
             pageToken=pageToken
         ).execute()
         messages = response.get('items', [])
         if messages:
-            yt_messages = list((message['authorDetails']['displayName'],message['snippet']['displayMessage']) for message in messages)
+            yt_messages.extend([(message['authorDetails']['displayName'],message['snippet']['displayMessage']) for message in messages])
             next_page_token = response.get('nextPageToken')
-            return yt_messages, next_page_token
-        return None, None
+            return next_page_token
+        return None
         # return messages
         # for message in messages:
         #     print(f"{message['authorDetails']['displayName']}: {message['snippet']['displayMessage']}")
