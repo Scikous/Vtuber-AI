@@ -2,7 +2,6 @@ import random
 from collections import deque
 import csv
 
-twitch_chat_msgs = []
 
 
 def write_messages_csv(file_path, messages):
@@ -50,6 +49,7 @@ class ChatPicker:
         total_prob = 0
         
         for i, lst in enumerate(self.lists):
+            print(lst)
             if len(lst) > 0:  # Only calculate probability for non-empty lists
                 probability = 1 / (len(lst) + 1 + self.pick_counts[i])
                 probabilities[i] = probability

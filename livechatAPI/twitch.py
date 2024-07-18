@@ -3,7 +3,7 @@ from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import os, time
 import threading
-from livechat_utils import append_message, twitch_chat_msgs
+from livechat_utils import append_message
 
 CHANNEL = 'scikous'
 BOT_NICK = 'Botty'
@@ -11,8 +11,8 @@ TOKEN_URL = 'https://id.twitch.tv/oauth2/token'  # Refresh token endpoint
 REDIRECT_URI = 'https://localhost:8080'
 AUTHORIZATION_BASE_URL = 'https://id.twitch.tv/oauth2/authorize'
 
+twitch_chat_msgs = []
 
-app = Flask(__name__)
 
 class TwitchTools():
     @staticmethod
@@ -23,6 +23,7 @@ class TwitchTools():
             CLIENT_SECRET = creds["client-secret"]
         return CLIENT_ID, CLIENT_SECRET
 
+app = Flask(__name__)
 class TwitchAuth():
     def __init__(self, CLIENT_ID, CLIENT_SECRET) -> None:
         self.CLIENT_ID = CLIENT_ID
@@ -85,6 +86,7 @@ class TwitchAuth():
                 print('\n' * 25 + '#' * 30)
                 self.stop_flask(stop_event)
                 flask_thread.join()
+                print("flask server exited")
                 token = self.token_from_file('token.json')
             return token
         
@@ -160,7 +162,7 @@ if __name__ == "__main__":
     TW_Auth = TwitchAuth(CLIENT_ID, CLIENT_SECRET)
 
     # # Replace with your Twitch token and channel
-    TOKEN = TW_Auth.auth_access_token()
+    TOKEN = TW_Auth.auth_access_token()             
     bot = Bot(TOKEN,CLIENT_ID, BOT_NICK, CHANNEL)
     bot.run()
     
