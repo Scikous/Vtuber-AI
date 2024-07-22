@@ -8,8 +8,10 @@ VENV = 'venv'
 #windows venv implementation
 def run_TTS():
     venv_path = f"..\\..\\{VENV}\\"
-    script1_path = "./api_v2.py"
-    new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
+    # script1_path = "./api_v2.py"
+    script1_path = "./tts_exp.py"
+    # new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
+    new_dir = "./voiceAI/GPT_Test/"
     # Activate virtual environment and run the script
     activate_script = os.path.join(venv_path, 'Scripts', 'activate.bat')
     command = f"{activate_script} && python {script1_path}"
@@ -27,8 +29,8 @@ def run_brain():
     os.system(command)
 
 if __name__ == "__main__":
-    tts_thread = Thread(target=run_brain, daemon=True)
-    tts_thread.start()
+    # tts_thread = Thread(target=run_brain, daemon=True)
+    # tts_thread.start()
     run_TTS()
 
 

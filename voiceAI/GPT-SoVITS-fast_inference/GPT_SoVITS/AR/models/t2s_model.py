@@ -668,7 +668,7 @@ class Text2SemanticDecoder(nn.Module):
                 if y.shape[1]==0:
                     y = torch.concat([y, torch.zeros_like(samples)], dim=1)
                     print("bad zero prediction")
-                print(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
+                print(f"T2S Decoding EOS ****[{prefix_len} -> {y.shape[1]}]")
                 break
 
             ####################### update next step ###################################

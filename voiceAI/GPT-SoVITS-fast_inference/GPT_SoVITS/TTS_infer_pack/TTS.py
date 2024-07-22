@@ -729,7 +729,7 @@ class TTS:
             t_34 = 0.0
             t_45 = 0.0
             audio = []
-            for item in data:
+            for idx, item in enumerate(data):
                 t3 = ttime()
                 if return_fragment:
                     item = make_batch(item)
@@ -826,12 +826,20 @@ class TTS:
                                                     )
                 else:
                     audio.append(batch_audio_fragment)
+                    # yield self.audio_postprocess([batch_audio_fragment], 
+                    #             self.configs.sampling_rate, 
+                    #             batch_index_list[idx],
+                    #             speed_factor,
+                    #             split_bucket,
+                    #             fragment_interval
+                    #             )
 
                 if self.stop_flag:
                     yield self.configs.sampling_rate, np.zeros(int(self.configs.sampling_rate),
                                                             dtype=np.int16)
                     return
-
+                
+            #returns basic audio data for packing in api_v2.py
             if not return_fragment:
                 print("%.3f\t%.3f\t%.3f\t%.3f" % (t1 - t0, t2 - t1, t_34, t_45))
                 yield self.audio_postprocess(audio, 

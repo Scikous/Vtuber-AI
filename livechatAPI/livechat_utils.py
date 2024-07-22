@@ -49,7 +49,6 @@ class ChatPicker:
         total_prob = 0
         
         for i, lst in enumerate(self.lists):
-            print(lst)
             if len(lst) > 0:  # Only calculate probability for non-empty lists
                 probability = 1 / (len(lst) + 1 + self.pick_counts[i])
                 probabilities[i] = probability
@@ -72,4 +71,8 @@ class ChatPicker:
             cumulative_prob += prob
             if rand < cumulative_prob:
                 self.pick_counts[i] += 1  # Increment pick count for the chosen list
-                return random.choice(self.lists[i])
+                random_chat_message = random.choice(self.lists[i])
+                #remove chosen message from list
+                self.lists[i].remove(random_chat_message)
+                # print(self.lists)
+                return random_chat_message

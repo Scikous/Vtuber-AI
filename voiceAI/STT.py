@@ -8,7 +8,7 @@ async def STT(callback):
             print("Speak something...")
             recognizer.energy_threshold = 2800
             #print("Listening...")
-            audio_data = recognizer.listen(source, phrase_time_limit=27)
+            audio_data = recognizer.listen(source, phrase_time_limit=15)
             #print("Processing...")
 
         try:
