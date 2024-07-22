@@ -3,7 +3,7 @@ from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import os, time
 import threading
-from livechat_utils import append_message
+from livechat_utils import append_message, write_messages_csv
 
 CHANNEL = 'scikous'
 BOT_NICK = 'Botty'
@@ -12,6 +12,7 @@ REDIRECT_URI = 'https://localhost:8080'
 AUTHORIZATION_BASE_URL = 'https://id.twitch.tv/oauth2/authorize'
 
 twitch_chat_msgs = []
+DEFAULT_SAVE_FILE = "livechatAPI/data/twitch_chat.csv"
 
 
 class TwitchTools():
@@ -67,7 +68,6 @@ class TwitchAuth():
         print("Shutting down flask server")
         stop_event.set()
 
-
     def auth_access_token(self):
             # Load the token from the file
         try:
@@ -81,7 +81,6 @@ class TwitchAuth():
                 # Wait for the Flask server to handle the redirect and save the token
                 time.sleep(15)  # Adjust the sleep time if necessary
 
-
                 # Print the access token
                 print('\n' * 25 + '#' * 30)
                 self.stop_flask(stop_event)
@@ -89,7 +88,6 @@ class TwitchAuth():
                 print("flask server exited")
                 token = self.token_from_file('token.json')
             return token
-        
         except Exception as e:
             print(f'HTTPError: {e}')
 
@@ -135,10 +133,9 @@ class TwitchAuth():
 
 from twitchio.ext import commands
 class Bot(commands.Bot):
-
-    def __init__(self, TOKEN, CLIENT_ID, BOT_NICK, CHANNEL):
+    def __init__(self, TOKEN, CLIENT_ID, BOT_NICK, CHANNEL, SAVE_MESSAGES=True):
         super().__init__(token=TOKEN, client_id=CLIENT_ID, nick=BOT_NICK, prefix='!', initial_channels=[CHANNEL])
-
+        self.write_message_func = write_messages_csv if SAVE_MESSAGES else None  # Assign conditionally
     async def event_ready(self):
         print(f'Ready | {self.nick}')
 
@@ -147,8 +144,10 @@ class Bot(commands.Bot):
         if '!' in message.content:
             await self.handle_commands(message)
         user_msg = (message.author.name, message.content)
+        #write message to file -- stability is questionable for bigger stream chats
+        if self.write_message_func:
+            self.write_message_func(DEFAULT_SAVE_FILE, user_msg)
         append_message(twitch_chat_msgs, user_msg)
-        print(twitch_chat_msgs)
         
     @commands.command(name='hello')
     async def hello(self, ctx):

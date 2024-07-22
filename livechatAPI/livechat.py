@@ -204,7 +204,7 @@
 
 
 import threading
-from youtube import YTLive, YTTools, yt_messages
+from youtube import YTLive, yt_messages
 from livechat_utils import ChatPicker 
 from twitch import TwitchAuth, TwitchTools, Bot, twitch_chat_msgs
 import time
@@ -240,24 +240,24 @@ class LiveChatSetup:
         twitch_thread.start()
 
     def setup_youtube(self):
-        api_key = YTTools.api_key_loader('livechatAPI/credentials/youtube.json')
-        self.youtube = YTLive(api_key=api_key, video_id="")
+        youtube_creds_file = 'livechatAPI/credentials/youtube.json'
+        self.youtube = YTLive(youtube_creds_file)
 
     async def fetch_chat_message(self):
         if self.youtube:
-            self.next_page_token = self.youtube.get_live_chat_messages(self.next_page_token)
-        
+            self.next_page_token = self.youtube.get_live_chat_messages(next_page_token=self.next_page_token)
         message = self.picker.pick_rand_message()
-        print(message)
+        # print(message)
         return message
 
 # Example usage:
 if __name__ == "__main__":
-    fetch_twitch = True
+    import asyncio
+    fetch_twitch = False
     fetch_youtube = True
 
     live_chat_setup = LiveChatSetup(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube)
-    
+
     while True:
-        live_chat_setup.fetch_chat_message()
+        asyncio.run(live_chat_setup.fetch_chat_message())
         time.sleep(10)  # Adjust the interval as needed
