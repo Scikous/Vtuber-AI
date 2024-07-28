@@ -227,3 +227,5 @@ voiceAI/GPT_Test/venv
 
 livechatAPI/credentials/*
 !livechatAPI/credentials/.gitignore
+livechatAPI/data/*
+!livechatAPI/data/.gitignore

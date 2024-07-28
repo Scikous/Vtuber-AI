@@ -95,7 +95,7 @@ import logging
 import asyncio
 import time
 
-from livechatAPI.livechat import LiveChatSetup
+from livechatAPI.livechat import LiveChatController
 
 async def stt_worker():
     async def stt_callback(speech):
@@ -170,6 +170,6 @@ if __name__ == "__main__":
 
     fetch_twitch = True
     fetch_youtube = True
-    live_chat_setup = LiveChatSetup(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube)
+    live_chat_setup = LiveChatController(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube)
 
     asyncio.run(loop_function(live_chat_setup))

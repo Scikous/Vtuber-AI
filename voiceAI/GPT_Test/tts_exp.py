@@ -171,31 +171,30 @@ async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", t
     url = "http://127.0.0.1:9880/tts"
     # for data in response.content:
     #     print(data)
-    # e = time.perf_counter()
-    # print("SJSJSJSJSJSJSJS", e-s)
+    # s = time.perf_counter()
 
     # response = requests.post(url, json=input_data) #response will be a .wav type of bytes
+    # e = time.perf_counter()
+    # print("SJSJSJSJSJSJSJS", e-s)
     # with LOCK:
     #     tts_queue.put(response.content)  # Enqueue the audio data
     #     CONDITION.notify()
-    print("GETTING RESPONSE")
     resp = tts_direct(input_data)
-    print("WOWOWOO"*25)
     s = time.perf_counter()
     for r in resp:
-        # with LOCK:
-        #     if tts_queue.empty:
-        #         CONDITION.notify()
-        #     tts_queue.put(r)  # Enqueue the audio data
+        with LOCK:
+            if tts_queue.empty:
+                CONDITION.notify()
+            tts_queue.put(r)  # Enqueue the audio data
         e = time.perf_counter()
         print("TIME TAKEN", e-s)
         # audio_playback_v2(r)
-        print("_-----"*30,r[:5], '\n')
+        # print("_-----"*30,r[:5], '\n')
         s = time.perf_counter()
     print(resp)
 
-# playback_thread = threading.Thread(target=audio_playback, daemon=True)
-# playback_thread.start()
+playback_thread = threading.Thread(target=audio_playback, daemon=True)
+playback_thread.start()
 
 
 if __name__ == "__main__":

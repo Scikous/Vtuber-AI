@@ -3,10 +3,8 @@ from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import os, time
 import threading
-from livechat_utils import append_message, write_messages_csv
+from livechat_utils import append_livechat_message, write_messages_csv
 
-CHANNEL = 'scikous'
-BOT_NICK = 'Botty'
 TOKEN_URL = 'https://id.twitch.tv/oauth2/token'  # Refresh token endpoint
 REDIRECT_URI = 'https://localhost:8080'
 AUTHORIZATION_BASE_URL = 'https://id.twitch.tv/oauth2/authorize'
@@ -14,83 +12,80 @@ AUTHORIZATION_BASE_URL = 'https://id.twitch.tv/oauth2/authorize'
 twitch_chat_msgs = []
 DEFAULT_SAVE_FILE = "livechatAPI/data/twitch_chat.csv"
 
+class TwitchAuth():
+    def __init__(self, credentials_file="livechatAPI/credentials/twitch.json") -> None:
+        self._token_file = "livechatAPI/credentials/twitch_token.json"
+        self.CHANNEL, self.BOT_NICK, self.CLIENT_ID, self.CLIENT_SECRET, self.TOKEN, = self.twitch_auth_loader(credentials_file)
+        self._oauth = OAuth2Session(self.CLIENT_ID, redirect_uri=REDIRECT_URI, scope=["chat:read", "chat:edit"])
+        self._stop_event = threading.Event()
+        self._flask_thread = None
 
-class TwitchTools():
-    @staticmethod
-    def twitch_auth_loader(cred_file):
-        with open(cred_file, 'r') as credentials:
+    def twitch_auth_loader(self, credentials_file="livechatAPI/credentials/twitch.json"):
+        with open(credentials_file, 'r') as credentials:
             creds = json.load(credentials)
+            CHANNEL = creds["channel"]
+            BOT_NICK = creds["bot-nick"]
             CLIENT_ID = creds["client-id"]
             CLIENT_SECRET = creds["client-secret"]
-        return CLIENT_ID, CLIENT_SECRET
-
-app = Flask(__name__)
-class TwitchAuth():
-    def __init__(self, CLIENT_ID, CLIENT_SECRET) -> None:
-        self.CLIENT_ID = CLIENT_ID
-        self.CLIENT_SECRET = CLIENT_SECRET
-        self.oauth = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URI, scope=["chat:read", "chat:edit"])
-
+            TOKEN = self.token_from_file()
+        return CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN
+        
+    def token_from_file(self):
+        def _validate_token(expiration):
+            current_time = time.time()
+            if expiration - current_time < 500:
+                return True
+            return False
+        try:
+            with open(self._token_file, 'r') as token_file:
+                token_data = json.load(token_file)
+                expired = _validate_token(token_data['expires_at'])
+                token = token_data["access_token"] if not expired else None
+            return token
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Error loading token (probably empty file): {e}")
+            return None
+        
+    def stop_flask(self):
+        print("Shutting down flask server")
+        self._stop_event.set()
+        self._flask_thread.join()
+        print("flask server exited")
+    
+    def run_flask(self):
+        app = Flask(__name__)
         @app.route('/')
         def index():
             # Only redirect to the authorization URL once
             if 'code' in request.args or 'state' in request.args:
-                token = self.oauth.fetch_token(TOKEN_URL, client_id=CLIENT_ID, client_secret=CLIENT_SECRET,include_client_id=True, authorization_response=request.url)
+                token = self._oauth.fetch_token(TOKEN_URL, client_id=self.CLIENT_ID, client_secret=self.CLIENT_SECRET,include_client_id=True, authorization_response=request.url)
                 #print(f"Token received: {token}")
                 # Save the token to a file or environment variable
-                with open('token.json', 'w') as token_file:
+                with open(self._token_file, 'w') as token_file:
                     json.dump(token, token_file)
+                self.stop_flask()
                 return 'Authorization successful! You can close this window.'
-                # return redirect('/callback')
             else:
-                authorization_url, state = self.oauth.authorization_url(AUTHORIZATION_BASE_URL)
+                authorization_url, state = self._oauth.authorization_url(AUTHORIZATION_BASE_URL)
                 return redirect(authorization_url)
-    @staticmethod
-    def validate_token(expiration):
-        current_time = time.time()
-        if expiration - current_time < 500:
-            return True
-        return False
-    def token_from_file(self, file_path):
-        with open('token.json', 'r') as token_file:
-            token_data = json.load(token_file)
-            expired = self.validate_token(token_data['expires_at'])
-            token = token_data["access_token"] if not expired else None
-        return token
-    
-    @staticmethod
-    def run_flask(stop_flask):
-        while not stop_flask.is_set():
-            # Start the Flask server
-            app.run(port=8080, ssl_context='adhoc')
-    @staticmethod
-    def stop_flask(stop_event: threading.Event):
-        print("Shutting down flask server")
-        stop_event.set()
+        app.run(port=8080, ssl_context='adhoc')
+
 
     def auth_access_token(self):
-            # Load the token from the file
-        try:
-            token = self.token_from_file('token.json')
-            if not token:
-                stop_event = threading.Event()
-                flask_thread = threading.Thread(target=self.run_flask, args=(stop_event,), daemon=True)
-                flask_thread.start()
-                # Open the authorization URL in the browser
-                webbrowser.open(f'https://localhost:8080')
-                # Wait for the Flask server to handle the redirect and save the token
-                time.sleep(15)  # Adjust the sleep time if necessary
+        try: 
+            self._flask_thread = threading.Thread(target=self.run_flask, daemon=True)
+            self._flask_thread.start()
 
-                # Print the access token
-                print('\n' * 25 + '#' * 30)
-                self.stop_flask(stop_event)
-                flask_thread.join()
-                print("flask server exited")
-                token = self.token_from_file('token.json')
-            return token
+            # Open the authorization URL in the browser
+            webbrowser.open(f'https://localhost:8080')
+            
+            # Wait for the Flask server to handle the authorization redirect, save the token and shutdown the flask server
+            self._stop_event.wait()
+            
+            self.TOKEN = self.token_from_file()
+            return self.TOKEN
         except Exception as e:
             print(f'HTTPError: {e}')
-
 
     def refresh_access_token(self,refresh_token):
     # Prepare the request data
@@ -133,7 +128,7 @@ class TwitchAuth():
 
 from twitchio.ext import commands
 class Bot(commands.Bot):
-    def __init__(self, TOKEN, CLIENT_ID, BOT_NICK, CHANNEL, SAVE_MESSAGES=True):
+    def __init__(self, CHANNEL, BOT_NICK, CLIENT_ID, TOKEN, SAVE_MESSAGES=True):
         super().__init__(token=TOKEN, client_id=CLIENT_ID, nick=BOT_NICK, prefix='!', initial_channels=[CHANNEL])
         self.write_message_func = write_messages_csv if SAVE_MESSAGES else None  # Assign conditionally
     async def event_ready(self):
@@ -144,10 +139,11 @@ class Bot(commands.Bot):
         if '!' in message.content:
             await self.handle_commands(message)
         user_msg = (message.author.name, message.content)
+        print("Twitch msg:", user_msg)
         #write message to file -- stability is questionable for bigger stream chats
         if self.write_message_func:
             self.write_message_func(DEFAULT_SAVE_FILE, user_msg)
-        append_message(twitch_chat_msgs, user_msg)
+        append_livechat_message(twitch_chat_msgs, user_msg)
         
     @commands.command(name='hello')
     async def hello(self, ctx):
@@ -156,12 +152,12 @@ class Bot(commands.Bot):
 
 
 if __name__ == "__main__":
-    TWTools = TwitchTools()
-    CLIENT_ID, CLIENT_SECRET = TWTools.twitch_auth_loader("livechatAPI/credentials/twitch.json")
-    TW_Auth = TwitchAuth(CLIENT_ID, CLIENT_SECRET)
 
     # # Replace with your Twitch token and channel
-    TOKEN = TW_Auth.auth_access_token()             
-    bot = Bot(TOKEN,CLIENT_ID, BOT_NICK, CHANNEL)
+    TW_Auth = TwitchAuth()
+    CHANNEL, BOT_NICK, CLIENT_ID, TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.TOKEN
+    if not TOKEN:
+        TOKEN = TW_Auth.auth_access_token()
+    bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, TOKEN)
     bot.run()
     
