@@ -1,11 +1,15 @@
 import os
 from threading import Thread
 import subprocess
+from dotenv import load_dotenv
+
 # Define the paths to your Python files
 # venv_path = "venv2\\scripts\\activate"
 VENV = 'venv'
 
-#windows venv implementation
+##windows venv implementation
+
+#legacy, handled running TTS web server
 def run_TTS():
     venv_path = f"..\\..\\{VENV}\\"
     script1_path = "./api_v2.py"
@@ -20,6 +24,7 @@ def run_TTS():
     except subprocess.CalledProcessError as e:
         print("Error running TTS:", e)
 
+#handles all of LLM, TTS, STT and livechat(s) related tasks
 def run_brain():
     script2_path = "./brain.py"
     venv_path = f".\\{VENV}\\"
@@ -29,10 +34,10 @@ def run_brain():
     os.system(command)
 
 if __name__ == "__main__":
+    load_dotenv()#get .env file variables
     tts_thread = Thread(target=run_brain, daemon=True)
     tts_thread.start()
     run_TTS()
-
 
 
 #linux venv version??? untested

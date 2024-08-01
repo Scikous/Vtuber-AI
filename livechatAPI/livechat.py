@@ -32,20 +32,24 @@ class LiveChatController:
     #get token and start twitch bot on a separate thread for livechat messages
     def setup_twitch(self):
         TW_Auth = TwitchAuth()
-        CHANNEL, BOT_NICK, CLIENT_ID, TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.TOKEN, 
-        if not TOKEN:#get new TOKEN if no token or token has expired
-            TOKEN = TW_Auth.auth_access_token()
-        self.twitch_bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, TOKEN)
+        CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.THIRD_PARTY_TOKEN
+        if THIRD_PARTY_TOKEN:
+            TOKEN = ACCESS_TOKEN
+        elif not ACCESS_TOKEN:
+            TOKEN = TW_Auth.access_token_generator()
+        else:
+            TOKEN = TW_Auth.refresh_access_token()
+        self.twitch_bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN)
         twitch_thread = threading.Thread(target=self.twitch_bot.run, daemon=True)
         twitch_thread.start()
+    
     #WIP
     def setup_kick(self):
         pass
 
     #get token and prepare for fetching youtube livechat messages
     def setup_youtube(self):
-        youtube_creds_file = 'livechatAPI/credentials/youtube.json'
-        self.youtube = YTLive(youtube_creds_file)
+        self.youtube = YTLive()
 
     #fetch a random message from 
     async def fetch_chat_message(self):
@@ -62,7 +66,6 @@ if __name__ == "__main__":
     fetch_youtube = False
 
     live_chat_setup = LiveChatController(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube)
-
     while True:
         asyncio.run(live_chat_setup.fetch_chat_message())
         time.sleep(15.5)  # Adjust the interval as needed

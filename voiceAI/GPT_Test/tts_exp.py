@@ -59,8 +59,6 @@ def audio_playback(audio_data=None):
     p.terminate()
 
 
-
-
 def audio_playback_v2(audio_data=None):
 
     paused = False
