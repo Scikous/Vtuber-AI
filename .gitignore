@@ -188,6 +188,7 @@ unnamedSIUEA-7B-GPTQ
 unnamedSIUEA
 
 #ignore test files
+.env
 tt.py
 LLM.py
 model_losses.txt

@@ -11,7 +11,8 @@ The aim of this project is both to give a good starting point for anyone to crea
 * [Large Language Model (LLM)](#large-language-model-llm)
     * [Prompt Style](#prompt-style)
     * [Dataset preparation](#dataset-preparation)
-    * [Training (Fine-tuning)](#training-fine-tuning)
+    * [Fine-tuning](#training-fine-tuning)
+    * [Quantization](#training-fine-tuning)
     * [Inference](#inference)
 * [Voice Model](#voice-model)
     * [Training](#training)
@@ -50,20 +51,86 @@ The aim of this project is both to give a good starting point for anyone to crea
   - [ ] Singing capability?
   - [ ] Vector database for improved RAG?
   - [ ] Different/Custom STT?
+
 # Setup
 This is developed and tested on Python 3.11.8.
 
-In the root directory, install everything in the requirements.txt. All of the necessary packages are included in this file, no need to install anything anywhere else. (I highly suggest setting up a virtual environment up first).
+## installation
 
 Download PyTorch first and foremost (assumes you are using CudaToolkit 12.1)
 ```
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Next, install requirements.
+Next, install the required packages.
 ```
 pip install -r requirements.txt
 ```
+
+:information_source: The next sub-sections are purely optional, only necessary if you want the AI to interact with livechat on YouTube, Twitch or Kick.
+
+## .env File Setup (Optional)
+Create a **.env** file inside of the root directory and add as much of the following as desired:
+
+:warning: REMEMBER TO ADD YOUR OWN INFORMATION FOR EACH PART - further instructions in respective sub-sections
+
+```
+#For YouTube
+YT_API_KEY=
+LIVESTREAM_ID=
+
+#For Twitch
+TW_CHANNEL=
+TW_BOT_NICK=
+TW_CLIENT_ID=
+TW_CLIENT_SECRET=
+TW_ACCESS_TOKEN=
+TW_THIRD_PARTY_TOKEN=
+```
+
+## YouTube API (Optional)
+The official guide here: https://developers.google.com/youtube/v3/live/getting-started
+
+Basic steps:
+1. Navigate to the [Google API Console](https://console.cloud.google.com/apis/credentials)
+2. Create a new project
+3. Back at the credentials page, use the **CREATE CREDENTIALS** to generate an API key
+4. Paste the API key in the **.env** file in the **YT_API_KEY**
+5. For NOW, you will also have to navigate to your livestream and copy the part after `https://www.youtube.com/watch?v=<LIVESTREAM_ID is here>`or go through youtube studio and copy from `https://youtube.com/live/<LIVESTREAM_ID is here>`
+
+## Twitch API (Optional)
+:information_source: The twitchio bot automatically renews your token using the your twitch application client id and client secret
+
+Precursory steps:
+1. Set **TW_CHANNEL=<your twitch username>** and **TW_BOT_NICK=<any name for the bot>**
+2. You will first need to create an application. Navigate to the developer console: https://dev.twitch.tv/console/
+3. Click on **Register Your Application** -- right side
+4. Set the following:
+**Name**: the application name can be anything
+**OAuth Redirect URLs**: you can use your desired HTTPS URI, in Optional Path 1 the following is used:
+```
+https://localhost:8080
+```
+**Category**: Chat Bot -- could use others probably
+**Client Type**: Confidential -- could be Public if need be
+5. Back at the console page, click on **Manage**
+6. Copy the **Client ID** and **Client Secret** to the **.env** file's variables **TW_CLIENT_ID=<Client ID here>** and **TW_CLIENT_SECRET=<Client Secret here>**
+
+Optional Path 1:
+Basic steps:
+1. Run `run.py` OR `twitch.py` (may need to uncomment some code) -- assumes you have all the requirements installed
+2. A locally hosted HTTPS web server should be running and a web page should open on your default browser -- MOST LIKELY THE BROWSER WILL WARN ABOUT THE CONNECTION, JUST ALLOW IT... or don't (see optional path 2)
+3. Authorize yourself to generate your own tokens
+4. You're done! For the foreseeable future, the refresh token will handle everything automatically, no need for steps 2 and 3
+
+Optional Path 2:
+1. Navigate to and generate a token: https://twitchtokengenerator.com/
+2. Set **TW_THIRD_PARTY_TOKEN=** to `True` -- case sensitive
+3. Done!
+
+In Optional Path 1, the TW_ACCESS_TOKEN is technically the refresh token, only self.TOKEN in TwitchAuth class is an actual access token.
+
+The twitchio bot should presumably automatically renew your token upon expiration. This requires atleast **Client Secret** and maybe **Client ID**
 
 ## Virtual Environments
 The virtual environment simply helps to avoid package conflicts. Do note that this will take more space in the storage as each environment is its own.
@@ -86,7 +153,6 @@ Deactivate env:
 ```
 Then just delete the venv folder
 
-
 # Quick Start
 :exclamation: Heavy WIP
 
@@ -105,7 +171,7 @@ python run.py
 ```
 
 ## Dataset preparation
-For the WIP dataset creator, the dataset will be expected to be in a .csv file format
+For the WIP dataset creator, the base dataset will be expected to be in a .csv file format
 
 
 >:information_source: The following are examples for the dataset formatting (will be the end result of dataset creator later on as well)
@@ -118,15 +184,21 @@ For the WIP dataset creator, the dataset will be expected to be in a .csv file f
 ```
 Effectively a **System-Context-User-Assistant** format is being followed (**SCUA** referred to as **SICUEAC** in research.pdf [WIP]).
 
-## Training (Fine-tuning)
-> :warning: It is assumed that the model name and .txt file (containing the data in expected format) have the exact same names.
-> Example: Model name = johnsmith, .txt = johnsmith.txt
+## Fine-tuning
+> :warning: Still slightly WIP, also fine-tuned model != quantized model
 
-*Fine-tuning* is the accurate term, however, I believe *training* is more universally understood.
+In the `finetune.py` file, only the **DATASET_PATH** must be changed:
+- **BASE_MODEL**: the base model that is to be fine-tuned -- currently uses [NousResearch/Hermes-2-Theta-Llama-3-8B](#acknowledgements)
+- **NEW_MODEL**: the fine-tuned model's name -- technically the output directory for it
+- **OUTPUT_DIR**: fine-tuning process' output directory
+- **DATASET_PATH**: path to the dataset file -- currently .txt, soon .parquet
 
-In the `train.py` file, for remove the other names in **model_names** variable and add your model name. If need be, the base model can be changed in the **model_preprocess** function, inside of the  **model_name** variable.
+## Quantization
+WIP
+pip install https://github.com/turboderp/exllamav2/releases/download/v0.1.8/exllamav2-0.1.8+cu118.torch2.3.1-cp311-cp311-win_amd64.whl
 
-Now, running `train.py` should train the model. I'm unsure if this works incase the base model is not a **quantized** model. Also, depending on your hardware, you may need to change some of the hyper parameters. 
+
+
 
 ## Inference
 :exclamation: HEAVY WIP
@@ -220,4 +292,6 @@ This project makes use of the following:
 
 * [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS/tree/main)
 * [CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
+* [NousResearch/Hermes-2-Theta-Llama-3-8B](https://huggingface.co/NousResearch/Hermes-2-Theta-Llama-3-8B/tree/main)
 * [Speech_Recognition](https://github.com/Uberi/speech_recognition)
+* [curiosily](https://github.com/curiousily/AI-Bootcamp/blob/master/15.fine-tuning-llama-3-llm-for-rag.ipynb)

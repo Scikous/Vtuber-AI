@@ -51,15 +51,17 @@ class LLMUtils:
             token_repetition_penalty = 1.025
         )
         return generator, gen_settings, tokenizer
+    
+    #legacy model loading
     @staticmethod
     def load_model(base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name=""):
         from peft import PeftModel, PeftConfig
         from transformers import AutoModelForCausalLM, AutoTokenizer
         
         model = AutoModelForCausalLM.from_pretrained(base_model_name,
-                                                     device_map="auto",
-                                                     trust_remote_code=False,
-                                                     revision="main")
+                                                        device_map="auto",
+                                                        trust_remote_code=False,
+                                                        revision="main")
 
         if custom_model_name:
             print(custom_model_name)

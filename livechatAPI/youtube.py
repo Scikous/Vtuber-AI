@@ -1,23 +1,22 @@
-import json
+import os
 from googleapiclient.discovery import build
 from livechat_utils import write_messages_csv
 
 yt_messages = []
 DEFAULT_SAVE_FILE = "livechatAPI/data/youtube_chat.csv"
-    
-class YTLive():
-    def __init__(self, youtube_creds_file, SAVE_MESSAGES=True):
-        api_key, video_id = self.youtube_credentials(youtube_creds_file)
-        self.youtube = build('youtube', 'v3', developerKey=api_key)
-        self.live_chat_id = self.get_live_chat_id(video_id)
-        self.write_message_func = write_messages_csv if SAVE_MESSAGES else None  # Assign conditionally
 
+class YTLive():
+    def __init__(self, SAVE_MESSAGES=True):
+        API_KEY, LIVESTREAM_ID = self.youtube_credentials()
+        self.youtube = build('youtube', 'v3', developerKey=API_KEY)
+        self.live_chat_id = self.get_live_chat_id(LIVESTREAM_ID)
+        self.write_message_func = write_messages_csv if SAVE_MESSAGES else None  # maybe remove?
+
+    #retrieves the API key
     @staticmethod
-    def youtube_credentials(cred_file):
-        with open(cred_file, 'r') as credentials:
-            creds = json.load(credentials)
-            api_key, video_id = creds["api_key"], creds["video_id"]
-        return api_key, video_id
+    def youtube_credentials():
+        API_KEY, LIVESTREAM_ID = os.getenv("YT_API_KEY"), os.getenv("LIVESTREAM_ID")
+        return API_KEY, LIVESTREAM_ID
     
     def get_live_chat_id(self, video_id):
         response = self.youtube.videos().list(
