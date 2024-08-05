@@ -3,20 +3,23 @@ from LLM.model_utils import LLMUtils
 from LLM.llm_templates import PromptTemplate as pt
 from livechatAPI.livechat import LiveChatController
 from voiceAI.TTS import send_tts_request, tts_queue
-from voiceAI.STT import STT
+from voiceAI.STT import speech_to_text
 import logging
 import asyncio
 import time
+from dotenv import load_dotenv
+
 
 #handles speech-to-text in the background
 async def stt_worker():
     async def stt_callback(speech):
+        #current STT system recognizes no sound as 'Thank you.' for reasons unknown
         if speech and speech.strip() != "Thank you.":
             await speech_queue.put(speech.strip())
         print(list(speech_queue._queue))
 
     while True:
-        await STT(stt_callback)
+        await speech_to_text(stt_callback)
         await asyncio.sleep(0.1)
 
 #handles retrieving a random chat message in the background
@@ -68,6 +71,8 @@ async def loop_function(live_chat_setup):
 
 #called by run.py
 if __name__ == "__main__":
+    load_dotenv()#get .env file variables
+
     custom_model = "LLM/unnamedSICUACCT"
     model, tokenizer = LLMUtils.load_model(custom_model_name=custom_model)
     
@@ -79,8 +84,8 @@ if __name__ == "__main__":
     # Character = VtuberLLM(model, tokenizer, character_name)  
     
     #exllamav2 model
-    generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2()
-    Character = VtuberExllamav2(generator, gen_settings, tokenizer, character_name)
+    # generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2() #deprecated
+    Character = VtuberExllamav2.load_model_exllamav2(character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
 
     speech_queue = asyncio.Queue(maxsize=2)
     live_chat_queue = asyncio.Queue(maxsize=2)

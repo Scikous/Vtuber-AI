@@ -158,6 +158,3 @@ if __name__ == "__main__":
         print("TOKEN EXPIRED with ValueERROR, LMAO", e)    
     except Exception as e:
         print("TOKEN EXPIRED with Exception, LMAO", e)
-
-
-    

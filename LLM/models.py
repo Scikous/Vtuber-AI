@@ -1,13 +1,58 @@
 from model_utils import LLMUtils
+
 #current, lowest latency
 class VtuberExllamav2:
+    """
+    Holds and handles all of the ExllamaV2 based tools
+    """
+
     def __init__(self, generator, gen_settings, tokenizer, character_name):
         self.generator = generator
         self.gen_settings = gen_settings
         self.tokenizer = tokenizer
         self.character_name = character_name
 
+    @classmethod
+    def load_model_exllamav2(cls, model_dir="LLM/CapybaraHermes-2.5-Mistral-7B-GPTQ", character_name='assistant'):
+        """
+        Loads an ExLlamaV2 compatible model
+
+        Returns:
+        
+            generator (ExLlamaV2DynamicGenerator): to be used for text generation
+
+            gen_settings (ExLlamaV2Sampler.Settings): default text generation settings -- reasonably unique responses
+            
+            tokenizer (ExLlamaV2Tokenizer): the initialized tokenizer -- given to the "model" in models.py
+        """
+        from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Cache, ExLlamaV2Tokenizer
+        from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2Sampler
+
+        config = ExLlamaV2Config(model_dir)
+        model = ExLlamaV2(config)
+        cache = ExLlamaV2Cache(model, max_seq_len = 65536, lazy = True)
+        model.load_autosplit(cache, progress = True)
+        tokenizer = ExLlamaV2Tokenizer(config)
+        generator = ExLlamaV2DynamicGenerator(
+            model = model,
+            cache = cache,
+            tokenizer = tokenizer,
+        )
+        #default text generation settings, can be overridden
+        gen_settings = ExLlamaV2Sampler.Settings(
+            temperature = 0.9, 
+            top_p = 0.8,
+            token_repetition_penalty = 1.025
+        )
+        return cls(generator, gen_settings, tokenizer, character_name)
+
+
     async def dialogue_generator(self, prompt, PromptTemplate, max_tokens=200):
+        """
+        Generates character's response to a given input (Message)
+
+        For text length variety's sake, randomly selects token length to appear more natural
+        """
         prompt = PromptTemplate(user_str=prompt)
         max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
         #prompt = ["Five good reasons to adopt a cat:","Tell 5 simple jokes:", "how much is 8 + 19?"],
@@ -29,9 +74,29 @@ class VtuberLLM:
         self.tokenizer = tokenizer
         self.character_name = character_name
 
+    @classmethod
+    def load_model(cls, base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name="", character_name='assistant'):
+        from peft import PeftModel, PeftConfig
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        
+        model = AutoModelForCausalLM.from_pretrained(base_model_name,
+                                                        device_map="auto",
+                                                        trust_remote_code=False,
+                                                        revision="main")
+
+        if custom_model_name:
+            print(custom_model_name)
+            config = PeftConfig.from_pretrained(custom_model_name)
+            model = PeftModel.from_pretrained(
+                model, custom_model_name, offload_folder="LLM/offload")
+
+        model.eval()
+        tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
+        return cls(model, tokenizer)
+
     def dialogue_generator(self, prompt, PromptTemplate):
         """
-        Generates character's response to a given input (TTS/Comment)
+        Generates character's response to a given input (Message)
         """
         def is_incomplete_sentence(text):
             return text.strip()[-1] not in {'.', '!', '?'}
@@ -47,7 +112,7 @@ class VtuberLLM:
             results = self.model.generate(input_ids=inputs["input_ids"].to("cuda"),
                                           max_new_tokens=max_new_tokens,
                                           top_p=0.8, top_k=50, temperature=1.1,
-                                          repetition_penalty=1.2, do_sample=True)
+                                          repetition_penalty=1.2, do_sample=True, num_return_sequences=10)
             output = self.tokenizer.batch_decode(results, skip_special_tokens=True)[0]
             # print(f"{'#' * 30}\n{output}\n{'#' * 30}")
             output_clean = LLMUtils.character_reply_cleaner(output, self.character_name).lower()
