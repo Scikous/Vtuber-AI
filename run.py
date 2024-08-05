@@ -1,7 +1,6 @@
 import os
 from threading import Thread
 import subprocess
-from dotenv import load_dotenv
 
 # Define the paths to your Python files
 # venv_path = "venv2\\scripts\\activate"
@@ -34,7 +33,6 @@ def run_brain():
     os.system(command)
 
 if __name__ == "__main__":
-    load_dotenv()#get .env file variables
     tts_thread = Thread(target=run_brain, daemon=True)
     tts_thread.start()
     run_TTS()

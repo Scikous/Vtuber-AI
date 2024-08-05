@@ -6,7 +6,6 @@ import time
 
 kick = []  # Placeholder for Kick messages
 
-#
 class LiveChatController:
     def __init__(self, fetch_twitch=False, fetch_youtube=False, fetch_kick=False):
         self.twitch_bot = None

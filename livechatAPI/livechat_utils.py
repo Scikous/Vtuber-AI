@@ -8,8 +8,9 @@ lock = threading.Lock() #may or may not be useful in avoiding messing with diffe
 #save livechat message(s) for convenient data
 def write_messages_csv(file_path, messages):
     '''
-    intented for writing tuples of chat messages -> (<user name>, <message>)
-    can technically be any format
+    Intented for writing tuples of chat messages -> (<user name>, <message>)
+    
+    Can technically be any format
     '''
     global lock
 
@@ -24,9 +25,11 @@ def write_messages_csv(file_path, messages):
 #fetch last 10 messages from csv
 def read_messages_csv(file_path, num_messages=10):
     '''
-    intented for return tuples of chat messages -> (<user name>, <message>)
-    can technically be any format
-    by default returns the latest 10 chat messages as a list of tuples -> [(<user name>, <message>), ...]
+    Intented for return tuples of chat messages -> (<user name>, <message>)
+    
+    Can technically be any format
+    
+    By default returns the latest 10 chat messages as a list of tuples -> [(<user name>, <message>), ...]
     '''
 
     with open(file_path, mode='r', newline='', encoding='utf-8') as file:
@@ -38,9 +41,9 @@ def read_messages_csv(file_path, num_messages=10):
 def append_livechat_message(chat_messages: list, user_msg: tuple):
     """
     adds the latest message to the running list of messages while maintaining a set max size (default is 10)
+    
     for twitch and kick livechats
     """
-
     global lock
     MAX_MESSAGES = 10
     with lock:
@@ -49,7 +52,7 @@ def append_livechat_message(chat_messages: list, user_msg: tuple):
             chat_messages.pop(0)
         chat_messages.append(user_msg)
 
-#takes lists of chat messages and allows for selecting a random message between them 
+#takes lists of livechat messages and allows for selecting a random message between them -- YT: [], TW: [], Kick: [] 
 class ChatPicker:
     def __init__(self, *lists):
         self.lists = lists
@@ -59,6 +62,7 @@ class ChatPicker:
     def calculate_probabilities(self):
         '''
         A livechat with more activity will generally have lower probability of being picked
+        
         As one chat is picked multiple times in a row, other chats get higher probability of being picked 
         '''
         probabilities = {}
