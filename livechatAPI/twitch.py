@@ -1,10 +1,9 @@
 import requests, webbrowser
 from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
-import threading
+import multiprocessing
 from livechat_utils import append_livechat_message, write_messages_csv, get_env_var
 import dotenv
-import os
 
 TOKEN_URL = 'https://id.twitch.tv/oauth2/token'  # Refresh token endpoint
 REDIRECT_URI = 'https://localhost:8080'
@@ -15,47 +14,42 @@ DEFAULT_SAVE_FILE = "livechatAPI/data/twitch_chat.csv"
 
 class TwitchAuth():
     def __init__(self) -> None:
-        self.CHANNEL, self.BOT_NICK, self.CLIENT_ID, self.CLIENT_SECRET, self.ACCESS_TOKEN, self.THIRD_PARTY_TOKEN = self.twitch_auth_loader()
-        self.TOKEN = None
-        self.token_expiration = None
-        self._oauth = OAuth2Session(self.CLIENT_ID, redirect_uri=REDIRECT_URI, scope=["chat:read", "chat:edit"])
-        self._stop_event = threading.Event()
-        self._flask_thread = None
+        self.CHANNEL, self.BOT_NICK, self.CLIENT_ID, self.CLIENT_SECRET, self.ACCESS_TOKEN, self.USE_THIRD_PARTY_TOKEN = self.twitch_auth_loader()
+        self._stop_event = multiprocessing.Event()
+        self._flask_process = None
 
     #load in necessary twitch credentials from .env
     def twitch_auth_loader(self):
-        CHANNEL, BOT_NICK =  get_env_var("TW_CHANNEL"), get_env_var("TW_BOT_NICK")
+        CHANNEL, BOT_NICK = get_env_var("TW_CHANNEL"), get_env_var("TW_BOT_NICK")
         CLIENT_ID, CLIENT_SECRET = get_env_var("TW_CLIENT_ID"), get_env_var("TW_CLIENT_SECRET")
         ACCESS_TOKEN = get_env_var("TW_ACCESS_TOKEN") #technically the refresh token if LOCAL GENERATION = True, but don't worry about it
-        USE_THIRD_PARTY_TOKEN = get_env_var("TW_USE_THIRD_PARTY_TOKEN") #if not locally generating token, handle access token differently 
+        USE_THIRD_PARTY_TOKEN = get_env_var("TW_USE_THIRD_PARTY_TOKEN") == 'True' #if not locally generating token, handle access token differently 
         return CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN
 
     #turn off the flask server when done with it -- may or may not be working
     def stop_flask(self):
-        print("Shutting down flask server")
+        print("Flask server shutdown signal sent")
         self._stop_event.set()
-        self._flask_thread.join()
-        print("flask server exited")
     
     #create a temporary HTTPS flask server which can be used to generate tokens
-    def run_flask(self):
+    def run_flask(self, token):
         app = Flask(__name__)
+        oauth = OAuth2Session(self.CLIENT_ID, redirect_uri=REDIRECT_URI, scope=["chat:read", "chat:edit"])
         @app.route('/')
         def index():
             # Only redirect to the authorization URL once
             if 'code' in request.args or 'state' in request.args:
-                token = self._oauth.fetch_token(TOKEN_URL, client_id=self.CLIENT_ID, client_secret=self.CLIENT_SECRET,include_client_id=True, authorization_response=request.url)
+                token_info = oauth.fetch_token(TOKEN_URL, client_id=self.CLIENT_ID, client_secret=self.CLIENT_SECRET,include_client_id=True, authorization_response=request.url)
                 #print(f"Token received: {token}")
                 # Save the token to a file or environment variable
-                self.TOKEN = token['access_token']
-                self.token_expiration = token['expires_at']
-                dotenv.set_key(dotenv_path=".env",key_to_set="TW_ACCESS_TOKEN",value_to_set=token["refresh_token"])
+                token.value = bytes(token_info['access_token'],'utf-8')
+                dotenv.set_key(dotenv_path=".env",key_to_set="TW_ACCESS_TOKEN",value_to_set=token_info["refresh_token"])
                 # with open('w') as token_file:
                     # json.dump(token, token_file)
                 self.stop_flask()
                 return 'Authorization successful! You can close this window.'
             else:
-                authorization_url, state = self._oauth.authorization_url(AUTHORIZATION_BASE_URL)
+                authorization_url, state = oauth.authorization_url(AUTHORIZATION_BASE_URL)
                 return redirect(authorization_url)
         app.run(port=8080, ssl_context='adhoc')
 
@@ -66,17 +60,20 @@ class TwitchAuth():
         The web page is "insecure" and requires manual authorization.
         """
         try: 
-            self._flask_thread = threading.Thread(target=self.run_flask, daemon=True)
-            self._flask_thread.start()
+            #create an empty character array of 30 bytes -- processes can't by default share memory
+            token = multiprocessing.Array('c', 30)
+            self._flask_process = multiprocessing.Process(target=self.run_flask, args=(token,),daemon=True)
+            self._flask_process.start()
 
             # Open the authorization URL in the browser
             webbrowser.open(f'https://localhost:8080')
             
             # Wait for the Flask server to handle the authorization redirect, save the token and shutdown the flask server
             self._stop_event.wait()
-            
-            # self.TOKEN = self.token_from_env()
-            return self.TOKEN
+            self._flask_process.terminate()
+            self._flask_process.join()
+            print("flask server exited")
+            return token.value.decode('utf-8') #decode bytest -> str
         except Exception as e:
             print(f'HTTPError: {e}')
 
@@ -137,10 +134,10 @@ if __name__ == "__main__":
     dotenv.load_dotenv()
     import twitchio
     TW_Auth = TwitchAuth()
-    CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.THIRD_PARTY_TOKEN
-    if THIRD_PARTY_TOKEN:
+    CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.USE_THIRD_PARTY_TOKEN
+    if USE_THIRD_PARTY_TOKEN:
         TOKEN = ACCESS_TOKEN
-    elif not ACCESS_TOKEN:
+    elif ACCESS_TOKEN:
         TOKEN = TW_Auth.access_token_generator()
     else:
         TOKEN = TW_Auth.refresh_access_token()

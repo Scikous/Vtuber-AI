@@ -34,7 +34,7 @@ class LiveChatController:
     #get token and start twitch bot on a separate thread for livechat messages
     def setup_twitch(self):
         TW_Auth = TwitchAuth()
-        CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.THIRD_PARTY_TOKEN
+        CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.USE_THIRD_PARTY_TOKEN
         if USE_THIRD_PARTY_TOKEN:
             TOKEN = ACCESS_TOKEN
         elif not ACCESS_TOKEN:
@@ -62,6 +62,9 @@ class LiveChatController:
 # Example usage:
 if __name__ == "__main__":
     import asyncio
+    from dotenv import load_dotenv
+    load_dotenv()
+
 
     fetch_youtube = get_env_var("YT_FETCH") 
     fetch_twitch = get_env_var("TW_FETCH")
