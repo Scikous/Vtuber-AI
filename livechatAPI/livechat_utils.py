@@ -2,6 +2,7 @@ import random
 from collections import deque
 import csv
 import threading
+import dotenv
 
 lock = threading.Lock() #may or may not be useful in avoiding messing with different livechats at wrong times
 
@@ -95,3 +96,18 @@ class ChatPicker:
                 self.lists[i].remove(random_chat_message) #remove chosen message from list
                 # print(self.lists)
                 return random_chat_message
+
+
+#get ENV variables for livechat API related needs
+def get_env_var(env_var):
+    """
+    Fetches information from .env file.
+
+    Args:
+        env_var (str): Any environment variable in .env file.
+    Returns:
+        bool | str: True/False if the key is a boolean type, otherwise returns the key value itself.
+    """
+    env_key = dotenv.get_key(dotenv_path=dotenv.find_dotenv(), key_to_get=env_var)
+    bool_values = {'true': True, 'false': False}
+    return bool_values.get(env_key.lower(), env_key) #return first value as boolean if key is boolean else return key itself

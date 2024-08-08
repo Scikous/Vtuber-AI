@@ -1,6 +1,6 @@
 import os
 from googleapiclient.discovery import build
-from livechat_utils import write_messages_csv
+from livechat_utils import write_messages_csv, get_env_var
 
 yt_messages = []
 DEFAULT_SAVE_FILE = "livechatAPI/data/youtube_chat.csv"
@@ -15,7 +15,7 @@ class YTLive():
     #retrieves the API key
     @staticmethod
     def youtube_credentials():
-        API_KEY, LIVESTREAM_ID = os.getenv("YT_API_KEY"), os.getenv("LIVESTREAM_ID")
+        API_KEY, LIVESTREAM_ID = get_env_var("YT_API_KEY"), get_env_var("LIVESTREAM_ID")
         return API_KEY, LIVESTREAM_ID
     
     def get_live_chat_id(self, video_id):
