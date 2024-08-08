@@ -109,5 +109,16 @@ def get_env_var(env_var):
         bool | str: True/False if the key is a boolean type, otherwise returns the key value itself.
     """
     env_key = dotenv.get_key(dotenv_path=dotenv.find_dotenv(), key_to_get=env_var)
-    bool_values = {'true': True, 'false': False}
-    return bool_values.get(env_key.lower(), env_key) #return first value as boolean if key is boolean else return key itself
+    
+    try:
+        return int(env_key)
+    except ValueError:
+        try:
+            return float(env_key)
+        except ValueError:
+            if env_key.lower() == "true":
+                return True
+            elif env_key.lower() == "false":
+                return False
+            else:
+                return env_key
