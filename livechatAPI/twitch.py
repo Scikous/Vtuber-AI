@@ -2,7 +2,7 @@ import requests, webbrowser
 from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import threading
-from livechat_utils import append_livechat_message, write_messages_csv
+from livechat_utils import append_livechat_message, write_messages_csv, get_env_var
 import dotenv
 import os
 
@@ -24,11 +24,11 @@ class TwitchAuth():
 
     #load in necessary twitch credentials from .env
     def twitch_auth_loader(self):
-        CHANNEL, BOT_NICK = os.getenv("TW_CHANNEL"), os.getenv("TW_BOT_NICK")
-        CLIENT_ID, CLIENT_SECRET = os.getenv("TW_CLIENT_ID"), os.getenv("TW_CLIENT_SECRET")
-        ACCESS_TOKEN = os.getenv("TW_ACCESS_TOKEN") #technically the refresh token if LOCAL GENERATION = True, but don't worry about it
-        THIRD_PARTY_TOKEN = os.getenv("TW_THIRD_PARTY_TOKEN") == 'True' #if not locally generating token, handle access token differently 
-        return CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, THIRD_PARTY_TOKEN
+        CHANNEL, BOT_NICK =  get_env_var("TW_CHANNEL"), get_env_var("TW_BOT_NICK")
+        CLIENT_ID, CLIENT_SECRET = get_env_var("TW_CLIENT_ID"), get_env_var("TW_CLIENT_SECRET")
+        ACCESS_TOKEN = get_env_var("TW_ACCESS_TOKEN") #technically the refresh token if LOCAL GENERATION = True, but don't worry about it
+        USE_THIRD_PARTY_TOKEN = get_env_var("TW_USE_THIRD_PARTY_TOKEN") #if not locally generating token, handle access token differently 
+        return CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN
 
     #turn off the flask server when done with it -- may or may not be working
     def stop_flask(self):

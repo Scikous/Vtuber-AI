@@ -92,7 +92,7 @@ class VtuberLLM:
 
         model.eval()
         tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
-        return cls(model, tokenizer)
+        return cls(model, tokenizer, character_name)
 
     def dialogue_generator(self, prompt, PromptTemplate):
         """

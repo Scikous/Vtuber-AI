@@ -2,6 +2,7 @@ from LLM.models import VtuberExllamav2#, VtuberLLM
 from LLM.model_utils import LLMUtils
 from LLM.llm_templates import PromptTemplate as pt
 from livechatAPI.livechat import LiveChatController
+from livechatAPI.livechat_utils import get_env_var
 from voiceAI.TTS import send_tts_request, tts_queue
 from voiceAI.STT import speech_to_text
 import logging
@@ -73,15 +74,13 @@ async def loop_function(live_chat_setup):
 if __name__ == "__main__":
     load_dotenv()#get .env file variables
 
-    custom_model = "LLM/unnamedSICUACCT"
-    model, tokenizer = LLMUtils.load_model(custom_model_name=custom_model)
-    
     character_info_json = "LLM/characters/character.json"
     instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
 
     instructions_string = f"""{instructions}"""
     PromptTemplate = pt(instructions_string, user_name, character_name)
-    # Character = VtuberLLM(model, tokenizer, character_name)  
+    # custom_model = "LLM/unnamedSICUACCT"
+    # Character = VtuberLLM.load_model(custom_model=custom_model, character_name=character_name)
     
     #exllamav2 model
     # generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2() #deprecated
@@ -91,8 +90,11 @@ if __name__ == "__main__":
     live_chat_queue = asyncio.Queue(maxsize=2)
     output_queue = asyncio.Queue(maxsize=2)
 
-    fetch_twitch = True
-    fetch_youtube = True
-    live_chat_setup = LiveChatController(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube)
+    #ENV variables determine whether to fetch specific livechats
+    fetch_youtube = get_env_var("YT_FETCH") 
+    fetch_twitch = get_env_var("TW_FETCH")
+    fetch_kick = get_env_var("KI_FETCH")
+
+    live_chat_setup = LiveChatController(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube, fetch_kick=fetch_kick)
 
     asyncio.run(loop_function(live_chat_setup))
