@@ -2,7 +2,8 @@ import requests, webbrowser
 from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import multiprocessing
-from livechat_utils import append_livechat_message, get_env_var
+from general_utils import get_env_var
+from livechat_utils import append_livechat_message
 import dotenv
 
 twitch_chat_msgs = []

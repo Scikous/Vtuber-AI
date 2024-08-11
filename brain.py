@@ -2,7 +2,7 @@ from LLM.models import VtuberExllamav2#, VtuberLLM
 from LLM.model_utils import LLMUtils
 from LLM.llm_templates import PromptTemplate as pt
 from livechatAPI.livechat import LiveChatController
-from livechatAPI.livechat_utils import get_env_var, write_messages_csv
+from general_utils import get_env_var, write_messages_csv
 from voiceAI.TTS import send_tts_request, tts_queue
 from voiceAI.STT import speech_to_text
 import logging
@@ -24,9 +24,9 @@ async def stt_worker():
         await asyncio.sleep(0.1)
 
 #handles retrieving a random chat message in the background
-async def live_chat_worker(live_chat_setup):
+async def live_chat_worker(live_chat_controller):
     while True:
-        live_chat_msg = await live_chat_setup.fetch_chat_message()
+        live_chat_msg = await live_chat_controller.fetch_chat_message()
         if live_chat_msg:
             await live_chat_queue.put(f"{live_chat_msg[0]}: {live_chat_msg[1]}")
         await asyncio.sleep(0.1)
@@ -46,12 +46,11 @@ async def dialogue_worker():
             #avoid generating too much text for the TTS to speak outloud
             if not tts_queue.full():
                 output = await Character.dialogue_generator(message, PromptTemplate.capybaraChatML, max_tokens=100)
-                await output_queue.put(output)
+                await llm_output_queue.put(output)
 
                 #write message to file -- stability is questionable for bigger stream chats
                 if save_messages:
-                   await write_messages_csv(DEFAULT_SAVE_FILE, (message, output))
-
+                   await write_messages_csv(DEFAULT_SAVE_FILE, message_data=(message, output))
             else:
                 print("TTS queue is full, skipping generation.")
         except ValueError:
@@ -62,14 +61,14 @@ async def dialogue_worker():
 #handles turning and playing generated TTS audio from LLM's generated text
 async def tts_worker():
     while True:
-        output = await output_queue.get()
+        output = await llm_output_queue.get()
         await send_tts_request(output)
         await asyncio.sleep(0.1)
 
 #run and switch between different tasks conveniently and avoid wasting computational resources
-async def loop_function(live_chat_setup):
+async def loop_function(live_chat_controller):
     stt_task = asyncio.create_task(stt_worker())
-    live_chat_task = asyncio.create_task(live_chat_worker(live_chat_setup))
+    live_chat_task = asyncio.create_task(live_chat_worker(live_chat_controller))
     dialogue_task = asyncio.create_task(dialogue_worker())
     tts_task = asyncio.create_task(tts_worker())
 
@@ -93,17 +92,22 @@ if __name__ == "__main__":
 
     speech_queue = asyncio.Queue(maxsize=2)
     live_chat_queue = asyncio.Queue(maxsize=2)
-    output_queue = asyncio.Queue(maxsize=2)
+    llm_output_queue = asyncio.Queue(maxsize=2)
+
+    #only save message_data if True
+    save_messages=get_env_var("SAVE_MESSAGES")
+    if save_messages:
+        DEFAULT_SAVE_FILE=get_env_var("DEFAULT_SAVE_FILE")
 
     #ENV variables determine whether to fetch specific livechats
-    save_messages=get_env_var("SAVE_MESSAGES")
-    DEFAULT_SAVE_FILE=get_env_var("DEFAULT_SAVE_FILE")
     fetch_youtube = get_env_var("YT_FETCH") 
     fetch_twitch = get_env_var("TW_FETCH")
     fetch_kick = get_env_var("KI_FETCH")
 
-    live_chat_setup = LiveChatController(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube, fetch_kick=fetch_kick)
+    #no reason to unnecessarily have LiveChatController wasting resources if no livechats to retrieve from
+    if any([fetch_youtube, fetch_twitch, fetch_kick]):
+        live_chat_controller = LiveChatController(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube, fetch_kick=fetch_kick)
 
-    asyncio.run(loop_function(live_chat_setup))
+    asyncio.run(loop_function(live_chat_controller))
 
 

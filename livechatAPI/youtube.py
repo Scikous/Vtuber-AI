@@ -1,5 +1,5 @@
 from googleapiclient.discovery import build
-from livechat_utils import get_env_var
+from general_utils import get_env_var
 
 yt_messages = []
 
@@ -8,6 +8,12 @@ class YTLive():
         API_KEY, LIVESTREAM_ID = self.youtube_credentials()
         self.youtube = build('youtube', 'v3', developerKey=API_KEY)
         self.live_chat_id = self.get_live_chat_id(LIVESTREAM_ID)
+        # request = self.youtube.liveStreams().list(
+        #     part='id,snippet',
+        #     mine=True  # Filter for your own live streams
+        # )
+        # response = request.execute()
+        # print(response)
 
     #retrieves the API key from .env
     @staticmethod
@@ -36,3 +42,6 @@ class YTLive():
             yt_messages.extend(yt_new_messages)
             next_page_token = response.get('nextPageToken')
         return next_page_token
+    
+if __name__ == "__main__":
+    YTLive()

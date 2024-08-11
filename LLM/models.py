@@ -94,7 +94,7 @@ class VtuberLLM:
         tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
         return cls(model, tokenizer, character_name)
 
-    def dialogue_generator(self, prompt, PromptTemplate):
+    async def dialogue_generator(self, prompt, PromptTemplate):
         """
         Generates character's response to a given input (Message)
         """
@@ -107,6 +107,7 @@ class VtuberLLM:
         inputs = self.tokenizer(prompt, return_tensors="pt")
 
         generated_text = ""
+        print(len(comment_tokenized["input_ids"][0]))
         for attempt in range(max_attempts):
             max_new_tokens = LLMUtils.get_rand_token_len(input_len=len(comment_tokenized["input_ids"][0]))
             results = self.model.generate(input_ids=inputs["input_ids"].to("cuda"),
