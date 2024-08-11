@@ -7,21 +7,18 @@ import dotenv
 lock = threading.Lock() #may or may not be useful in avoiding messing with different livechats at wrong times
 
 #save livechat message(s) for convenient data
-def write_messages_csv(file_path, messages):
+async def write_messages_csv(file_path, message_data):
     '''
-    Intented for writing tuples of chat messages -> (<user name>, <message>)
+    Intented for writing tuples of chat message_data -> ('<user name>: <message>', '<LLM output>')
     
     Can technically be any format
     '''
-    global lock
-
+    # global lock #we may come back to threading eventually
+    print(message_data)
     with open(file_path, mode='a', newline='\n', encoding='utf-8') as file:
         csv_writer = csv.writer(file)
-        with lock:
-            if isinstance(messages, list):
-                csv_writer.writerows(messages)
-            else:#assumes single message -- for twitch and kick
-                csv_writer.writerow(messages)    
+        # with lock:
+        csv_writer.writerow(message_data)    
 
 #fetch last 10 messages from csv
 def read_messages_csv(file_path, num_messages=10):

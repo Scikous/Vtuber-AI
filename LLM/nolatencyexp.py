@@ -89,29 +89,44 @@
 # #         generated_text = output.outputs[0].text
 # #         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
 
+from models import VtuberExllamav2
 
-from models import VtuberExllamav2, VtuberLLM
 from model_utils import LLMUtils
 from llm_templates import PromptTemplate as pt
 from time import perf_counter
 
+import asyncio
+
 character_info_json = "LLM/characters/character.json"
 instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
+
+instructions_string = f"""{instructions}"""
+PromptTemplate = pt(instructions_string, user_name, character_name)
+# custom_model = "LLM/unnamedSICUACCT"
+# Character = VtuberLLM.load_model(custom_model=custom_model, character_name=character_name)
+
+#exllamav2 model
+# generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2() #deprecated
+Character = VtuberExllamav2.load_model_exllamav2(character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
+
+
 dummy_data = ["Good day, state your name.", "What is your favorite drink?", "Do you edge?"]
 
-
-PromptTemplate = pt(instructions, user_name, character_name)
-
-generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2()
-Character = VtuberExllamav2(generator, gen_settings, tokenizer, character_name)  
 # custom_model = "LLM/unnamedSICUACCT"
 # model, tokenizer = LLMUtils.load_model(custom_model_name=custom_model)
 # Character = VtuberLLM(model, tokenizer, character_name)  
 
+# start = perf_counter()
+# response = Character.dialogue_generator(prompt=dummy_data[0], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
+# response1 = Character.dialogue_generator(prompt=dummy_data[1], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
+# response2 = Character.dialogue_generator(prompt=dummy_data[2], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
+# end = perf_counter()
+
+# print(f"Prompts: {dummy_data}\nResponses:\n{response}\n\n{response1}\n\n{response2}\n\nTime Taken (Seconds): {end-start}")
+
+msg = """You MUST have the following in your output EXACTLY as written: "hello", 'wow't'"""
 start = perf_counter()
-response = Character.dialogue_generator(prompt=dummy_data[0], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
-response1 = Character.dialogue_generator(prompt=dummy_data[1], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
-response2 = Character.dialogue_generator(prompt=dummy_data[2], PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400)
+response = asyncio.run(Character.dialogue_generator(prompt=msg, PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=400))
 end = perf_counter()
 
-print(f"Prompts: {dummy_data}\nResponses:\n{response}\n\n{response1}\n\n{response2}\n\nTime Taken (Seconds): {end-start}")
+print(f"Prompts: {dummy_data}\nResponses:\n{response}\n\nTime Taken (Seconds): {end-start}")
