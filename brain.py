@@ -98,3 +98,10 @@ if __name__ == "__main__":
     live_chat_setup = LiveChatController(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube, fetch_kick=fetch_kick)
 
     asyncio.run(loop_function(live_chat_setup))
+
+
+
+        # self.write_message_func = write_messages_csv if SAVE_MESSAGES else None  # Assign conditionally
+        #write message to file -- stability is questionable for bigger stream chats
+            # if self.write_message_func:
+            # self.write_message_func(DEFAULT_SAVE_FILE, user_msg)
