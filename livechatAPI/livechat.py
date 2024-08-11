@@ -1,6 +1,7 @@
 import threading
+from general_utils import get_env_var
 from youtube import YTLive, yt_messages
-from livechat_utils import ChatPicker, get_env_var
+from livechat_utils import ChatPicker
 from twitch import TwitchAuth, Bot, twitch_chat_msgs
 import time
 

@@ -9,7 +9,7 @@ class LLMUtils:
         Given an input (Message), the potential response length should have a higher chance of being longer.
         """
         # Adjust max tokens based on input length to avoid cutting off mid-thought
-        adjusted_max_tokens = max(min_tokens, max_tokens - input_len)
+        adjusted_max_tokens = max(min_tokens, max_tokens - input_len)+1
         print(adjusted_max_tokens)
         tokens = np.arange(min_tokens, adjusted_max_tokens)
         token_weights = np.linspace(
