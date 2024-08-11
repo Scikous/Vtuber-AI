@@ -47,7 +47,7 @@ class VtuberExllamav2:
         return cls(generator, gen_settings, tokenizer, character_name)
 
 
-    async def dialogue_generator(self, prompt, PromptTemplate, max_tokens=200):
+    async def dialogue_generator(self, prompt, PromptTemplate, max_tokens=200,):
         """
         Generates character's response to a given input (Message)
 

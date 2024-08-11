@@ -2,7 +2,7 @@ import requests, webbrowser
 from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import multiprocessing
-from livechat_utils import append_livechat_message, write_messages_csv, get_env_var
+from livechat_utils import append_livechat_message, get_env_var
 import dotenv
 
 twitch_chat_msgs = []
@@ -50,7 +50,7 @@ class TwitchAuth():
             else:
                 authorization_url, state = oauth.authorization_url(AUTHORIZATION_BASE_URL)
                 return redirect(authorization_url)
-        app.run(port=8080, ssl_context='adhoc')
+        app.run(port=8080, ssl_context='adhoc')#requires an HTTPS server to work
 
     #a generator for tokens
     def access_token_generator(self):

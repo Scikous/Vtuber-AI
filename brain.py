@@ -2,7 +2,7 @@ from LLM.models import VtuberExllamav2#, VtuberLLM
 from LLM.model_utils import LLMUtils
 from LLM.llm_templates import PromptTemplate as pt
 from livechatAPI.livechat import LiveChatController
-from livechatAPI.livechat_utils import get_env_var
+from livechatAPI.livechat_utils import get_env_var, write_messages_csv
 from voiceAI.TTS import send_tts_request, tts_queue
 from voiceAI.STT import speech_to_text
 import logging
@@ -47,6 +47,11 @@ async def dialogue_worker():
             if not tts_queue.full():
                 output = await Character.dialogue_generator(message, PromptTemplate.capybaraChatML, max_tokens=100)
                 await output_queue.put(output)
+
+                #write message to file -- stability is questionable for bigger stream chats
+                if save_messages:
+                   await write_messages_csv(DEFAULT_SAVE_FILE, (message, output))
+
             else:
                 print("TTS queue is full, skipping generation.")
         except ValueError:
@@ -91,6 +96,8 @@ if __name__ == "__main__":
     output_queue = asyncio.Queue(maxsize=2)
 
     #ENV variables determine whether to fetch specific livechats
+    save_messages=get_env_var("SAVE_MESSAGES")
+    DEFAULT_SAVE_FILE=get_env_var("DEFAULT_SAVE_FILE")
     fetch_youtube = get_env_var("YT_FETCH") 
     fetch_twitch = get_env_var("TW_FETCH")
     fetch_kick = get_env_var("KI_FETCH")
@@ -100,8 +107,3 @@ if __name__ == "__main__":
     asyncio.run(loop_function(live_chat_setup))
 
 
-
-        # self.write_message_func = write_messages_csv if SAVE_MESSAGES else None  # Assign conditionally
-        #write message to file -- stability is questionable for bigger stream chats
-            # if self.write_message_func:
-            # self.write_message_func(DEFAULT_SAVE_FILE, user_msg)
