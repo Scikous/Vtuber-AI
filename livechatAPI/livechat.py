@@ -12,7 +12,7 @@ class LiveChatController:
     def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False):
         self.twitch_bot = None
         self.youtube = None
-        self.next_page_token = None
+        self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
         chat_sources = []
 
         if fetch_youtube:

@@ -1,6 +1,6 @@
 from googleapiclient.discovery import build
 from general_utils import get_env_var
-
+import dotenv
 
 class YTLive():
     def __init__(self, yt_messages):
@@ -41,6 +41,8 @@ class YTLive():
             yt_new_messages = [(message['authorDetails']['displayName'],message['snippet']['displayMessage']) for message in messages]
             self.yt_messages.extend(yt_new_messages)
             next_page_token = response.get('nextPageToken')
+            #save current next_page_token to ENV variable
+            dotenv.set_key(dotenv_path=dotenv.find_dotenv(),key_to_set="LAST_NEXT_PAGE_TOKEN",value_to_set=next_page_token)
         return next_page_token
     
 if __name__ == "__main__":
