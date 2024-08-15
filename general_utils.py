@@ -46,11 +46,13 @@ def get_env_var(env_var):
     env_key = dotenv.get_key(dotenv_path=dotenv.find_dotenv(), key_to_get=env_var)
 
     try:
+        if not env_key:
+            return None
         return int(env_key)
-    except ValueError:
+    except (TypeError, ValueError):
         try:
             return float(env_key)
-        except ValueError:
+        except (TypeError, ValueError):
             if env_key.lower() == "true":
                 return True
             elif env_key.lower() == "false":
