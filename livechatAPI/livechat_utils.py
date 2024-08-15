@@ -10,13 +10,13 @@ def append_livechat_message(chat_messages: list, user_msg: tuple):
     
     for twitch and kick livechats
     """
-    global lock
+    # global lock
     MAX_MESSAGES = 10
-    with lock:
+    # with lock:
         # print(chat_messages)
-        if len(chat_messages) >= MAX_MESSAGES:
-            chat_messages.pop(0)
-        chat_messages.append(user_msg)
+    if len(chat_messages) >= MAX_MESSAGES:
+        chat_messages.pop(0)
+    chat_messages.append(user_msg)
 
 #takes lists of livechat messages and allows for selecting a random message between them -- YT: [], TW: [], Kick: [] 
 class ChatPicker:

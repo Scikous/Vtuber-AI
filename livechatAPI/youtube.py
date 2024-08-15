@@ -1,13 +1,13 @@
 from googleapiclient.discovery import build
 from general_utils import get_env_var
 
-yt_messages = []
 
 class YTLive():
-    def __init__(self):
+    def __init__(self, yt_messages):
         API_KEY, LIVESTREAM_ID = self.youtube_credentials()
         self.youtube = build('youtube', 'v3', developerKey=API_KEY)
         self.live_chat_id = self.get_live_chat_id(LIVESTREAM_ID)
+        self.yt_messages = yt_messages
         # request = self.youtube.liveStreams().list(
         #     part='id,snippet',
         #     mine=True  # Filter for your own live streams
@@ -39,9 +39,10 @@ class YTLive():
         messages = response.get('items', [])
         if messages:
             yt_new_messages = [(message['authorDetails']['displayName'],message['snippet']['displayMessage']) for message in messages]
-            yt_messages.extend(yt_new_messages)
+            self.yt_messages.extend(yt_new_messages)
             next_page_token = response.get('nextPageToken')
         return next_page_token
     
 if __name__ == "__main__":
-    YTLive()
+    yt_messages = []
+    YTLive(yt_messages)
