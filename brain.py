@@ -49,7 +49,7 @@ async def dialogue_worker():
                 await llm_output_queue.put(output)
 
                 #write message to file -- stability is questionable for bigger stream chats
-                if save_messages:
+                if DEFAULT_SAVE_FILE:
                    await write_messages_csv(DEFAULT_SAVE_FILE, message_data=(message, output))
             else:
                 print("TTS queue is full, skipping generation.")
@@ -66,13 +66,21 @@ async def tts_worker():
         await asyncio.sleep(0.1)
 
 #run and switch between different tasks conveniently and avoid wasting computational resources
-async def loop_function(live_chat_controller):
-    stt_task = asyncio.create_task(stt_worker())
-    live_chat_task = asyncio.create_task(live_chat_worker(live_chat_controller))
-    dialogue_task = asyncio.create_task(dialogue_worker())
-    tts_task = asyncio.create_task(tts_worker())
+async def loop_function():
+    tasks = [
+        asyncio.create_task(stt_worker()),
+        asyncio.create_task(dialogue_worker()),
+        asyncio.create_task(tts_worker())
+    ]
+    
 
-    await asyncio.gather(stt_task, live_chat_task, dialogue_task, tts_task)
+    live_chat_controller = LiveChatController.create()
+    #it is possible that no livechats are being used
+    if live_chat_controller:
+        tasks.append(asyncio.create_task(live_chat_worker(live_chat_controller)))
+    
+    await asyncio.gather(*tasks)
+
 
 #called by run.py
 if __name__ == "__main__":
@@ -90,24 +98,18 @@ if __name__ == "__main__":
     # generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2() #deprecated
     Character = VtuberExllamav2.load_model_exllamav2(character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
 
-    speech_queue = asyncio.Queue(maxsize=2)
-    live_chat_queue = asyncio.Queue(maxsize=2)
-    llm_output_queue = asyncio.Queue(maxsize=2)
+    speech_queue = asyncio.Queue(maxsize=1)
+    live_chat_queue = asyncio.Queue(maxsize=1)
+    llm_output_queue = asyncio.Queue(maxsize=1)
 
     #only save message_data if True
-    save_messages=get_env_var("SAVE_MESSAGES")
-    if save_messages:
-        DEFAULT_SAVE_FILE=get_env_var("DEFAULT_SAVE_FILE")
+    DEFAULT_SAVE_FILE=get_env_var("DEFAULT_SAVE_FILE")
 
     #ENV variables determine whether to fetch specific livechats
     fetch_youtube = get_env_var("YT_FETCH") 
     fetch_twitch = get_env_var("TW_FETCH")
     fetch_kick = get_env_var("KI_FETCH")
 
-    #no reason to unnecessarily have LiveChatController wasting resources if no livechats to retrieve from
-    if any([fetch_youtube, fetch_twitch, fetch_kick]):
-        live_chat_controller = LiveChatController(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube, fetch_kick=fetch_kick)
-
-    asyncio.run(loop_function(live_chat_controller))
+    asyncio.run(loop_function())
 
 

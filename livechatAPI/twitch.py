@@ -6,8 +6,10 @@ from general_utils import get_env_var
 from livechat_utils import append_livechat_message
 import dotenv
 
-twitch_chat_msgs = []
+# manager = multiprocessing.Manager()
+# twitch_chat_msgs = manager.list()
 
+# multiprocessing.
 class TwitchAuth():
     def __init__(self) -> None:
         self.CHANNEL, self.BOT_NICK, self.CLIENT_ID, self.CLIENT_SECRET, self.ACCESS_TOKEN, self.USE_THIRD_PARTY_TOKEN = self.twitch_auth_loader()
@@ -108,8 +110,9 @@ class Bot(commands.Bot):
     """
     A twitchio bot which is used to primarily retrieve and "forward" messages to the LLM.
     """
-    def __init__(self, CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN):
+    def __init__(self, CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs):
         super().__init__(token=TOKEN, client_id=CLIENT_ID, client_secret=CLIENT_SECRET, nick=BOT_NICK, prefix='!', initial_channels=[CHANNEL])
+        self.twitch_chat_msgs = twitch_chat_msgs
 
     async def event_ready(self):
         print(f'Ready | {self.nick}')
@@ -120,8 +123,10 @@ class Bot(commands.Bot):
         if '!' in message.content:
             await self.handle_commands(message)
         user_msg = (message.author.name, message.content)
+        append_livechat_message(self.twitch_chat_msgs, user_msg)
+            
         # print("Twitch msg:", user_msg)
-        append_livechat_message(twitch_chat_msgs, user_msg)
+        # append_livechat_message(twitch_chat_msgs, user_msg)
 
     @commands.command(name='hello')
     async def hello(self, ctx):
@@ -131,6 +136,8 @@ class Bot(commands.Bot):
 if __name__ == "__main__":
     # Replace with your Twitch token and channel
     dotenv.load_dotenv()
+    manager = multiprocessing.Manager()
+    twitch_chat_msgs = manager.list()
     import twitchio
     TW_Auth = TwitchAuth()
     CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.USE_THIRD_PARTY_TOKEN
@@ -142,7 +149,7 @@ if __name__ == "__main__":
         TOKEN = TW_Auth.refresh_access_token()
 
     try:
-        bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN)
+        bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs)
         bot.run()
     except twitchio.AuthenticationError as e:
         print("TOKEN EXPIRED LAMO", e)
