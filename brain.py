@@ -49,8 +49,8 @@ async def dialogue_worker():
                 await llm_output_queue.put(output)
 
                 #write message to file -- stability is questionable for bigger stream chats
-                if DEFAULT_SAVE_FILE:
-                   await write_messages_csv(DEFAULT_SAVE_FILE, message_data=(message, output))
+                if CONVERSATION_LOG_FILE:
+                   await write_messages_csv(CONVERSATION_LOG_FILE, message_data=(message, output))
             else:
                 print("TTS queue is full, skipping generation.")
         except ValueError:
@@ -102,8 +102,8 @@ if __name__ == "__main__":
     live_chat_queue = asyncio.Queue(maxsize=1)
     llm_output_queue = asyncio.Queue(maxsize=1)
 
-    #only save message_data if True
-    DEFAULT_SAVE_FILE=get_env_var("DEFAULT_SAVE_FILE")
+    #saves user/livechat, LLM response message data if file path is provided 
+    CONVERSATION_LOG_FILE=get_env_var("CONVERSATION_LOG_FILE")
 
     #ENV variables determine whether to fetch specific livechats
     fetch_youtube = get_env_var("YT_FETCH") 

@@ -33,8 +33,8 @@ The aim of this project is both to give a good starting point for anyone to crea
   **Features:**
   - [X] Create a function to create a dataset for LLM training from a .csv file
   - [ ] Send audio data to Discord or other, so anyone in call can hear
-  - [ ] Support for receiving and responding to YouTube live chat messages
-  - [ ] Support for receiving and responding to Twitch live chat messages
+  - [X] Support for receiving and responding to YouTube live chat messages
+  - [X] Support for receiving and responding to Twitch live chat messages
   - [ ] Support for receiving and responding to Kick live chat messages
   - [ ] Boolean for automatically stopping the model from speaking when user speaks at the same time
   - [ ] On screen subtitles for OBS
@@ -67,26 +67,83 @@ Next, install the required packages.
 pip install -r requirements.txt
 ```
 
-:information_source: The next sub-sections are purely optional, only necessary if you want the AI to interact with livechat on YouTube, Twitch or Kick.
+## Virtual Environments
+The virtual environment simply helps to avoid package conflicts. Do note that this will take more space in the storage as each environment is its own.
+
+:information_source: Note that this is for CMD
+
+Create env (the last `venv` is the folder name/path where the venv will be created):
+```
+ python -m venv venv
+```
+
+Activate env:
+```
+venv\Scripts\activate
+```
+
+Deactivate env:
+```
+ deactivate
+```
+Then just delete the venv folder
+
+# Quick Start
+:exclamation: Heavy WIP
+
+after activating the venv, run the following in the root directory:
+```
+python run.py
+```
+
+:information_source: The next sub-sections are purely optional, only necessary if you want the AI to interact with livechat on YouTube/Twitch/Kick.
 
 ## .env File Setup (Optional)
 Create a **.env** file inside of the root directory and add as much of the following as desired:
 
-:warning: REMEMBER TO ADD YOUR OWN INFORMATION FOR EACH PART - further instructions in respective sub-sections
+:information_source: For information on YouTube/Twitch related variables refer to their respective sections: [YouTube API](#youtube-api) [Twitch API](#twitch-api).
 
 ```
+#For all
+CONVERSATION_LOG_FILE=livechatAPI/data/llm_finetune_data.csv
+
 #For YouTube
+YT_FETCH=False
 YT_API_KEY=
-LIVESTREAM_ID=
+YT_CHANNEL_ID=
+LAST_NEXT_PAGE_TOKEN=
 
 #For Twitch
+TW_FETCH=False
 TW_CHANNEL=
-TW_BOT_NICK=
+TW_BOT_NICK=Botty
 TW_CLIENT_ID=
 TW_CLIENT_SECRET=
 TW_ACCESS_TOKEN=
-TW_THIRD_PARTY_TOKEN=
+TW_USE_THIRD_PARTY_TOKEN=False #True if using non-locally token
 ```
+<details>
+<summary>Variable Explanations</summary>
+
+* CONVERSATION_LOG_FILE: The .csv file which the user message AND the LLM response is written to
+
+**YouTube**:
+* YT_FETCH: (Boolean) True if fetching youtube live chat messages
+* YT_API_KEY: Your YouTube project API key
+* YT_CHANNEL_ID: Your YouTube channel id (NOT channel name)
+* LAST_NEXT_PAGE_TOKEN: Last fetched messages from live chat -- HANDLED BY PROGRAM DO NOT TOUCH
+
+**TWITCH**:
+* TW_FETCH: (Boolean) True if fetching twitch live chat messages
+* TW_CHANNEL: Your Twitch channel name -- whatever you named your channel
+* TW_BOT_NICK: Default name is 'Botty', can be renamed to anything
+* TW_CLIENT_ID: Your App's client id
+* TW_CLIENT_ID: Your App's client secret
+* TW_ACCESS_TOKEN: If generated LOCALLY -> technically refresh access token, if using third party token -> is actually the access token
+* TW_USE_THIRD_PARTY_TOKEN: (Boolean) True if using a token NOT generated locally ex. https://twitchtokengenerator.com/
+
+</details>
+
 
 ## YouTube API (Optional)
 The official guide here: https://developers.google.com/youtube/v3/live/getting-started
@@ -96,7 +153,10 @@ Basic steps:
 2. Create a new project
 3. Back at the credentials page, use the **CREATE CREDENTIALS** to generate an API key
 4. Paste the API key in the **.env** file in the **YT_API_KEY**
-5. For NOW, you will also have to navigate to your livestream and copy the part after `https://www.youtube.com/watch?v=<LIVESTREAM_ID is here>`or go through youtube studio and copy from `https://youtube.com/live/<LIVESTREAM_ID is here>`
+5. Go to Settings (click user icon top right)
+6. Go to Advanced settings and copy the **Channel ID** to **YT_CHANNEL_ID** in **.env** file
+
+The environment variable **LAST_NEXT_PAGE_TOKEN** is handled by the program itself (DO NOT TOUCH). It makes sure that upon program restart, we continue to fetch live chat messages from where we last left off.
 
 ## Twitch API (Optional)
 :information_source: The twitchio bot automatically renews your token using the your twitch application client id and client secret
@@ -128,43 +188,14 @@ Optional Path 2:
 2. Set **TW_THIRD_PARTY_TOKEN=** to `True` -- case sensitive
 3. Done!
 
-In Optional Path 1, the TW_ACCESS_TOKEN is technically the refresh token, only self.TOKEN in TwitchAuth class is an actual access token.
+In Optional Path 1, the TW_ACCESS_TOKEN is technically the refresh token, only self.TOKEN in TwitchAuth class is an actual access token. This is ONLY a technicality and does not affect anything.
 
-The twitchio bot should presumably automatically renew your token upon expiration. This requires atleast **Client Secret** and maybe **Client ID**
-
-## Virtual Environments
-The virtual environment simply helps to avoid package conflicts. Do note that this will take more space in the storage as each environment is its own.
-
-:information_source: Note that this is for CMD
-
-Create env (the last `venv` is the folder name/path where the venv will be created):
-```
- python -m venv venv
-```
-
-Activate env:
-```
-venv\Scripts\activate
-```
-
-Deactivate env:
-```
- deactivate
-```
-Then just delete the venv folder
-
-# Quick Start
-:exclamation: Heavy WIP
-
-after activating the venv, run the following in the root directory:
-```
-python run.py
-```
+The twitchio bot should presumably automatically renew your token upon expiration. This requires atleast **Client Secret** and maybe **Client ID** -- UNTESTED.
 
 # Large Language Model (LLM)
 ## Prompt Style
 
->:information_source: This is the prompt styling for inference
+>:information_source: This is the prompt styling for inference -- WIP
 
 ```
 <|im_start|>system <character behaviour> <|im_end|> <|im_start|>context <information about current situation (previous dialogue or description of situation)> <|im_end|> <|im_start|>user <Question or Instruction> <|im_end|> <|im_start|>assistant <Model Answer>
