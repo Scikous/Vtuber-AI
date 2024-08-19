@@ -33,9 +33,10 @@ def run_brain():
     os.system(command)
 
 if __name__ == "__main__":
-    tts_thread = Thread(target=run_brain, daemon=True)
-    tts_thread.start()
-    run_TTS()
+    # tts_thread = Thread(target=run_brain, daemon=True)
+    # tts_thread.start()
+    run_brain()
+    # run_TTS()
 
 
 #linux venv version??? untested
