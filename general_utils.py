@@ -1,7 +1,6 @@
 from collections import deque
 import csv
 import dotenv
-
 #save user+LLM message(s) for convenient data
 async def write_messages_csv(file_path, message_data):
     '''
@@ -59,3 +58,14 @@ def get_env_var(env_var):
                 return False
             else:
                 return env_key
+            
+from contextlib import contextmanager
+import os
+@contextmanager
+def change_dir(new_dir):
+    old_dir = os.getcwd()
+    os.chdir(new_dir)
+    try:
+        yield
+    finally:
+        os.chdir(old_dir)

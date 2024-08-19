@@ -2,12 +2,13 @@ from LLM.models import VtuberExllamav2#, VtuberLLM
 from LLM.model_utils import LLMUtils
 from LLM.llm_templates import PromptTemplate as pt
 from livechatAPI.livechat import LiveChatController
-from general_utils import get_env_var, write_messages_csv
-from voiceAI.TTS import send_tts_request, tts_queue
+from general_utils import get_env_var, write_messages_csv, change_dir
+# from voiceAI.TTS import send_tts_request, tts_queue
+from voiceAI.GPT_Test.tts_exp import send_tts_request, tts_queue
 from voiceAI.STT import speech_to_text
 import logging
 import asyncio
-import time
+import time, os
 from dotenv import load_dotenv
 
 
@@ -26,22 +27,41 @@ async def stt_worker():
 #handles retrieving a random chat message in the background
 async def live_chat_worker(live_chat_controller):
     while True:
-        live_chat_msg = await live_chat_controller.fetch_chat_message()
-        if live_chat_msg:
-            await live_chat_queue.put(f"{live_chat_msg[0]}: {live_chat_msg[1]}")
-        await asyncio.sleep(0.1)
+        if not live_chat_queue.full():
+            live_chat_msg = await live_chat_controller.fetch_chat_message()
+            if live_chat_msg:
+                await live_chat_queue.put(f"{live_chat_msg[0]}: {live_chat_msg[1]}")
+        await asyncio.sleep(50)
 
 #handles stt/livechat message -> LLM output message
 async def dialogue_worker():
     while True:
         try:
-            # Check if there's a live chat message first
-            if not live_chat_queue.empty():
-                message = await live_chat_queue.get()
-            else:
-                # Otherwise, get speech from the speech queue
-                message = await speech_queue.get()
+            # # Check if there's a live chat message first
+            # if not live_chat_queue.empty():
+            #     message = await live_chat_queue.get()
+            # else:
+            #     # Otherwise, get speech from the speech queue
+            #     message = await speech_queue.get()
                 
+            # Create tasks for getting messages from both queues
+            speech_task = asyncio.create_task(speech_queue.get())
+            live_chat_task = asyncio.create_task(live_chat_queue.get())
+
+            # Wait for either task to complete
+            done, pending = await asyncio.wait(
+                [speech_task, live_chat_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            # Cancel the pending task
+            for task in pending:
+                task.cancel()
+
+            # Get the completed task's result
+            completed_task = done.pop()
+            message = await completed_task
+
             print("CHOSEN MESSAGE:", message)
             #avoid generating too much text for the TTS to speak outloud
             if not tts_queue.full():
@@ -49,8 +69,8 @@ async def dialogue_worker():
                 await llm_output_queue.put(output)
 
                 #write message to file -- stability is questionable for bigger stream chats
-                if CONVERSATION_LOG_FILE:
-                   await write_messages_csv(CONVERSATION_LOG_FILE, message_data=(message, output))
+                if write_message:
+                   await write_message(conversation_log_file, message_data=(message, output))
             else:
                 print("TTS queue is full, skipping generation.")
         except ValueError:
@@ -62,7 +82,10 @@ async def dialogue_worker():
 async def tts_worker():
     while True:
         output = await llm_output_queue.get()
-        await send_tts_request(output)
+        import os
+        with change_dir('./voiceAI/GPT_Test'):
+            print(os.getcwd())
+            await send_tts_request(output)
         await asyncio.sleep(0.1)
 
 #run and switch between different tasks conveniently and avoid wasting computational resources
@@ -103,7 +126,13 @@ if __name__ == "__main__":
     llm_output_queue = asyncio.Queue(maxsize=1)
 
     #saves user/livechat, LLM response message data if file path is provided 
-    CONVERSATION_LOG_FILE=get_env_var("CONVERSATION_LOG_FILE")
+    conversation_log_file=get_env_var("CONVERSATION_LOG_FILE")
+    if conversation_log_file:
+        #check if path is full path (absolute path or not) -- add root directory extension if not abs path
+        if not os.path.isabs(conversation_log_file):
+            project_root = os.path.dirname(__file__) + '/'
+            conversation_log_file = project_root + conversation_log_file
+        write_message = write_messages_csv #pre-assign user message + LLM response writing function
 
     #ENV variables determine whether to fetch specific livechats
     fetch_youtube = get_env_var("YT_FETCH") 
@@ -111,5 +140,3 @@ if __name__ == "__main__":
     fetch_kick = get_env_var("KI_FETCH")
 
     asyncio.run(loop_function())
-
-
