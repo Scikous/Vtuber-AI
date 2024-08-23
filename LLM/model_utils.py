@@ -6,10 +6,10 @@ class LLMUtils:
     @staticmethod
     def get_rand_token_len(min_tokens=15, max_tokens=100, input_len=0):
         """
-        Given an input (STT/Comment), the potential response length should have a higher chance of being longer.
+        Given an input (Message), the potential response length should have a higher chance of being longer.
         """
         # Adjust max tokens based on input length to avoid cutting off mid-thought
-        adjusted_max_tokens = max(min_tokens, max_tokens - input_len)
+        adjusted_max_tokens = max(min_tokens, max_tokens - input_len)+1
         print(adjusted_max_tokens)
         tokens = np.arange(min_tokens, adjusted_max_tokens)
         token_weights = np.linspace(
@@ -30,49 +30,13 @@ class LLMUtils:
         return output_clean
     
     @staticmethod
-    def load_model_exllamav2(model_dir="LLM/CapybaraHermes-2.5-Mistral-7B-GPTQ"):
-        from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Cache, ExLlamaV2Tokenizer
-        from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2Sampler
-
-        config = ExLlamaV2Config(model_dir)
-        model = ExLlamaV2(config)
-        cache = ExLlamaV2Cache(model, max_seq_len = 65536, lazy = True)
-        model.load_autosplit(cache, progress = True)
-        tokenizer = ExLlamaV2Tokenizer(config)
-        generator = ExLlamaV2DynamicGenerator(
-            model = model,
-            cache = cache,
-            tokenizer = tokenizer,
-        )
-        #default text generation settings, can be overridden
-        gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = 0.9, 
-            top_p = 0.8,
-            token_repetition_penalty = 1.025
-        )
-        return generator, gen_settings, tokenizer
-    @staticmethod
-    def load_model(base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name=""):
-        from peft import PeftModel, PeftConfig
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        
-        model = AutoModelForCausalLM.from_pretrained(base_model_name,
-                                                     device_map="auto",
-                                                     trust_remote_code=False,
-                                                     revision="main")
-
-        if custom_model_name:
-            print(custom_model_name)
-            config = PeftConfig.from_pretrained(custom_model_name)
-            model = PeftModel.from_pretrained(
-                model, custom_model_name, offload_folder="LLM/offload")
-
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
-        return model, tokenizer
-    
-    @staticmethod
     def load_character(character_info_json=""):
+        """
+        Returns:
+            instructions (str): tells how the LLM (character) should behave
+            user_name (str): the name of the user (probably deleted in the future)
+            character_name (str): the name of the character
+        """
         if character_info_json:
             with open(character_info_json, 'r') as character:
                 character_info = json.load(character)

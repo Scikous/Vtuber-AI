@@ -47,7 +47,6 @@ fastparquet==2024.5.0
 ffmpeg-python==0.2.0
 ffmpy==0.3.2
 filelock==3.15.4
-flash-attn==2.5.9.post1
 flatbuffers==24.3.25
 fonttools==4.53.0
 frozenlist==1.4.1
@@ -185,11 +184,6 @@ tiktoken==0.7.0
 tokenizers==0.19.1
 tomli==2.0.1
 toolz==0.12.1
-torch==2.3.1+cu121
-torch-complex==0.4.4
-torchaudio==2.3.1
-torchmetrics==1.4.0.post0
-torchvision==0.18.1+cu121
 tqdm==4.66.4
 transformers==4.42.3
 twitchio==2.10.0
