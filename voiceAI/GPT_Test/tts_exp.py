@@ -7,45 +7,78 @@ import threading
 import time
 import sys
 import asyncio
-
-# sys.path.append('voiceAI/GPT_Test/')
-# sys.path.append('voiceAI/GPT_Test/AR/')
-# sys.path.append('voiceAI/GPT_Test/tools/')
-# sys.path.append('voiceAI/GPT_Test/tools/i18n/locale/')
-# sys.path.append('voiceAI/GPT_Test/i18n')
-# sys.path.append('voiceAI/GPT_Test/i18n/')
-# sys.path.append('voiceAI/GPT_Test/GPT_SoVITS/')
-# sys.path.append('voiceAI/GPT_Test/GPT_SoVITS/configs/')
-# sys.path.append('voiceAI/GPT_Test/docs/')
-
-
-# __all__ = ["livechat.py", "livechat_utils.py"]
-#adds LLM dir to path, so that Python will stop whining about module not found
-
 sys.path.append('voiceAI/GPT_Test/')
-
 tts_queue = Queue()
 # Lock for thread-safe operations
 LOCK = threading.Lock()
 CONDITION = threading.Condition(LOCK)
+PLAYBACK_PAUSED = threading.Event()
+
+import queue
+
+audio_queue = queue.Queue(maxsize=10)  # Buffer for audio chunks
+
+# def audio_playback():
+#     def on_press(key):
+#         if key == keyboard.Key.f3:
+#             if PLAYBACK_PAUSED.is_set():
+#                 PLAYBACK_PAUSED.clear()
+#                 print("Playback resumed")
+#             else:
+#                 PLAYBACK_PAUSED.set()
+#                 print("Playback paused")
+
+#     listener = keyboard.Listener(on_press=on_press)
+#     listener.start()
+
+#     p = pyaudio.PyAudio()
+#     stream = p.open(format=pyaudio.paInt16,
+#                     channels=1,
+#                     rate=32000,
+#                     output=True)
+
+#     def audio_worker():
+#         while True:
+#             if not PLAYBACK_PAUSED.is_set():
+#                 try:
+#                     chunk = audio_queue.get(timeout=0.1)
+#                     stream.write(chunk)
+#                 except queue.Empty:
+#                     time.sleep(0.01)  # Short sleep if queue is empty
+#             else:
+#                 time.sleep(0.1)  # Longer sleep when paused
+
+#     worker_thread = threading.Thread(target=audio_worker)
+#     worker_thread.daemon = True
+#     worker_thread.start()
+
+#     while True:
+#         with CONDITION:
+#             while tts_queue.empty():
+#                 CONDITION.wait()
+#             try:
+#                 audio_data = tts_queue.get(timeout=1)
+#                 audio_data = audio_data[64:]  # skip first 64 bytes
+#                 while audio_data:
+#                     chunk = audio_data[:2048]
+#                     audio_queue.put(chunk)
+#                     audio_data = audio_data[2048:]
+#             except Exception as e:
+#                 print(f"Error: {e}")
+#     listener.stop()
+#     stream.stop_stream()
+#     stream.close()
+#     p.terminate()
 
 def audio_playback(audio_data=None):
-
-    paused = False
-    key_states = {}
-
     def on_press(key):
-        nonlocal paused
         if key == keyboard.Key.f3:
-            paused = not paused
-        else:
-            key_states[key] = True
-
-    def on_release(key):
-        if key in key_states:
-            del key_states[key]
-
-    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+            if PLAYBACK_PAUSED.is_set():
+                PLAYBACK_PAUSED.clear()
+            else:
+                PLAYBACK_PAUSED.set()
+    # Create a keyboard listener
+    listener = keyboard.Listener(on_press=on_press)
     listener.start()
 
     stop_requested = False
@@ -56,33 +89,31 @@ def audio_playback(audio_data=None):
                     channels=1,               # Assuming mono audio
                     rate=32000,               # Example framerate (replace with actual value)
                     output=True)
-
+    
+    
     # Write audio data to the stream in chunks
     while not stop_requested:
         with CONDITION:
             while tts_queue.empty():
                 CONDITION.wait()
             # Initialize audio buffer with silence padding to avoid popping sound
-            if paused:
-                time.sleep(0.1)
-                continue
             try:
                 audio_data = tts_queue.get(timeout=1)  # Get audio data from the queue
                 audio_data = audio_data[64:]#skip first 64 bytes to avoid popping sound
                 while audio_data:
-                    if not paused:
-                        data = audio_data[:2048]
-                        stream.write(data)
-                        audio_data = audio_data[len(data):]
+                    if PLAYBACK_PAUSED.is_set():
+                        time.sleep(0.1)
+                        continue
+                    data = audio_data[:2048]
+                    stream.write(data)
+                    audio_data = audio_data[len(data):]
             except Exception as e:
                 print(f"Error: {e}")
                 continue
-
     # Close the audio stream and PyAudio
     stream.stop_stream()
     stream.close()
     p.terminate()
-
 #prompt_text example, causes issues: But truly, is a simple piece of paper worth the credit people give it?
 async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_lang="en",
                         ref_audio_path="../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav",
