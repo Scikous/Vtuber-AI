@@ -1,40 +1,24 @@
 import random
-from collections import deque
-import csv
+# import threading
 
-twitch_chat_msgs = []
+# lock = threading.Lock() #may or may not be useful in avoiding messing with different livechats at wrong times
 
-
-def write_messages_csv(file_path, messages):
-    '''
-    intented for writing tuples of data (<user name>, <message>)
-    can technically be any format
-    '''
-    with open(file_path, mode='a', newline='', encoding='utf-8') as file:
-        csv_writer = csv.writer(file)
-        csv_writer.writerows(messages)
-
-
-def read_messages_csv(file_path, num_messages=10):
-    '''
-    intented for reading tuples of data (<user name>, <message>)
-    can technically be any format
-    by default returns the latest 10 tuples of data as a list of tuples
-    '''
-    with open(file_path, mode='r', newline='', encoding='utf-8') as file:
-        csv_reader = csv.reader(file)
-        messages = deque(csv_reader, maxlen=num_messages)
-    return [tuple(row) for row in messages]
-
-
-def append_message(chat_messages: list, user_msg: tuple):
+#each livechat should keep to a set limit avoiding favoritism
+def append_livechat_message(chat_messages: list, user_msg: tuple):
+    """
+    adds the latest message to the running list of messages while maintaining a set max size (default is 10)
+    
+    for twitch and kick livechats
+    """
+    # global lock
     MAX_MESSAGES = 10
-    if len(chat_messages) < MAX_MESSAGES:
-        chat_messages.append(user_msg)
-    else:
+    # with lock:
+        # print(chat_messages)
+    if len(chat_messages) >= MAX_MESSAGES:
         chat_messages.pop(0)
-        chat_messages.append(user_msg)
+    chat_messages.append(user_msg)
 
+#takes lists of livechat messages and allows for selecting a random message between them -- YT: [], TW: [], Kick: [] 
 class ChatPicker:
     def __init__(self, *lists):
         self.lists = lists
@@ -44,6 +28,7 @@ class ChatPicker:
     def calculate_probabilities(self):
         '''
         A livechat with more activity will generally have lower probability of being picked
+        
         As one chat is picked multiple times in a row, other chats get higher probability of being picked 
         '''
         probabilities = {}
@@ -71,5 +56,10 @@ class ChatPicker:
         for i, prob in probabilities.items():
             cumulative_prob += prob
             if rand < cumulative_prob:
-                self.pick_counts[i] += 1  # Increment pick count for the chosen list
-                return random.choice(self.lists[i])
+                self.pick_counts[i] += 1  # Increment pick count for the chosen list -- lowers chances of being chosen again later
+                random_chat_message = random.choice(self.lists[i])
+                self.lists[i].remove(random_chat_message) #remove chosen message from list
+                # print(self.lists)
+                return random_chat_message
+
+

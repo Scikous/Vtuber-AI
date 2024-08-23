@@ -188,11 +188,14 @@ unnamedSIUEA-7B-GPTQ
 unnamedSIUEA
 
 #ignore test files
+.env
 tt.py
 LLM.py
 model_losses.txt
 audio_response/*
 LLM/dataset/*
+LLM/offload/*
+!LLM/offload/.gitignore
 voiceAI/dataset/*
 !voiceAI/dataset/inference_testing
 LLM/characters/*
@@ -219,5 +222,13 @@ voiceAI/GPT-SoVITS-fast_inference/GPT_SoVITS/pretrained_models/*
 voiceAI/GPT-SoVITS-fast_inference/venv
 voiceAI/GPT-SoVITS-fast_inference/ffmpeg.exe
 voiceAI/GPT-SoVITS-fast_inference/ffprobe.exe
+
+voiceAI/GPT_Test/GPT_SoVITS/pretrained_models/*
+voiceAI/GPT_Test/ffmpeg.exe
+voiceAI/GPT_Test/ffprobe.exe
+voiceAI/GPT_Test/venv
+
 livechatAPI/credentials/*
 !livechatAPI/credentials/.gitignore
+livechatAPI/data/*
+!livechatAPI/data/.gitignore

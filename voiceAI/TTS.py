@@ -7,7 +7,7 @@ import threading
 import time
 
 
-tts_queue = Queue(maxsize=3)
+tts_queue = Queue(maxsize=2)
 # Lock for thread-safe operations
 LOCK = threading.Lock()
 CONDITION = threading.Condition(LOCK)

@@ -1,97 +1,100 @@
-from youtube import YTLive, api_key_loader
-from livechat_utils import ChatPicker, twitch_chat_msgs
+import threading
+from general_utils import get_env_var
+from youtube import YTLive
+from livechat_utils import ChatPicker
+from twitch import TwitchAuth, Bot
+# from livechat_lists import twitch_chat_msgs
+import time
+import multiprocessing
 
-youtube_creds = api_key_loader('livechatAPI/credentials/youtube.json')
-api_key = youtube_creds
 
-video_id = ''
-YTLIVE = YTLive(api_key=youtube_creds) 
-live_chat_id = YTLIVE.get_live_chat_id(video_id)
+class LiveChatController:
+    def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False):
+        self.twitch_bot = None
+        self.youtube = None
+        self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
+        chat_sources = []
 
-async def fetch_chat_msgs():
-    yt_messages, next_page_token = YTLIVE.get_live_chat_messages(live_chat_id)
-    print(twitch_chat_msgs)
-    kick = []
-    picker = ChatPicker(yt_messages, twitch_chat_msgs, kick)
+        if fetch_youtube:
+            self.yt_messages = []
+            chat_sources.append(self.yt_messages)
+            self.setup_youtube()
+        
+        if fetch_twitch:
+            manager = multiprocessing.Manager()
+            self.twitch_chat_msgs = manager.list()
+            chat_sources.append(self.twitch_chat_msgs)
+            self.setup_twitch()
 
-    message = picker.pick_rand_message()
-    print(message)
-    if yt_messages:
-        return yt_messages[0][1], next_page_token
-    else:
-        return None, None
+        if fetch_kick:
+            kick = []  # Placeholder for Kick messages
+            chat_sources.append(kick)
+            self.setup_kick()
+
+        #only desired chats should be included in the random message picking
+        self.picker = ChatPicker(*chat_sources)
+
+    @classmethod
+    def create(cls):
+        fetch_youtube = get_env_var("YT_FETCH")
+        fetch_twitch = get_env_var("TW_FETCH")
+        fetch_kick = get_env_var("KI_FETCH")
+
+        # Return None if all fetch variables are False
+        if not any([fetch_youtube, fetch_twitch, fetch_kick]):
+            return None
+
+        return cls(fetch_youtube=fetch_youtube, fetch_twitch=fetch_twitch, fetch_kick=fetch_kick)
+
+
+    #get token and prepare for fetching youtube livechat messages
+    def setup_youtube(self):
+        self.youtube = YTLive(self.yt_messages)
+
+    #get token and start twitch bot on a separate thread for livechat messages
+    @staticmethod
+    def _twitch_process(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs):
+        twitch_bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs)
+        twitch_bot.run()
+
+    def setup_twitch(self):
+        TW_Auth = TwitchAuth()
+        CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.USE_THIRD_PARTY_TOKEN
+        if USE_THIRD_PARTY_TOKEN:
+            TOKEN = ACCESS_TOKEN
+        elif not ACCESS_TOKEN:
+            TOKEN = TW_Auth.access_token_generator()
+        else:
+            TOKEN = TW_Auth.refresh_access_token()
+        twitch_bot_process = multiprocessing.Process(target=self._twitch_process, args=(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, self.twitch_chat_msgs), daemon=True)
+        twitch_bot_process.start()
     
-
-import asyncio
-msg = asyncio.run(fetch_chat_msgs())
-print(msg[0])
-
+    #WIP
+    def setup_kick(self):
+        pass
 
 
-##################################
-# {
-#     "yt": (
-#         "user": "msg",
-#         "user2": "msg2",
-#     )
-#     "tw": (
-#         {
-#             "user": "msg",
-#             "user2": "msg2",
-#         }
-#     )
-#     "ki": (
-#         "user": "msg",
-#         "user2": "msg2",
-#     )
-# }
-
-# {
-#     "yt": (
-#         (user, msg),
-#         (user2, msg2)
-#     ),
-#     "tw": (
-#         (user, msg),
-#         (user2, msg2)
-#     ),
-#     "ki": (
-#         (user, msg),
-#         (user2, msg2)
-#     )
-# }
-
-#########
-    #     csv_reader = csv.reader(file)
-    #     messages = tuple((tuple(row) for row in csv_reader))
-    # return messages[-num_messages:]
+    #fetch a random message from 
+    async def fetch_chat_message(self):
+        if self.youtube:
+            self.next_page_token = self.youtube.get_live_chat_messages(next_page_token=self.next_page_token)
+        message = self.picker.pick_rand_message()
+        print("PICKED MESSAGE:", message)
+        return message
 
 
-# file = 'livechatAPI/data/kick_chat.csv'
-# # messages_to_csv(file, (("john", "msg0"), ("bob","msg")))
-# messages = read_messages_csv(file)
-# print(messages)
+# Example usage:
+if __name__ == "__main__":
+    import asyncio
+    from dotenv import load_dotenv
+    load_dotenv()
 
+    fetch_youtube = get_env_var("YT_FETCH") 
+    fetch_twitch = get_env_var("TW_FETCH")
+    fetch_kick = get_env_var("KI_FETCH")
+    live_chat_setup = LiveChatController.create()#(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube, fetch_kick=fetch_kick)
 
-# ############################
-# from twitch import TwitchTools, TwitchAuth, Bot
-# import threading
-# TWTools = TwitchTools()
-# CLIENT_ID, CLIENT_SECRET = TWTools.twitch_auth_loader("livechatAPI/credentials/twitch.json")
-# CHANNEL = 'scikous'
-# BOT_NICK = 'Botty'
-
-# TW_Auth = TwitchAuth(CLIENT_ID, CLIENT_SECRET)
-
-
-# # Replace with your Twitch token and channel
-# TOKEN = TW_Auth.auth_access_token()
-# bot = Bot(TOKEN,CLIENT_ID, BOT_NICK, CHANNEL)
-# twitch_thread = threading.Thread(target=bot.run, daemon=True)
-# twitch_thread.start()
-
-# # ##kick api
-# from kick_chat import client
-
-# p = client.Client(username="scikous")
-# print(p.listen())
+    while True:
+        print("attempting_fetch")
+        asyncio.run(live_chat_setup.fetch_chat_message())
+        time.sleep(5.5)  # Adjust the interval as needed

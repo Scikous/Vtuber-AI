@@ -445,7 +445,7 @@ from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
 
 SEED = 42
 PAD_TOKEN = "<|pad|>"
-BASE_MODEL = "NousResearch/Hermes-2-Theta-Llama-3-8B"
+BASE_MODEL = "NousResearch/Hermes-2-Theta-Llama-3-8B"#LLM/Meta-Llama-3.1-8B"
 NEW_MODEL = "LLM/Llama-3-8B-Test"
 OUTPUT_DIR = "LLM/Hermes-Test"
 DATASET_PATH = "LLM/dataset/unnamedSIUAC.txt"
@@ -456,10 +456,26 @@ class ModelTrainer:
         self.new_model = new_model
         self.pad_token = pad_token
         self.output_dir = output_dir
-        self.dataset = dataset_path
+        self.dataset_path = dataset_path
         self.tokenizer = None
         self.model = None
-    
+        self.dataset = None
+
+    @classmethod
+    def prepare_for_training(cls, base_model: str, new_model: str, pad_token: str, output_dir: str, dataset_path: str):
+        trainer = cls(base_model, new_model, pad_token, output_dir, dataset_path)
+        trainer.seed_everything(SEED)
+        trainer.dataset = trainer.load_and_split_dataset(dataset_path)
+        trainer.tokenizer = trainer.setup_tokenizer()
+        trainer.model = trainer.load_model()
+        trainer.prepare_lora_model()
+        return trainer
+
+    def clear_memory(self):
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
+        
     @staticmethod
     def seed_everything(seed: int):
         random.seed(seed)
@@ -473,6 +489,7 @@ class ModelTrainer:
         return tokenizer
     
     def load_model(self):
+        print(torch.cuda.is_available(), torch.cuda.device_count(), torch.cuda.current_device(), torch.cuda.device(0), torch.cuda.get_device_name(0))
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16
         )
@@ -574,49 +591,39 @@ class ModelTrainer:
         )
         trainer.train()
         trainer.save_model(self.new_model)
+        self.clear_memory()
         print("Finished fine-tuning")
     #saves the model locally
-    def convert_and_save_model(self):
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(self.new_model)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.base_model,
-                torch_dtype=torch.float16,
-                device_map="auto",
-            )
+def convert_and_save_model():
+    try:
+        new_tokenizer = AutoTokenizer.from_pretrained(NEW_MODEL)
+        base_model = AutoModelForCausalLM.from_pretrained(
+            BASE_MODEL,
+            torch_dtype=torch.float16,
+            device_map="auto",
+        )
 
-            print('begin conversion')
-            self.model.resize_token_embeddings(len(self.tokenizer), pad_to_multiple_of=8)
-            self.model = PeftModel.from_pretrained(self.model, self.new_model, offload_folder="LLM/offload")
-            self.model = self.model.merge_and_unload()
+        print('begin conversion')
+        base_model.resize_token_embeddings(len(new_tokenizer), pad_to_multiple_of=8)
+        lora_model = PeftModel.from_pretrained(base_model, NEW_MODEL, offload_folder="LLM/offload")
+        merged_model = lora_model.merge_and_unload()
 
-            self.model.save_pretrained(self.new_model)
-            self.tokenizer.save_pretrained(self.new_model)
-            print("Finished Local Saving")
+        merged_model.save_pretrained(NEW_MODEL)
+        new_tokenizer.save_pretrained(NEW_MODEL)
+        # self.clear_memory()
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
+        print("Finished Local Saving")
 
-        except Exception as e:
-            print("Ran Into:", e)
+    except Exception as e:
+        print("Ran Into:", e)
 
 def main():
-    trainer = ModelTrainer(BASE_MODEL, NEW_MODEL, PAD_TOKEN, OUTPUT_DIR, DATASET_PATH)
-#    trainer.prepare_lora_model()
-#    trainer.train_model()
-    trainer.convert_and_save_model()
-    print("i guees we heres")
-    
+    # trainer = ModelTrainer.prepare_for_training(BASE_MODEL, NEW_MODEL, PAD_TOKEN, OUTPUT_DIR, DATASET_PATH)
+    # trainer.train_model()
+    # trainer.convert_and_save_model()
+    convert_and_save_model()
 if __name__ == "__main__":
     main()
-
-# from exllamav2.conversion.convert_exl2V2 import ExLlamaV2Converter, parse_arguments
-
-# def main():
-#     args = parse_arguments()
-#     converter = ExLlamaV2Converter(args)
-#     converter.setup()
-#     converter.run()
-
-# if __name__ == "__main__":
-#     main()
-
-
 
