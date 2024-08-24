@@ -1,6 +1,9 @@
 from collections import deque
 import csv
+from functools import wraps
 import dotenv
+import time
+
 #save user+LLM message(s) for convenient data
 async def write_messages_csv(file_path, message_data):
     '''
@@ -69,3 +72,30 @@ def change_dir(new_dir):
         yield
     finally:
         os.chdir(old_dir)
+
+#used as a decorator for functions that can fail initially, namely YouTube/Twitch/Kick livechat
+def retry_with_backoff(max_retries=3, initial_delay=5, backoff_factor=2, exceptions=(Exception,)):
+    """
+    A decorator that retries the decorated function with exponential backoff.
+
+    :param max_retries: Maximum number of retries before giving up
+    :param initial_delay: Initial delay between retries in seconds
+    :param backoff_factor: Multiplier for delay after each retry
+    :param exceptions: Tuple of exceptions to catch and retry on
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    print(f"Attempt {attempt + 1} failed with the following ERROR: {e}. Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                    delay *= backoff_factor
+        return wrapper
+    return decorator

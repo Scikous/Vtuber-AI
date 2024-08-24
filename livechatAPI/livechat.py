@@ -3,7 +3,6 @@ from general_utils import get_env_var
 from youtube import YTLive
 from livechat_utils import ChatPicker
 from twitch import TwitchAuth, Bot
-# from livechat_lists import twitch_chat_msgs
 import time
 import multiprocessing
 
@@ -72,7 +71,6 @@ class LiveChatController:
     #WIP
     def setup_kick(self):
         pass
-
 
     #fetch a random message from 
     async def fetch_chat_message(self):

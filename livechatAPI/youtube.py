@@ -1,5 +1,5 @@
 from googleapiclient.discovery import build
-from general_utils import get_env_var
+from general_utils import get_env_var, retry_with_backoff
 import dotenv
 
 class YTLive():
@@ -17,6 +17,7 @@ class YTLive():
         return API_KEY, CHANNEL_ID
     
     #retrieves livestream ID -- used to fetch live chat id
+    @retry_with_backoff(max_retries=3, initial_delay=5, backoff_factor=2, exceptions=(ValueError,))
     def get_livestream_id(self, channel_id):
         """
         channel_id: Found from YouTube.com -> Settings -> Advanced Settings
@@ -30,7 +31,6 @@ class YTLive():
                 eventType='live',
                 maxResults=1
             ).execute()
-
             if not response['items']:
                 raise ValueError("No active livestreams found!")
 

@@ -196,6 +196,7 @@ audio_response/*
 LLM/dataset/*
 LLM/offload/*
 !LLM/offload/.gitignore
+
 voiceAI/dataset/*
 !voiceAI/dataset/inference_testing
 LLM/characters/*
