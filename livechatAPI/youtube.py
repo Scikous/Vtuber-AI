@@ -31,7 +31,6 @@ class YTLive():
                 eventType='live',
                 maxResults=1
             ).execute()
-
             if not response['items']:
                 raise ValueError("No active livestreams found!")
 
