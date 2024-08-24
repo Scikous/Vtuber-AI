@@ -198,7 +198,6 @@ async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", t
         e = time.perf_counter()
         print("TIME TAKEN", e-s)
         s = time.perf_counter()
-    print(resp)
 
 def enqueue_audio(audio_data):
     with LOCK:
