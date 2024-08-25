@@ -7,7 +7,7 @@ from livechat_utils import append_livechat_message
 import dotenv
 
 # manager = multiprocessing.Manager()
-# twitch_chat_msgs = manager.list()
+# twitch_chat_msgs = managkr.list()
 
 # multiprocessing.
 class TwitchAuth():
@@ -45,7 +45,7 @@ class TwitchAuth():
                 token.value = bytes(token_info['access_token'],'utf-8')
 
                 #Save the token to a file or environment variable
-                dotenv.set_key(dotenv_path=".env",key_to_set="TW_ACCESS_TOKEN",value_to_set=token_info["refresh_token"])
+                dotenv.set_key(dotenv_path=dotenv.find_dotenv(),key_to_set="TW_ACCESS_TOKEN",value_to_set=token_info["refresh_token"])
                 # with open('w') as token_file:
                     # json.dump(token, token_file)
                 self.stop_flask(process_stop_event)

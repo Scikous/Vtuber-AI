@@ -1,8 +1,12 @@
 from collections import deque
 import csv
-from functools import wraps
 import dotenv
+from dateutil.parser import parse
+from functools import wraps
+from contextlib import contextmanager
 import time
+import os
+
 
 #save user+LLM message(s) for convenient data
 async def write_messages_csv(file_path, message_data):
@@ -55,15 +59,17 @@ def get_env_var(env_var):
         try:
             return float(env_key)
         except (TypeError, ValueError):
-            if env_key.lower() == "true":
-                return True
-            elif env_key.lower() == "false":
-                return False
-            else:
-                return env_key
+                    # Attempt to parse as datetime
+            try:
+                return parse(env_key)
+            except ValueError:
+                if env_key.lower() == "true":
+                    return True
+                elif env_key.lower() == "false":
+                    return False
+                else:
+                    return env_key
             
-from contextlib import contextmanager
-import os
 @contextmanager
 def change_dir(new_dir):
     old_dir = os.getcwd()
