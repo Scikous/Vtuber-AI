@@ -598,12 +598,9 @@ class ModelTrainer:
             print("Ran Into:", e)
 
 def main():
-    trainer = ModelTrainer(BASE_MODEL, NEW_MODEL, PAD_TOKEN, OUTPUT_DIR, DATASET_PATH)
-#    trainer.prepare_lora_model()
-#    trainer.train_model()
-    trainer.convert_and_save_model()
-    print("i guees we heres")
-    
+    trainer = ModelTrainer.prepare_for_training(BASE_MODEL, NEW_MODEL, PAD_TOKEN, OUTPUT_DIR, DATASET_PATH)
+    trainer.train_model()
+    convert_and_save_model()
 if __name__ == "__main__":
     main()
 

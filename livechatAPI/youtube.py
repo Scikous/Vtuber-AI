@@ -1,5 +1,6 @@
 from googleapiclient.discovery import build
 from general_utils import get_env_var, retry_with_backoff
+from livechat_utils import append_livechat_message
 import dotenv
 
 class YTLive():
@@ -63,7 +64,7 @@ class YTLive():
         messages = response.get('items', [])
         if messages:
             yt_new_messages = [(message['authorDetails']['displayName'],message['snippet']['displayMessage']) for message in messages]
-            self.yt_messages.extend(yt_new_messages)
+            append_livechat_message(self.yt_messages, yt_new_messages)
             next_page_token = response.get('nextPageToken')
             #save current next_page_token to ENV variable
             dotenv.set_key(dotenv_path=dotenv.find_dotenv(),key_to_set="LAST_NEXT_PAGE_TOKEN",value_to_set=next_page_token)
@@ -73,4 +74,4 @@ if __name__ == "__main__":
     yt_messages = []
     yt_live_controller = YTLive(yt_messages)
     yt_live_controller.get_live_chat_messages()
-    print(yt_messages)
+    print(len(yt_messages))

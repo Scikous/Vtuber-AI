@@ -40,9 +40,10 @@ class VtuberExllamav2:
         )
         #default text generation settings, can be overridden
         gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = 0.9, 
-            top_p = 0.8,
-            token_repetition_penalty = 1.025
+            temperature = 1.97, 
+            top_p = 0.95,
+            min_p=0.05,
+            token_repetition_penalty = 1.125
         )
         return cls(generator, gen_settings, tokenizer, character_name)
 
@@ -61,6 +62,7 @@ class VtuberExllamav2:
 
         max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
         #prompt = ["Five good reasons to adopt a cat:","Tell 5 simple jokes:", "how much is 8 + 19?"],
+        # print(prompt)
         output = self.generator.generate(
             prompt = prompt,
             encode_special_tokens=True,
