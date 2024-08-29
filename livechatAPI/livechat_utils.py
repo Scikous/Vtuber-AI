@@ -4,7 +4,7 @@ import random
 # lock = threading.Lock() #may or may not be useful in avoiding messing with different livechats at wrong times
 
 #each livechat should keep to a set limit avoiding favoritism
-def append_livechat_message(chat_messages: list, user_msg: tuple):
+def append_livechat_message(chat_messages: list, user_msg: tuple|list):
     """
     adds the latest message to the running list of messages while maintaining a set max size (default is 10)
     
@@ -14,9 +14,16 @@ def append_livechat_message(chat_messages: list, user_msg: tuple):
     MAX_MESSAGES = 10
     # with lock:
         # print(chat_messages)
-    if len(chat_messages) >= MAX_MESSAGES:
-        chat_messages.pop(0)
-    chat_messages.append(user_msg)
+    def _livechat_appender(chat_messages, user_msg):
+        if len(chat_messages) >= MAX_MESSAGES:
+                chat_messages.pop(0)
+        chat_messages.append(msg)
+    if type(user_msg) is tuple:
+        _livechat_appender(chat_messages, user_msg)
+    elif type(user_msg) is list:
+        for msg in user_msg:
+            _livechat_appender(chat_messages, msg)
+        
 
 #takes lists of livechat messages and allows for selecting a random message between them -- YT: [], TW: [], Kick: [] 
 class ChatPicker:
