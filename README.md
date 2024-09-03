@@ -57,14 +57,31 @@ This is developed and tested on Python 3.11.8.
 
 ## installation
 
-Download PyTorch first and foremost (assumes you are using CudaToolkit 12.1)
+[flash-attention](https://github.com/Dao-AILab/flash-attention) is required (used by ExllamaV2).
+
+PyTorch (assumes you are using CudaToolkit 12.1)
 ```
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Next, install the required packages.
+[ExllamaV2](https://github.com/turboderp/exllamav2) (assumes Windows, Torch 2.4.0, CudaToolkit 12.1, Python 3.11) - swap release version based on your needs.
+
+```
+pip install https://github.com/turboderp/exllamav2/releases/download/v0.2.0/exllamav2-0.2.0+cu121.torch2.4.0-cp311-cp311-win_amd64.whl
+```
+
+The local version of Whisper needs to be installed manually
+```
+pip install SpeechRecognition[whisper-local]
+```
+
 ```
 pip install -r requirements.txt
+```
+
+may need to use:
+```
+python -m nltk.downloader averaged_perceptron_tagger
 ```
 
 ## Virtual Environments
@@ -326,3 +343,5 @@ This project makes use of the following:
 * [NousResearch/Hermes-2-Theta-Llama-3-8B](https://huggingface.co/NousResearch/Hermes-2-Theta-Llama-3-8B/tree/main)
 * [Speech_Recognition](https://github.com/Uberi/speech_recognition)
 * [curiosily](https://github.com/curiousily/AI-Bootcamp/blob/master/15.fine-tuning-llama-3-llm-for-rag.ipynb)
+* [Dao-AILab](https://github.com/Dao-AILab/flash-attention)
+* [turboderp](https://github.com/turboderp/exllamav2)

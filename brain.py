@@ -10,6 +10,7 @@ import logging
 import asyncio
 import time, os
 from dotenv import load_dotenv
+from collections import deque
 
 
 #handles speech-to-text in the background
@@ -17,7 +18,7 @@ async def stt_worker():
     async def stt_callback(speech):
         #current STT system recognizes no sound as 'Thank you.' for reasons unknown
         if speech and speech.strip() != "Thank you.":
-            await speech_queue.put(speech.strip())
+            await speech_queue.put(f"{speaker_name}: {speech.strip()}")
         print(list(speech_queue._queue))
 
     while True:
@@ -63,11 +64,24 @@ async def dialogue_worker():
             message = await completed_task
 
             print("CHOSEN MESSAGE:", message)
+            chat_history = "\n".join(naive_short_term_memory)
+            prompt = f"""
+            Here's the previous chat history, it may or may not be relevant to the current prompt:
+            {chat_history}
+
+            The following is the current prompt:
+            {message}
+            """
+            # print("The PROMPT:", prompt)
+
+
             #avoid generating too much text for the TTS to speak outloud
             if not tts_queue.full():
-                output = await Character.dialogue_generator(message, PromptTemplate.capybaraChatML, max_tokens=100)
+                output = await Character.dialogue_generator(prompt, PromptTemplate.capybaraChatML, max_tokens=100)
                 await llm_output_queue.put(output)
 
+                naive_short_term_memory.append(message)
+                naive_short_term_memory.append(f"{character_name}: {output}")
                 #write message to file -- stability is questionable for bigger stream chats
                 if write_message:
                    await write_message(conversation_log_file, message_data=(message, output))
@@ -125,6 +139,8 @@ if __name__ == "__main__":
     live_chat_queue = asyncio.Queue(maxsize=1)
     llm_output_queue = asyncio.Queue(maxsize=1)
 
+    naive_short_term_memory = deque(maxlen=6)
+    speaker_name = "_"#temporary until finetuning has been solved fully
     #saves user/livechat, LLM response message data if file path is provided 
     conversation_log_file=get_env_var("CONVERSATION_LOG_FILE")
     if conversation_log_file:
