@@ -38,13 +38,13 @@ class PromptTemplate(BaseTemplate):
 class DataTemplate(BaseTemplate):
 
     def capybaraChatML(self, user_str="", context_str="", character_str=""):
-        return dedent(f'''
-        <|begin_of_text|><|im_start|>system
-            {self.instructions_str}<|im_end|>
-        <|im_start|>context
-            {context_str}<|im_end|>
-        <|im_start|>{self.user_name}
-            {user_str}<|im_end|>
-        <|im_start|>{self.character_name}
-            {character_str}<|im_end|>'''
-        )
+        return f'''
+<s><|im_start|>system
+{self.instructions_str}<|im_end|>
+<|im_start|>context
+{context_str}<|im_end|>
+<|im_start|>{self.user_name}
+{user_str}<|im_end|>
+<|im_start|>{self.character_name}
+{character_str}<|im_end|>
+        '''
