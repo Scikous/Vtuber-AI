@@ -18,7 +18,7 @@ class YTLive():
         return API_KEY, CHANNEL_ID
     
     #retrieves livestream ID -- used to fetch live chat id
-    @retry_with_backoff(max_retries=5, initial_delay=5, backoff_factor=2, exceptions=(ValueError,))
+    @retry_with_backoff(max_retries=7, initial_delay=5, backoff_factor=2, exceptions=(ValueError,))
     def get_livestream_id(self, channel_id):
         """
         channel_id: Found from YouTube.com -> Settings -> Advanced Settings
