@@ -8,10 +8,11 @@ from voiceAI.GPT_Test.tts_exp import send_tts_request, tts_queue
 from voiceAI.STT import speech_to_text
 import logging
 import asyncio
-import time, os
+import os
 from dotenv import load_dotenv
 from collections import deque
-
+from multiprocessing import Queue as MPQueue
+import multiprocessing
 
 #handles speech-to-text in the background
 async def stt_worker():
@@ -25,43 +26,68 @@ async def stt_worker():
         await speech_to_text(stt_callback)
         await asyncio.sleep(0.1)
 
-#handles retrieving a random chat message in the background
-async def live_chat_worker(live_chat_controller):
+#retrieves live chat messages and puts them into a queue that is accessible across processes
+def live_chat_process(mp_queue):
+    live_chat_controller = LiveChatController.create()#handles everything regarding managing different live chats
+    
+    #user has not defined a livechat to attempt to retrieve livechat messages from
+    if not live_chat_controller:
+        mp_queue.put(None)  # Signal that no live chat is available
+        logging.info("Live chat functionality is not available")
+        return
+
+    #fetch a live chat message and put it into the process queue
+    async def fetch_and_send():
+        while True:
+            try:
+                live_chat_msg = await asyncio.wait_for(live_chat_controller.fetch_chat_message(), timeout=10)
+                if live_chat_msg:
+                    mp_queue.put(f"{live_chat_msg[0]}: {live_chat_msg[1]}")
+            except asyncio.TimeoutError:
+                # No message received in 10 seconds, continue loop
+                pass
+            except Exception as e:
+                logging.error(f"Error in live chat process: {e}")
+                break
+            await asyncio.sleep(15) #sleep to avoid sending too many requests for live chat messages
+    
+    asyncio.run(fetch_and_send())
+
+#retrieves live chat messages from sub-process queue and puts them into a main process queue
+async def live_chat_worker(mp_queue):
     while True:
-        if not live_chat_queue.full():
-            live_chat_msg = await live_chat_controller.fetch_chat_message()
-            if live_chat_msg:
-                await live_chat_queue.put(f"{live_chat_msg[0]}: {live_chat_msg[1]}")
-        await asyncio.sleep(50)
+        try:
+            message = mp_queue.get_nowait()
+            if message is None:
+                logging.info("Live chat functionality was not turned on due to ENV vars being missing or set to False")
+                break  # No live chat available, exit the worker
+            if not live_chat_queue.full():
+                await live_chat_queue.put(message)
+        except multiprocessing.queues.Empty:
+            # No message available, don't block
+            pass
+        except Exception as e:
+            logging.error(f"Unexpected error in live_chat_worker: {e}")
+        
+        await asyncio.sleep(0.1)  # Short sleep to prevent tight looping
+
+    logging.info("Live chat worker is exiting")
+
 
 #handles stt/livechat message -> LLM output message
 async def dialogue_worker():
     while True:
         try:
-            # # Check if there's a live chat message first
-            # if not live_chat_queue.empty():
-            #     message = await live_chat_queue.get()
-            # else:
-            #     # Otherwise, get speech from the speech queue
-            #     message = await speech_queue.get()
-                
-            # Create tasks for getting messages from both queues
-            speech_task = asyncio.create_task(speech_queue.get())
-            live_chat_task = asyncio.create_task(live_chat_queue.get())
-
-            # Wait for either task to complete
-            done, pending = await asyncio.wait(
-                [speech_task, live_chat_task],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-
-            # Cancel the pending task
-            for task in pending:
-                task.cancel()
-
-            # Get the completed task's result
-            completed_task = done.pop()
-            message = await completed_task
+            #try to get STT output or live chat message
+            try:
+                message = speech_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                try:
+                    message = live_chat_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    # Both queues are empty, wait a bit and try again
+                    await asyncio.sleep(0.1)
+                    continue
 
             print("CHOSEN MESSAGE:", message)
             chat_history = "\n".join(naive_short_term_memory)
@@ -74,8 +100,7 @@ async def dialogue_worker():
             """
             # print("The PROMPT:", prompt)
 
-
-            #avoid generating too much text for the TTS to speak outloud
+            #queue prevents unnecessary generation, and determines how much backlog can be generated
             if not tts_queue.full():
                 output = await Character.dialogue_generator(prompt, PromptTemplate.capybaraChatML, max_tokens=100)
                 await llm_output_queue.put(output)
@@ -96,32 +121,40 @@ async def dialogue_worker():
 async def tts_worker():
     while True:
         output = await llm_output_queue.get()
-        import os
         with change_dir('./voiceAI/GPT_Test'):
-            print(os.getcwd())
             await send_tts_request(output)
         await asyncio.sleep(0.1)
 
 #run and switch between different tasks conveniently and avoid wasting computational resources
 async def loop_function():
+    # Create a multiprocessing Queue for communication between processes
+    mp_queue = MPQueue()
+    
+    # Start the live chat process
+    live_chat_proc = multiprocessing.Process(target=live_chat_process, args=(mp_queue,))
+    live_chat_proc.start()
+    
     tasks = [
         asyncio.create_task(stt_worker()),
         asyncio.create_task(dialogue_worker()),
-        asyncio.create_task(tts_worker())
+        asyncio.create_task(tts_worker()),
+        asyncio.create_task(live_chat_worker(mp_queue))
     ]
     
-
-    live_chat_controller = LiveChatController.create()
-    #it is possible that no livechats are being used
-    if live_chat_controller:
-        tasks.append(asyncio.create_task(live_chat_worker(live_chat_controller)))
-    
-    await asyncio.gather(*tasks)
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        # Ensure the live chat process is terminated
+        live_chat_proc.terminate()
+        live_chat_proc.join()
 
 
 #called by run.py
 if __name__ == "__main__":
     load_dotenv()#get .env file variables
+    logging.basicConfig(filename="program.log", level=logging.INFO)#define log file and its level
 
     character_info_json = "LLM/characters/character.json"
     instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
@@ -131,17 +164,18 @@ if __name__ == "__main__":
     # custom_model = "LLM/unnamedSICUACCT"
     # Character = VtuberLLM.load_model(custom_model=custom_model, character_name=character_name)
     
-    #exllamav2 model
-    # generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2() #deprecated
+    #exllamav2 model setup
     Character = VtuberExllamav2.load_model_exllamav2(character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
 
+    #different queues to hold messages/outputs as they finish/come for further processing
     speech_queue = asyncio.Queue(maxsize=1)
     live_chat_queue = asyncio.Queue(maxsize=1)
     llm_output_queue = asyncio.Queue(maxsize=1)
 
-    naive_short_term_memory = deque(maxlen=6)
-    speaker_name = "_"#temporary until finetuning has been solved fully
-    #saves user/livechat, LLM response message data if file path is provided 
+    naive_short_term_memory = deque(maxlen=6)#used to keep a very short-term memory of what was said in the current conversation
+    speaker_name = "_"#temporarily emprty until finetuning has been solved fully
+    
+    #saves user/livechat/LLM response message data to csv file if file path is defined 
     conversation_log_file=get_env_var("CONVERSATION_LOG_FILE")
     if conversation_log_file:
         #check if path is full path (absolute path or not) -- add root directory extension if not abs path
