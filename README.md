@@ -23,6 +23,7 @@ The aim of this project is both to give a good starting point for anyone to crea
             * [Audio Labelling](#audio-labelling)
     * [Training](#training-1)
     * [Inference](#inference-1)
+* [Testing](#testing)
 * [Acknowledgements](#acknowledgements)
 
 # Features
@@ -245,9 +246,6 @@ In the `finetune.py` file, only the **DATASET_PATH** must be changed:
 WIP
 pip install https://github.com/turboderp/exllamav2/releases/download/v0.1.9/exllamav2-0.1.9+cu121.torch2.4.0-cp311-cp311-win_amd64.whl
 
-
-
-
 ## Inference
 :exclamation: HEAVY WIP
 
@@ -332,6 +330,15 @@ Do basic inference through browser:
 ```
 http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the credit people give it?&text_lang=en&ref_audio_path=../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav&prompt_lang=en&prompt_text=But truly, is a simple piece of paper worth the credit people give it?&text_split_method=cut5&batch_size=1&media_type=wav&streaming_mode=true&top_k=7&top_p=0.87&temperature=0.87
 ```
+
+# Testing
+:warning: Running just **pytest** will result in running all test files in the entire project which will inevitably fail. We are only concerned with the tests within the tests directory at the root.
+
+To run tests use:
+```
+pytest -s tests
+```
+
 
 # Acknowledgements
 > I used a mix of my own and other people's code for the LLM training and evaluation. I can't remember who the people are, sorry. I would cite otherwise.

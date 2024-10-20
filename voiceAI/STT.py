@@ -67,10 +67,10 @@ async def speech_to_text(callback):
     while True:
         try:
             # Run the speech recognition in a separate thread
-            text = await asyncio.get_event_loop().run_in_executor(executor, recognize_speech_sync)
-            
+            text = await asyncio.to_thread(recognize_speech_sync)
             if text:
                 await callback(text)
+                return
             
             # Small delay to prevent busy-waiting
             await asyncio.sleep(0.1)
@@ -79,16 +79,18 @@ async def speech_to_text(callback):
             print(f"Unexpected error in speech_to_text: {e}")
             await asyncio.sleep(1)  # Wait a bit before retrying
 
-# #only for testing purposes
-# if __name__ == "__main__":
-#     import asyncio
 
-#     #a basic callback that exists solely for basic testing of the STT
-#     async def _stt_test_callback(speech):
-#         #current STT system recognizes no sound as 'Thank you.' for reasons unknown
-#         if speech and speech.strip() != "Thank you.":
-#             await test_speech_queue.put(speech.strip())
-#         print(list(test_speech_queue._queue))
+# #only for testing purposes
+if __name__ == "__main__":
+    import asyncio
+
+    #a basic callback that exists solely for basic testing of the STT
+    async def _stt_test_callback(speech):
+        #current STT system recognizes no sound as 'Thank you.' for reasons unknown
+        if speech and speech.strip() != "Thank you.":
+            await test_speech_queue.put(speech.strip())
+        print(list(test_speech_queue._queue))
     
-#     test_speech_queue = asyncio.Queue(maxsize=2)
-#     stt = asyncio.run(speech_to_text(_stt_test_callback))
+    test_speech_queue = asyncio.Queue(maxsize=4)
+    while True:
+        asyncio.run(speech_to_text(_stt_test_callback))
