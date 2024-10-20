@@ -4,7 +4,7 @@ import subprocess
 
 # Define the paths to your Python files
 # venv_path = "venv2\\scripts\\activate"
-VENV = 'venv'
+VENV = 'venv7'
 
 ##windows venv implementation
 
