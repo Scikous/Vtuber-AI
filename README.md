@@ -334,11 +334,20 @@ http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the c
 # Testing
 :warning: Running just **pytest** will result in running all test files in the entire project which will inevitably fail. We are only concerned with the tests within the tests directory at the root.
 
-To run tests use:
+To run all tests use:
 ```
 pytest -s tests
 ```
 
+Only unit tests:
+```
+pytest -s tests -m "not integration"
+```
+
+Only integration tests
+```
+pytest -s tests -m integration
+```
 
 # Acknowledgements
 > I used a mix of my own and other people's code for the LLM training and evaluation. I can't remember who the people are, sorry. I would cite otherwise.

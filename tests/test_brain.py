@@ -14,9 +14,12 @@ def speak_message():
 
 #simulates stt_worker in brain.py
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_stt_worker(speak_message):
     #a basic callback that exists solely for basic testing of the STT
     async def _stt_test_callback(speech):
+        #returned value from speech recognition should be of type str
+        assert isinstance(speech, str)
         #current STT system recognizes no sound as 'Thank you.' for reasons unknown
         if speech and speech.strip() != "Thank you.":
             await test_speech_queue.put(speech.strip())

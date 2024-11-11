@@ -10,7 +10,7 @@ class LLMUtils:
         """
         # Adjust max tokens based on input length to avoid cutting off mid-thought
         adjusted_max_tokens = max(min_tokens, max_tokens - input_len)+1
-        print(adjusted_max_tokens)
+        # print(adjusted_max_tokens)
         tokens = np.arange(min_tokens, adjusted_max_tokens)
         token_weights = np.linspace(
             start=1.0, stop=0.05, num=adjusted_max_tokens - min_tokens)
