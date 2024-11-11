@@ -26,12 +26,14 @@ class YTLive():
         if channel_id:
             #get active livestream data
             response = self.youtube.search().list(
-                part='id,snippet',
                 channelId=channel_id,
-                type='video',
-                eventType='live',
-                maxResults=1
-            ).execute()
+        part="snippet",
+        # eventType="live",
+        maxResults=2,
+        type="video",
+        order="date",
+    ).execute()
+            print(response)
             if not response['items']:
                 raise ValueError("No active livestreams found!")
 
