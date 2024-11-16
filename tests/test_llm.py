@@ -65,6 +65,11 @@ def test_PromptTemplate_population(prompt_template):
     capybaraChatML = PromptTemplate()
     assert isinstance(capybaraChatML, str) and bos_token in capybaraChatML and eos_token in capybaraChatML
 
+def test_model_loading():
+    model = "LLM/ALlama"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+    Character = VtuberExllamav2.load_model_exllamav2(model_dir=model,character_name="John")
+    print(Character, type(Character))
+
 #test using exllamav2
 def test_exllamav2(prompt_template):
     model = "LLM/ALlama"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'

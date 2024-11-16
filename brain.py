@@ -4,7 +4,7 @@ from LLM.llm_templates import PromptTemplate as pt
 from livechatAPI.livechat import LiveChatController
 from general_utils import get_env_var, write_messages_csv, change_dir
 # from voiceAI.TTS import send_tts_request, tts_queue
-from voiceAI.GPT_Test.tts_exp import send_tts_request, tts_queue
+from voiceAI.GPT_Test.tts_exp import send_tts_request, run_playback_thread, tts_queue
 from voiceAI.STT import speech_to_text
 import logging
 import asyncio
@@ -133,22 +133,27 @@ async def loop_function():
     # Start the live chat process
     live_chat_proc = multiprocessing.Process(target=live_chat_process, args=(mp_queue,))
     live_chat_proc.start()
-    
     tasks = [
         asyncio.create_task(stt_worker()),
         asyncio.create_task(dialogue_worker()),
         asyncio.create_task(tts_worker()),
-        asyncio.create_task(live_chat_worker(mp_queue))
+        asyncio.create_task(live_chat_worker(mp_queue)),
     ]
     
     try:
+        playback_thread = run_playback_thread(run=True)
         await asyncio.gather(*tasks)
     except asyncio.CancelledError:
         pass
+        # # Signal playback thread to stop
+        # stop_event.set()
+        # playback_thread.join(timeout=2)  # Wait for playback thread to finish
     finally:
         # Ensure the live chat process is terminated
         live_chat_proc.terminate()
         live_chat_proc.join()
+        if playback_thread:
+            playback_thread.join(timeout=1)
 
 
 #called by run.py

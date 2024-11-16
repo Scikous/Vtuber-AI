@@ -14,9 +14,9 @@ LOCK = threading.Lock()
 CONDITION = threading.Condition(LOCK)
 PLAYBACK_PAUSED = threading.Event()
 
-import queue
+# import queue
 
-audio_queue = queue.Queue(maxsize=10)  # Buffer for audio chunks
+# audio_queue = queue.Queue(maxsize=10)  # Buffer for audio chunks
 
 # def audio_playback():
 #     def on_press(key):
@@ -90,7 +90,6 @@ def audio_playback(audio_data=None):
                     rate=32000,               # Example framerate (replace with actual value)
                     output=True)
     
-    
     # Write audio data to the stream in chunks
     while not stop_requested:
         with CONDITION:
@@ -114,6 +113,8 @@ def audio_playback(audio_data=None):
     stream.stop_stream()
     stream.close()
     p.terminate()
+    listener.stop()
+
 #prompt_text example, causes issues: But truly, is a simple piece of paper worth the credit people give it?
 async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_lang="en",
                         ref_audio_path="../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav",
@@ -125,8 +126,7 @@ async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", t
                           seed= -1,
                           media_type="wav",
                           streaming_mode=False, parallel_infer=True,
-                          repetition_penalty=1.35
-                          ):
+                          repetition_penalty=1.35):
     """
     Sends a text-to-speech request to the provided Gradio interface URL.
 
@@ -176,7 +176,8 @@ async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", t
     # with LOCK:
     #     tts_queue.put(response.content)  # Enqueue the audio data
     #     CONDITION.notify()
-    from api_v2 import tts_direct
+    # from api_v2 import tts_direct
+    from api_custom import tts_direct
 
     # resp = tts_direct(input_data)
     # s = time.perf_counter()
@@ -191,8 +192,11 @@ async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", t
     #     # print("_-----"*30,r[:5], '\n')
     #     s = time.perf_counter()
     # print(resp)
+    
+
     resp = tts_direct(input_data)
     s = time.perf_counter()
+    print("LLLSJDKDLSDKLS"*30)
     for r in resp:
         await asyncio.to_thread(enqueue_audio, r)
         e = time.perf_counter()
@@ -206,9 +210,22 @@ def enqueue_audio(audio_data):
         tts_queue.put(audio_data)
 
 
-playback_thread = threading.Thread(target=audio_playback, daemon=True)
-playback_thread.start()
-
+#determines whether audio playback should be enabled or not
+# playback_thread = threading.Thread(target=audio_playback, daemon=True)
+# playback_thread.start()
+def run_playback_thread(run=True):
+    # return
+    print(run)
+    if run:
+        print("WOWZERS"*30)
+        # await asyncio.to_thread(audio_playback)
+        # audio_playback()
+        playback_thread = threading.Thread(target=audio_playback, daemon=True)
+        playback_thread.start()
+        time.sleep(1)
+        return playback_thread
+    return None
+    print("HAHAHA"*30)
 
 if __name__ == "__main__":
     import asyncio
