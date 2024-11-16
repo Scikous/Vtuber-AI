@@ -16,7 +16,7 @@ async def write_messages_csv(file_path, message_data):
     Can technically be any format
     '''
     # global lock #we may come back to threading eventually
-    with open(file_path, mode='a', newline='\n', encoding='utf-8') as file:
+    with open(file_path, mode='a+', newline='\n', encoding='utf-8') as file:
         # csv_writer = csv.writer(file)
         # # with lock:
         # csv_writer.writerow(message_data)
@@ -25,7 +25,7 @@ async def write_messages_csv(file_path, message_data):
 
 
 #fetch last 10 messages from csv
-def read_messages_csv(file_path, num_messages=10):
+async def read_messages_csv(file_path, num_messages=10):
     '''
     Intented for return tuples of chat messages -> (<user name>, <message>)
 
