@@ -11,7 +11,6 @@ async def test_tts():
     dummy_output = "I'm John The Magnificent, tremble before my mighty power!"
     _ = run_playback_thread(run=False)#unit test has no need for audio playback
     with change_dir('./voiceAI/GPT_Test'):
-        print("wahahahaha"*30, os.getcwd())
         await send_tts_request(text=dummy_output)#asyncio.wait_for(send_tts_request(dummy_output), timeout=35)
     tts_audio_bytes = tts_queue.get(timeout=1)
     print(tts_queue, tts_queue.qsize(), type(tts_audio_bytes))

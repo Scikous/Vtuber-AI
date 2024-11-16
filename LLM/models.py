@@ -1,5 +1,6 @@
 from model_utils import LLMUtils
-
+import torch
+import gc
 #current, lowest latency
 class VtuberExllamav2:
     """
@@ -45,8 +46,18 @@ class VtuberExllamav2:
             min_p=0.05,
             token_repetition_penalty = 1.035
         )
+
+        
         return cls(generator, gen_settings, tokenizer, character_name)
 
+    def __del__(self):
+        # Manual cleanup (if necessary)
+        del self.generator
+        del self.gen_settings
+        del self.tokenizer
+        torch.cuda.empty_cache()  # If using CUDA
+        gc.collect()
+        print("Deleted and garbage collected ExllamaV2 Model!")
 
     async def dialogue_generator(self, prompt, PromptTemplate, max_tokens=200,):
         """
