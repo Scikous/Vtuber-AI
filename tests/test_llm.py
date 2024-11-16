@@ -9,6 +9,8 @@ from LLM.model_utils import LLMUtils
 from LLM.llm_templates import PromptTemplate as pt
 from time import perf_counter
 import asyncio
+import gc
+import torch
 
 # @pytest.fixture
 # def speak_message():
@@ -39,7 +41,13 @@ import asyncio
 def character_info():
     character_info_json = "LLM/characters/character.json"
     instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
-    return instructions, user_name, character_name
+    yield instructions, user_name, character_name
+
+    # Cleanup
+    del instructions
+    del user_name
+    del character_name
+    gc.collect()  # Force garbage collection
 
 #define prompt template and presumed bos and eos tokens -- currenlty capybara chatml
 @pytest.fixture
@@ -49,9 +57,24 @@ def prompt_template(character_info):
     PromptTemplate = pt(instructions_string, user_name, character_name)
     bos_token, eos_token = "<|im_start|>", "<|im_end|>"
 
-    return PromptTemplate.capybaraChatML, bos_token, eos_token
- 
+    yield PromptTemplate.capybaraChatML, bos_token, eos_token
+    
+    # Cleanup
+    del PromptTemplate
+    del bos_token
+    del eos_token
+    gc.collect()
+
+# For the model test, we'll create a fixture with cleanup
+@pytest.fixture
+def exllama_model():
+    model = "LLM/ALlama"
+    Character = VtuberExllamav2.load_model_exllamav2(model_dir=model, character_name="John")
+    yield Character
+    del Character #required to make space for other tests
+
 #test that character information can be loaded in
+@pytest.mark.run(order=1)
 def test_character_loading(character_info):
     #get current character's information to use
     instructions, user_name, character_name = character_info
@@ -59,27 +82,30 @@ def test_character_loading(character_info):
     assert isinstance(instructions, str) and isinstance(user_name, str) and isinstance(character_name, str)
 
 #test that prompt template is correctly initialized
+@pytest.mark.run(order=2)
 def test_PromptTemplate_population(prompt_template):
     PromptTemplate, bos_token, eos_token = prompt_template#pt(instructions_string, user_name, character_name)
     # print(PromptTemplate.capybaraChatML())
     capybaraChatML = PromptTemplate()
     assert isinstance(capybaraChatML, str) and bos_token in capybaraChatML and eos_token in capybaraChatML
 
-def test_model_loading():
-    model = "LLM/ALlama"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
-    Character = VtuberExllamav2.load_model_exllamav2(model_dir=model,character_name="John")
-    print(Character, type(Character))
+#model must be loadable
+@pytest.mark.run(order=3)
+def test_exllamav2_model_loading(exllama_model):
+    assert isinstance(exllama_model, VtuberExllamav2)
 
+
+# test_model_loading()
 #test using exllamav2
-def test_exllamav2(prompt_template):
-    model = "LLM/ALlama"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+@pytest.mark.run(order=4)
+def test_exllamav2(prompt_template, exllama_model):
     prompTemplate, bos_token, eos_token = prompt_template
-    Character = VtuberExllamav2.load_model_exllamav2(model_dir=model,character_name="John")#(generator, gen_settings, tokenizer, character_name)
+    Character = exllama_model#VtuberExllamav2.load_model_exllamav2(model_dir=model,character_name="John")#(generator, gen_settings, tokenizer, character_name)
     #msg = "<|begin_of_text|>instructions: John Smith takes everything to an extreme. He dresses in outlandish and flamboyant clothing, often with theatricality. His speech is full of bombastic, grand and dramatic pronouncements. Everytime he speaks he says and responds ALWAYS with something NEW and UNIQUE EVERY SINGLE TIME. You will be penalized for saying anything present in this paragraph, and for not saying random unique things. He speaks of many fascinating topics.\n\n user message: Kid Flasher: Elon musk? You MUST have the following in your output EXACTLY as written, AND at least 2 sentences: "hello", 'wow't'"""
     msg = "Do you edge?"
     MAX_LATENCY = 2.00 #seconds
     start = perf_counter()
-    print(Character.tokenizer.eos_token, Character.tokenizer.bos_token)
+    # print(Character.tokenizer.eos_token, Character.tokenizer.bos_token)
     #returns generated dialogue
     response = asyncio.run(Character.dialogue_generator(prompt=msg, PromptTemplate=prompTemplate, max_tokens=200))
     end = perf_counter()
