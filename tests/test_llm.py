@@ -118,6 +118,7 @@ def test_exllamav2(prompt_template, exllama_model):
     assert response and isinstance(response, str) and bos_token not in response and eos_token not in response
 
 #tests random token length generator method from LLMUtils
+@pytest.mark.run(order=5)
 def test_random_token_len():
     min_tokens = 15
     max_tokens = 200
