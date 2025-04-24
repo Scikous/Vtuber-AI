@@ -151,6 +151,7 @@ python-dotenv==1.0.1
 python-multipart==0.0.9
 pytorch-lightning==2.3.2
 pytorch-wpe==0.0.1
+pytest==8.3.3
 pytz==2024.1
 PyYAML==6.0.1
 referencing==0.35.1
@@ -207,3 +208,6 @@ yapf==0.40.2
 yarl==1.9.4
 zipp==3.19.2
 requests_oauthlib==2.0.0
+robotframework==7.1.1
+robotframework-pythonlibcore==4.4.1
+robotframework-seleniumlibrary==6.6.1

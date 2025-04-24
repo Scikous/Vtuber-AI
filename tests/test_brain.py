@@ -4,10 +4,6 @@ from brain import stt_worker, live_chat_process, live_chat_worker, dialogue_work
 from voiceAI.STT import speech_to_text
 
 
-
-
-
-
 @pytest.fixture
 def speak_message():
     print("Speak something into the microphone. The test will wait for 10 seconds.")

@@ -251,6 +251,20 @@ pip install https://github.com/turboderp/exllamav2/releases/download/v0.1.9/exll
 
 eval.py with modifications can be used for the inference, this is planned to change very soon.
 
+## Huggingface Cache Cleaning
+
+Install
+```
+pip install huggingface_hub["cli"]
+```
+
+run
+```
+huggingface-cli delete-cache
+```
+
+Next, select model(s) to delete from cache.
+
 # Voice Model
 ## Training
 ### Official Guide: 
