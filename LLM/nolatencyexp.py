@@ -103,7 +103,8 @@ dummy_data = ["Good day, state your name.", "What is your favorite drink?", "Do 
 
 PromptTemplate = pt(instructions, user_name, character_name)
 
-generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2('LLM/Llama-3-8B-Test')
+# generator, gen_settings, tokenizer = LLMUtils.load_model_exllamav2('LLM/Llama-3-8B-Test')
+generator, gen_settings, tokenizer = VtuberExllamav2.load_model_exllamav2('LLM/Hermes-Test-Unsloth')
 Character = VtuberExllamav2(generator, gen_settings, tokenizer, character_name)  
 # custom_model = "LLM/unnamedSICUACCT"
 # model, tokenizer = LLMUtils.load_model(custom_model_name=custom_model)

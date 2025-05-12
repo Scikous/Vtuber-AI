@@ -57,17 +57,27 @@ This is developed and tested on Python 3.11.8.
 
 ## installation
 
+:exclamation: This works only on Linux (Ubuntu 24.04 LTS, other distros may work), No Windows support.
+
 [flash-attention](https://github.com/Dao-AILab/flash-attention) is required (used by ExllamaV2).
 
-PyTorch (assumes you are using CudaToolkit 12.1)
+PyTorch (assumes you are using CudaToolkit 12.4)
 ```
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+
 ```
+TensorboardX (PyTorch should install this automatically):
+```
+pip install tensorboardX
+```
+
 
 [ExllamaV2](https://github.com/turboderp/exllamav2) (assumes Windows, Torch 2.4.0, CudaToolkit 12.1, Python 3.11) - swap release version based on your needs.
 
+
+Pytorch 2.6.0, CudaToolkit 12.4, Python 3.11:
 ```
-pip install https://github.com/turboderp/exllamav2/releases/download/v0.2.0/exllamav2-0.2.0+cu121.torch2.4.0-cp311-cp311-win_amd64.whl
+pip install https://github.com/turboderp-org/exllamav2/releases/download/v0.2.9/exllamav2-0.2.9+cu124.torch2.6.0-cp312-cp312-linux_x86_64.whl
 ```
 
 The local version of Whisper needs to be installed manually
@@ -75,13 +85,13 @@ The local version of Whisper needs to be installed manually
 pip install SpeechRecognition[whisper-local]
 ```
 
-```
-pip install -r requirements.txt
-```
 
 may need to use:
 ```
 python -m nltk.downloader averaged_perceptron_tagger
+```
+```
+pip install -r requirements.txt
 ```
 
 ## Virtual Environments
@@ -242,9 +252,16 @@ In the `finetune.py` file, only the **DATASET_PATH** must be changed:
 - **DATASET_PATH**: path to the dataset file -- currently .txt, soon .parquet
 
 ## Quantization
-WIP
-pip install https://github.com/turboderp/exllamav2/releases/download/v0.1.9/exllamav2-0.1.9+cu121.torch2.4.0-cp311-cp311-win_amd64.whl
 
+:information_source: Assumes ExllamaV2 was installed via the wheel
+```
+python -m exllamav2.conversion.convert_exl2
+```
+
+
+### Calibration dataset
+
+Use fine-tuning dataset here OR rely on the built-in calibration dataset of ExllamaV2.
 
 
 

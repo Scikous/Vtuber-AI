@@ -71,49 +71,62 @@ audio_queue = queue.Queue(maxsize=10)  # Buffer for audio chunks
 #     p.terminate()
 
 def audio_playback(audio_data=None):
-    def on_press(key):
-        if key == keyboard.Key.f3:
-            if PLAYBACK_PAUSED.is_set():
-                PLAYBACK_PAUSED.clear()
-            else:
-                PLAYBACK_PAUSED.set()
-    # Create a keyboard listener
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
+    # def on_press(key):
+    #     if key == keyboard.Key.f3:
+    #         if PLAYBACK_PAUSED.is_set():
+    #             PLAYBACK_PAUSED.clear()
+    #         else:
+    #             PLAYBACK_PAUSED.set()
+    # # Create a keyboard listener
+    # listener = keyboard.Listener(on_press=on_press)
+    # listener.start()
+    try:
+        stop_requested = False
 
-    stop_requested = False
-
-    # Open an audio stream using pyaudio
-    p = pyaudio.PyAudio()
-    stream = p.open(format=pyaudio.paInt16,  # Assuming 16-bit signed integer PCM
-                    channels=1,               # Assuming mono audio
-                    rate=32000,               # Example framerate (replace with actual value)
-                    output=True)
-    
-    
-    # Write audio data to the stream in chunks
-    while not stop_requested:
-        with CONDITION:
-            while tts_queue.empty():
-                CONDITION.wait()
-            # Initialize audio buffer with silence padding to avoid popping sound
-            try:
-                audio_data = tts_queue.get(timeout=1)  # Get audio data from the queue
-                audio_data = audio_data[64:]#skip first 64 bytes to avoid popping sound
-                while audio_data:
-                    if PLAYBACK_PAUSED.is_set():
-                        time.sleep(0.1)
-                        continue
-                    data = audio_data[:2048]
-                    stream.write(data)
-                    audio_data = audio_data[len(data):]
-            except Exception as e:
-                print(f"Error: {e}")
-                continue
+        # Open an audio stream using pyaudio
+        p = pyaudio.PyAudio()
+        stream = p.open(format=pyaudio.paInt16,  # Assuming 16-bit signed integer PCM
+                        channels=1,               # Assuming mono audio
+                        rate=32000,               # Example framerate (replace with actual value)
+                        output=True,
+                        frames_per_buffer=8192,  # Adjust buffer size as needed
+                        )  # Adjust buffer size as needed
+        
+        
+        # Write audio data to the stream in chunks
+        while not stop_requested:
+            with CONDITION:
+                while tts_queue.empty():
+                    CONDITION.wait()
+                # Initialize audio buffer with silence padding to avoid popping sound
+                try:
+                    audio_data = tts_queue.get(timeout=1)  # Get audio data from the queue
+                    audio_data = audio_data[64:]#skip first 64 bytes to avoid popping sound
+                    while audio_data:
+                        if PLAYBACK_PAUSED.is_set():
+                            time.sleep(0.1)
+                            continue
+                        data = audio_data[:2048]
+                        stream.write(data)
+                        audio_data = audio_data[len(data):]
+                except Exception as e:
+                    print(f"Error: {e}")
+                    continue
     # Close the audio stream and PyAudio
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
+    finally:
+        print("Cleaning up audio resources...")
+        if listener:
+            print("Stopping listener...")
+            listener.stop()
+        if stream:
+            print("Stopping stream...")
+            stream.stop_stream()
+            print("Closing stream...")
+            stream.close()
+        if p:
+            print("Terminating PyAudio...")
+            p.terminate()
+        print("Audio cleanup finished.")
 #prompt_text example, causes issues: But truly, is a simple piece of paper worth the credit people give it?
 async def send_tts_request(text="(Super Elite Magnificent Agent John Smith!)", text_lang="en",
                         ref_audio_path="../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav",

@@ -252,7 +252,7 @@ class TTS:
         print(f"Loading VITS weights from {weights_path}")
         self.configs.vits_weights_path = weights_path
         self.configs.save_configs()
-        dict_s2 = torch.load(weights_path, map_location=self.configs.device)
+        dict_s2 = torch.load(weights_path, map_location=self.configs.device, weights_only=False)
         hps = dict_s2["config"]
         self.configs.filter_length = hps["data"]["filter_length"]
         self.configs.segment_size = hps["train"]["segment_size"]
