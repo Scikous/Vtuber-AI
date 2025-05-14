@@ -10,3 +10,6 @@
 [submodule "LLM-Wizard"]
 	path = LLM-Wizard
 	url = https://github.com/Scikous/LLM-Wizard.git
+[submodule "STT-Wizard"]
+	path = STT-Wizard
+	url = https://github.com/Scikous/STT-Wizard.git
