@@ -1,15 +1,15 @@
-[submodule "Livechat-Wizard"]
-	path = Livechat-Wizard
+[submodule "Livechat_Wizard"]
+	path = Livechat_Wizard
 	url = https://github.com/Scikous/Livechat-Wizard.git
 [submodule "STT_Wizard"]
 	path = STT_Wizard
 	url = https://github.com/Scikous/STT-Wizard.git
-[submodule "TTS-Wizard"]
-	path = TTS-Wizard
+[submodule "TTS_Wizard"]
+	path = TTS_Wizard
 	url = https://github.com/Scikous/TTS-Wizard.git
-[submodule "LLM-Wizard"]
-	path = LLM-Wizard
+[submodule "LLM_Wizard"]
+	path = LLM_Wizard
 	url = https://github.com/Scikous/LLM-Wizard.git
-[submodule "STT-Wizard"]
-	path = STT-Wizard
+[submodule "STT_Wizard"]
+	path = STT_Wizard
 	url = https://github.com/Scikous/STT-Wizard.git
