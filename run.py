@@ -1,83 +1,65 @@
 import os
-from threading import Thread
 import subprocess
+import sys
+import t
+# Define the virtual environment name. This could be read from a config or .env file.
+VENV_NAME = 'venv7'
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
-# Define the paths to your Python files
-# venv_path = "venv2\\scripts\\activate"
-VENV = 'venv7'
+def get_python_executable(venv_name):
+    """Gets the path to the Python executable in the specified virtual environment."""
+    # Construct path to venv based on OS
+    if sys.platform == "win32":
+        python_exe = os.path.join(PROJECT_ROOT, venv_name, "Scripts", "python.exe")
+    else: # Linux/macOS
+        python_exe = os.path.join(PROJECT_ROOT, venv_name, "bin", "python")
+    
+    if os.path.exists(python_exe):
+        return python_exe
+    return None
 
-##windows venv implementation
+def main():
+    """
+    Main function to start the Vtuber-AI application by running the MainOrchestrator.
+    """
+    print("Starting Vtuber-AI application...")
 
-#legacy, handled running TTS web server
-def run_TTS():
-    venv_path = f"..\\..\\{VENV}\\"
-    script1_path = "./api_v2.py"
-    # script1_path = "./tts_exp.py"
-    new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
-    # new_dir = "./voiceAI/GPT_Test/"
-    # Activate virtual environment and run the script
-    activate_script = os.path.join(venv_path, 'Scripts', 'activate.bat')
-    command = f"{activate_script} && python {script1_path}"
+    python_executable = get_python_executable(VENV_NAME)
+    
+    main_orchestrator_script = os.path.join(PROJECT_ROOT, "src", "main_orchestrator.py")
+
+    if not os.path.exists(main_orchestrator_script):
+        print(f"Error: Main orchestrator script not found at {main_orchestrator_script}")
+        sys.exit(1)
+
+    if python_executable:
+        print(f"Using Python from virtual environment: {python_executable}")
+        command = [python_executable, main_orchestrator_script]
+    else:
+        print(f"Warning: Virtual environment '{VENV_NAME}' Python not found. "
+              f"Attempting to use system 'python'.")
+        print("Please ensure the virtual environment is activated and contains all dependencies, "
+              "or that dependencies are installed globally.")
+        command = ["python", main_orchestrator_script]
+
+    print(f"Executing: {' '.join(command)}")
+    print(f"Project Root: {PROJECT_ROOT}")
+    
     try:
-        subprocess.run(command, shell=True, check=True, cwd=new_dir)
+        # Run the main_orchestrator.py script.
+        # The CWD for the subprocess will be PROJECT_ROOT.
+        process = subprocess.Popen(command, cwd=PROJECT_ROOT)
+        process.wait()  # Wait for the orchestrator process to complete.
+    except FileNotFoundError:
+        print(f"Error: Failed to execute command. Ensure '{command[0]}' is a valid command or in PATH.")
+        sys.exit(1)
     except subprocess.CalledProcessError as e:
-        print("Error running TTS:", e)
-
-#handles all of LLM, TTS, STT and livechat(s) related tasks
-def run_brain():
-    script2_path = "./brain.py"
-    venv_path = f".\\{VENV}\\"
-    # Activate virtual environment and run the script
-    activate_script = os.path.join(venv_path, 'Scripts', 'activate.bat')
-    command = f"{activate_script} && python {script2_path}"
-    os.system(command)
+        print(f"Error running MainOrchestrator: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nApplication interrupted by user (Ctrl+C in run.py).")
+    finally:
+        print("Vtuber-AI application has finished.")
 
 if __name__ == "__main__":
-    # tts_thread = Thread(target=run_brain, daemon=True)
-    # tts_thread.start()
-    run_brain()
-    # run_TTS()
-
-
-#linux venv version??? untested
-# def run_TTS():
-#     new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
-#     # Activate virtual environment and run the script
-#     activate_script = os.path.join(venv_path, 'bin', 'activate')
-#     command = f"source {activate_script} && python {script1_path}"
-#     try:
-#         subprocess.run(command, shell=True, check=True, cwd=new_dir, executable='/bin/bash')
-#     except subprocess.CalledProcessError as e:
-#         print("Error running TTS:", e)
-
-# def run_brain():
-#     # Activate virtual environment and run the script
-#     activate_script = os.path.join(venv_path, 'bin', 'activate')
-#     command = f"source {activate_script} && python {script2_path}"
-#     os.system(command)
-
-# if __name__ == "__main__":
-#     tts_thread = Thread(target=run_brain, daemon=True)
-#     tts_thread.start()
-#     run_TTS()
-
-
-
-#non-venv, not recommended
-# print(os.getcwd())
-# def run_TTS():
-#     new_dir = "./voiceAI/GPT-SoVITS-fast_inference/"
-#     try:
-#         subprocess.run([venv_path,"python", "api_v2.py"], check=True,
-#                        cwd=new_dir)  # Run script1 with arguments
-#     except subprocess.CalledProcessError as e:
-#         print("Error running TTS:", e)
-
-
-# def run_brain():
-#     os.system(f"{venv_path} python {script2_path}")
-
-# if __name__ == "__main__":
-#     tts_thread = Thread(target=run_brain, daemon=True)
-#     tts_thread.start()
-#     run_TTS()
+    main()
