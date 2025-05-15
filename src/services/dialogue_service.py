@@ -76,12 +76,12 @@ class DialogueService(BaseService):
                             self.logger.warning(f"Could not parse speaker from message: {message}. Using raw message as input.")
                 
                 history_for_llm_content = "\n".join(list(self.naive_short_term_memory))
-                content_for_template_hole = f"{self.prompt_template.instructions}\n\n{history_for_llm_content}\n{self.prompt_template.user_name}: {raw_input_text}\n{self.prompt_template.character_name}:"
+                content_for_template_hole = f"{self.prompt_template.instructions_str}\n\n{history_for_llm_content}\n{self.prompt_template.user_name}: {raw_input_text}\n{self.prompt_template.character_name}:"
                 chatml_template = self.prompt_template.capybaraChatML
 
-                if self.logger:
-                    self.logger.debug(f"Content for LLM template hole: {content_for_template_hole[:200]}...")
-                    self.logger.debug(f"ChatML template: {chatml_template[:200]}...")
+                # if self.logger:
+                #     self.logger.debug(f"Content for LLM template hole: {content_for_template_hole[:200]}...")
+                #     self.logger.debug(f"ChatML template: {chatml_template[:200]}...")
 
                 if not self.llm_output_queue.full():
                     output = await self.llm_model.dialogue_generator(content_for_template_hole, chatml_template, max_tokens=100)
@@ -96,13 +96,13 @@ class DialogueService(BaseService):
                     if self.write_to_log_fn and self.conversation_log_file:
                         try:
                             msg_speaker, msg_text = message.split(": ", 1)
-                            self.write_to_log_fn(self.conversation_log_file, msg_speaker, msg_text)
+                            await self.write_to_log_fn(self.conversation_log_file, (msg_speaker, msg_text))
                         except ValueError:
                             if self.logger:
                                 self.logger.warning(f"Could not parse speaker/text from incoming message for logging: {message}")
-                            self.write_to_log_fn(self.conversation_log_file, "UnknownSpeaker", message)
+                            await self.write_to_log_fn(self.conversation_log_file, ("UnknownSpeaker", message))
                         
-                        self.write_to_log_fn(self.conversation_log_file, self.character_name, output)
+                        await self.write_to_log_fn(self.conversation_log_file, (self.character_name, output))
                 else:
                     if self.logger:
                         self.logger.warning("LLM output queue is full, skipping generation.")
