@@ -18,7 +18,6 @@ from utils.env_utils import get_env_var
 from common import config as app_config
 from common import queues
 from utils.live_chat_process_handler import live_chat_process_target # For the separate live chat process
-import t
 
 # Temporary direct imports for LLM and other components not yet refactored into src/services
 # These will be replaced by service-specific imports later.
@@ -30,20 +29,19 @@ import sys
 # if project_root not in sys.path:
 #     sys.path.insert(0, project_root)
 
-print(f"sys.path FUCKCKFFOFOFOFOSFJKSOFJAIOFJAIOFASIJFASUIOFSI: {sys.path}")
 
 try:
     from LLM_Wizard.models import VtuberExllamav2
     from LLM_Wizard.model_utils import LLMUtils
     from LLM_Wizard.llm_templates import PromptTemplate as LLMPromptTemplate # Renamed to avoid conflict
     # Imports for STT, TTS, LiveChat will be handled by their respective services
-    # from voiceAI.GPT_Test.tts_exp import send_tts_request, run_playback_thread, tts_queue as tts_output_queue_brain
-    # from voiceAI.STT import speech_to_text
-    # from livechatAPI.livechat import LiveChatController
+    # from TTS_Wizard.GPT_Test.tts_exp import send_tts_request, run_playback_thread, tts_queue as tts_output_queue_brain
+    # from STT_Wizard.STT import speech_to_text # Assuming STT_Wizard/STT.py exists and has speech_to_text
+    # from Livechat_Wizard.livechat import LiveChatController # Assuming Livechat_Wizard/livechat.py exists and has LiveChatController
 except ImportError as e:
     print(f"Critical Import Error: Could not import core AI modules (LLM, etc.): {e}. Ensure PYTHONPATH is set correctly or modules are accessible.")
     VtuberExllamav2, LLMUtils, LLMPromptTemplate = None, None, None # Graceful degradation or error handling needed
-
+import time
 class MainOrchestrator:
     live_chat_process = None # Class attribute to hold the live chat process
     def __init__(self):
@@ -52,12 +50,12 @@ class MainOrchestrator:
         load_dotenv() # Load .env file variables into environment
 
         self.config = app_config.load_config()
-        self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+        self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         # Initialize shared queues
         self.speech_queue = queues.get_speech_queue()
         self.live_chat_queue = queues.get_live_chat_queue()
         self.llm_output_queue = queues.get_llm_output_queue()
+        self.audio_output_queue = queues.get_audio_output_queue()
         self.mp_live_chat_message_queue = queues.get_mp_live_chat_message_queue()
 
         self.character_name = None
@@ -88,6 +86,7 @@ class MainOrchestrator:
                 "speech_queue": self.speech_queue,
                 "live_chat_queue": self.live_chat_queue,
                 "llm_output_queue": self.llm_output_queue,
+                "audio_output_queue": self.audio_output_queue,
                 "mp_live_chat_message_queue": self.mp_live_chat_message_queue,
                 # Add other queues like tts_input_queue if they become shared
             },
@@ -114,7 +113,7 @@ class MainOrchestrator:
             # Potentially raise an error or handle this state appropriately
             return
 
-        character_info_json_path = self.config.get("character_info_json", "LLM/characters/character.json")
+        character_info_json_path = self.config.get("character_info_json", "LLM_Wizard/characters/character.json")
         if not os.path.isabs(character_info_json_path):
             character_info_json_path = os.path.join(self.project_root, character_info_json_path)
         
@@ -138,12 +137,14 @@ class MainOrchestrator:
         from services.tts_service import TTSService
         from services.dialogue_service import DialogueService
         from services.live_chat_service import LiveChatService
+        from services.audio_stream_service import AudioStreamService
 
         # Instantiate and register services with self.shared_resources
         self.service_manager.register_service(STTService(self.shared_resources))
         self.service_manager.register_service(DialogueService(self.shared_resources))
         self.service_manager.register_service(TTSService(self.shared_resources))
-        self.service_manager.register_service(LiveChatService(self.shared_resources)) # Corrected to use self.shared_resources
+        self.service_manager.register_service(LiveChatService(self.shared_resources))
+        self.service_manager.register_service(AudioStreamService(self.shared_resources))
         self.logger.info("All services registered.")
 
     async def run_async_loop(self):

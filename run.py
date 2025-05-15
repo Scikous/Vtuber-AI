@@ -1,7 +1,6 @@
 import os
 import subprocess
 import sys
-import t
 # Define the virtual environment name. This could be read from a config or .env file.
 VENV_NAME = 'venv7'
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
