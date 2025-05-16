@@ -218,18 +218,18 @@ voiceAI/GPT-SoVITS-beta0217/
 # voiceAI/GPT-SoVITS-beta0217/ffprobe.exe
 
 
-#ignore from fast inference
-voiceAI/GPT-SoVITS-fast_inference/GPT_SoVITS/pretrained_models/*
-voiceAI/GPT-SoVITS-fast_inference/venv
-voiceAI/GPT-SoVITS-fast_inference/ffmpeg.exe
-voiceAI/GPT-SoVITS-fast_inference/ffprobe.exe
+# #ignore from fast inference
+# voiceAI/GPT-SoVITS-fast_inference/GPT_SoVITS/pretrained_models/*
+# voiceAI/GPT-SoVITS-fast_inference/venv
+# voiceAI/GPT-SoVITS-fast_inference/ffmpeg.exe
+# voiceAI/GPT-SoVITS-fast_inference/ffprobe.exe
 
-voiceAI/GPT_Test/GPT_SoVITS/pretrained_models/*
-voiceAI/GPT_Test/ffmpeg.exe
-voiceAI/GPT_Test/ffprobe.exe
-voiceAI/GPT_Test/venv
+# voiceAI/GPT_Test/GPT_SoVITS/pretrained_models/*
+# voiceAI/GPT_Test/ffmpeg.exe
+# voiceAI/GPT_Test/ffprobe.exe
+# voiceAI/GPT_Test/venv
 
-livechatAPI/credentials/*
-!livechatAPI/credentials/.gitignore
-livechatAPI/data/*
-!livechatAPI/data/.gitignore
+# livechatAPI/credentials/*
+# !livechatAPI/credentials/.gitignore
+# livechatAPI/data/*
+# !livechatAPI/data/.gitignore

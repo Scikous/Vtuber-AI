@@ -172,3 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# personal to each project owner/user
+data/*
+!data/.gitkeep

@@ -172,3 +172,12 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+dataset/*
+!dataset/.gitkeep
+!dataset/inference_testing
+dataset/inference_testing/*
+!dataset/inference_testing/.gitkeep
+GPT_SoVITS
+GPT_Test
