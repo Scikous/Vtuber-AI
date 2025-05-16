@@ -1,6 +1,7 @@
 from model_utils import LLMUtils
 import torch
 import gc
+import asyncio
 #current, lowest latency
 class VtuberExllamav2:
     """
@@ -27,17 +28,26 @@ class VtuberExllamav2:
             tokenizer (ExLlamaV2Tokenizer): the initialized tokenizer -- given to the "model" in models.py
         """
         from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Cache, ExLlamaV2Tokenizer
-        from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2Sampler
-
+        from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2DynamicGeneratorAsync, ExLlamaV2Sampler
+        from transformers import AutoTokenizer
+        
+        tokenizer = AutoTokenizer.from_pretrained(model_dir) # for applying chat template
+        
         config = ExLlamaV2Config(model_dir)
         model = ExLlamaV2(config)
         cache = ExLlamaV2Cache(model, max_seq_len = 65536, lazy = True)
         model.load_autosplit(cache, progress = True)
-        tokenizer = ExLlamaV2Tokenizer(config)
+        #transformers tokenizer, not exllamav2's tokenizer
         generator = ExLlamaV2DynamicGenerator(
             model = model,
             cache = cache,
-            tokenizer = tokenizer,
+            tokenizer = ExLlamaV2Tokenizer(config),
+        )
+
+        generator_async = ExLlamaV2DynamicGeneratorAsync(
+            model = model,
+            cache = cache,
+            tokenizer = ExLlamaV2Tokenizer(config),
         )
         #default text generation settings, can be overridden
         gen_settings = ExLlamaV2Sampler.Settings(
@@ -48,7 +58,7 @@ class VtuberExllamav2:
         )
 
         
-        return cls(generator, gen_settings, tokenizer, character_name)
+        return cls(generator_async, gen_settings, tokenizer, character_name)
 
     def __del__(self):
         # Manual cleanup (if necessary)
@@ -65,26 +75,48 @@ class VtuberExllamav2:
 
         For text length variety's sake, randomly selects token length to appear more natural
         """
+        from exllamav2.generator import ExLlamaV2DynamicJobAsync
         # print(self.tokenizer.encode("instructions", encode_special_tokens = False, add_bos = False))
         # print("WHAHAHSSHSHS:\n\n", self.tokenizer.encode(prompt, encode_special_tokens = True, add_bos = False), self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
-
-        prompt = PromptTemplate(user_str=prompt)
+        prompt = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+        # prompt = PromptTemplate(user_str=prompt)
         # print("HAAAAA:\n", prompt, self.tokenizer.encode(prompt, encode_special_tokens = True, add_bos = False), self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
 
         max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
         #prompt = ["Five good reasons to adopt a cat:","Tell 5 simple jokes:", "how much is 8 + 19?"],
         # print(prompt)
-        output = self.generator.generate(
-            prompt = prompt,
-            encode_special_tokens=True,
-            decode_special_tokens=True,
-            completion_only=True,
-            max_new_tokens = max_tokens,
-            stop_conditions = [self.tokenizer.eos_token_id],
-            gen_settings = self.gen_settings,
-            add_bos = False)
-        # output = LLMUtils.character_reply_cleaner(output, self.character_name)
-        return output
+        # print(self.tokenizer.encode("foools"))
+        async_job = ExLlamaV2DynamicJobAsync(
+                        generator=self.generator,
+                        input_ids=prompt,
+                        # input_ids=self.tokenizer.encode("foools"),
+                        max_new_tokens=max_tokens,
+                        gen_settings=self.gen_settings,
+                        # identifier=f"job_{i}" # Optional identifier
+                    )
+        return async_job
+
+        # output = self.generator.generate(
+        #     prompt = prompt,
+        #     encode_special_tokens=True, #if using apply_chat_template set to false
+        #     decode_special_tokens=True, #False for clean output, true for debugging
+        #     completion_only=True,
+        #     max_new_tokens = max_tokens,
+        #     stop_conditions = [self.tokenizer.eos_token_id],
+        #     gen_settings = self.gen_settings,
+        #     add_bos = False #if using apply_chat_template set to false -- only plain string should have True)
+        #     #token_healing = False #True if output is weird, False if output is un-weird
+        #     #return_logits = False #for analyzing model's probability distribution before sapling -- generally don't touch
+        #     #return_probs = False #for understanding the model's confidence in its choices -- generally don't touch
+        #     #filters = None #list[list[ExLlamaV2Filter]] | list[ExLlamaV2Filter] forcing/guiding text generation
+        #     #identifier = None #object for tracking/associating metadata
+        #     #banned_strings = None #list[str] for banning specific words/phrases
+        #     #embeddings = None #list[ExLlamaV2MMEmbedding] can input images thathave been embedded into vectors
+
+
+        # )
+        # # output = LLMUtils.character_reply_cleaner(output, self.character_name)
+        # return output
 
 #legacy model, high latency
 class VtuberLLM:

@@ -1,3 +1,4 @@
+##IMPORTANT: LEGACY -- TO BE DELETED IN THE FUTURE
 from textwrap import dedent
 class BaseTemplate:
     def __init__(self, instructions_str="", user_name="user", character_name="assistant"):
