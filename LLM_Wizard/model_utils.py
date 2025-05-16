@@ -4,6 +4,21 @@ import re
 
 class LLMUtils:
     @staticmethod
+    def apply_chat_template(instructions, prompt, tokenizer):
+        """
+        Applies a chat template to the prompt.
+        """
+
+        messages = [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": prompt},
+            # Add previous assistant messages if it's an ongoing conversation
+        ]
+        tokenized_chat = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt")
+        return tokenized_chat
+
+
+    @staticmethod
     def get_rand_token_len(min_tokens=15, max_tokens=100, input_len=0):
         """
         Given an input (Message), the potential response length should have a higher chance of being longer.
