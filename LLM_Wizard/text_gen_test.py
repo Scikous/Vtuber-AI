@@ -44,6 +44,7 @@ async def exllamav2_test():
     # print(Character.tokenizer.eos_token, Character.tokenizer.bos_token)
     # return 
     response = await Character.dialogue_generator(prompt="happy fun prompt", PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=200)#asyncio.run(Character.dialogue_generator(prompt=tokenized_chat, PromptTemplate=PromptTemplate.capybaraChatML, max_tokens=200))
+    print(type(response))
     async for result in response:
         output = result.get("text", "")
         # if len(output) != 0:

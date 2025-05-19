@@ -62,7 +62,7 @@ class MainOrchestrator:
         self.user_name = None
         self.llm_prompt_template = None
         self.character_model = None
-        self.load_character_and_llm()
+        # LLM loading will be done in run_async_loop
 
         self.naive_short_term_memory = deque(maxlen=self.config.get("short_term_memory_maxlen", 6))
         self.speaker_name = self.config.get("speaker_name", "_") # Default speaker name
@@ -99,14 +99,15 @@ class MainOrchestrator:
             "conversation_log_file": self.conversation_log_file,
             "write_to_log_fn": self.write_to_log_fn,
             "project_root": self.project_root
+            # LLM specific resources will be added in run_async_loop
         }
 
-        self.service_manager = ServiceManager(self.shared_resources) # Pass the instance attribute
-        self.register_services()
+        # ServiceManager and services will be initialized in run_async_loop after LLM loading
+        self.service_manager = None 
 
-        self.logger.info("MainOrchestrator initialized successfully.")
+        self.logger.info("MainOrchestrator initialized (LLM and services will be set up in run_async_loop).")
 
-    def load_character_and_llm(self):
+    async def load_character_and_llm(self):
         self.logger.info("Loading character and LLM...")
         if not LLMUtils or not LLMPromptTemplate or not VtuberExllamav2:
             self.logger.error("LLM utilities or models not imported. Cannot load character/LLM.")
@@ -150,6 +151,19 @@ class MainOrchestrator:
     async def run_async_loop(self):
         self.logger.info("Starting asynchronous event loop and workers...")
 
+        # Load character and LLM model first
+        await self.load_character_and_llm()
+
+        # Update shared_resources with loaded LLM components
+        self.shared_resources["character_model"] = self.character_model
+        self.shared_resources["llm_prompt_template"] = self.llm_prompt_template
+        self.shared_resources["character_name"] = self.character_name
+        self.shared_resources["user_name"] = self.user_name
+
+        # Now initialize ServiceManager and register services
+        self.service_manager = ServiceManager(self.shared_resources)
+        self.register_services()
+
         # Start the separate live chat process if the queue is available
         if self.mp_live_chat_message_queue:
             self.logger.info("Starting live chat process...")
@@ -168,7 +182,11 @@ class MainOrchestrator:
             self.logger.warning("mp_live_chat_message_queue not available, live chat process will not be started.")
         
         # Start all registered async services
-        await self.service_manager.start_all_services()
+        if self.service_manager:
+            await self.service_manager.start_all_services()
+        else:
+            self.logger.error("ServiceManager not initialized, cannot start services.")
+            return # Critical error, cannot proceed
 
         try:
             # Keep the main orchestrator alive, services run in background
