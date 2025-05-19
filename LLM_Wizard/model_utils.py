@@ -2,6 +2,7 @@ import json
 import numpy as np
 import re
 
+
 class LLMUtils:
     @staticmethod
     def apply_chat_template(instructions, prompt, tokenizer):
@@ -17,6 +18,27 @@ class LLMUtils:
         tokenized_chat = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt")
         return tokenized_chat
 
+    @staticmethod
+    def prompt_wrapper(message, context):
+        from textwrap import dedent
+
+        """
+        Wraps the user message and context within the correct styled prompt.
+
+        IS NOT APPLYING CHAT TEMPLATE -- SEE apply_chat_template() for that
+        """
+        prompt = dedent(
+            f"""
+        {message}
+
+        Information:
+
+        ```
+        {context}
+        ```
+        """
+        )
+        return prompt
 
     @staticmethod
     def get_rand_token_len(min_tokens=15, max_tokens=100, input_len=0):
