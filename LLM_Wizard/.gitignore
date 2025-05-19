@@ -176,3 +176,5 @@ cython_debug/
 CapybaraHermes-2.5-Mistral-7B-GPTQ
 characters/
 !characters/characters.json
+dataset/*
+!dataset/.gitkeep

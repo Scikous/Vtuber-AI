@@ -4,15 +4,13 @@ Handles the generation of responses using the LLM.
 """
 import asyncio
 from .base_service import BaseService
+from LLM_Wizard.model_utils import LLMUtils
 # Import necessary LLM utilities, prompt templates, etc.
-# from utils.llm_utils import LLMUtils # Example
-# from utils.prompt_template import LLMPromptTemplate # Example
 
 class DialogueService(BaseService):
     def __init__(self, shared_resources):
         super().__init__(shared_resources)
         self.llm_model = shared_resources.get("character_model")
-        self.prompt_template = shared_resources.get("llm_prompt_template")
         self.naive_short_term_memory = shared_resources.get("naive_short_term_memory")
         self.character_name = shared_resources.get("character_name")
         self.user_name = shared_resources.get("user_name")
@@ -30,9 +28,9 @@ class DialogueService(BaseService):
         if self.logger:
             self.logger.info(f"{self.__class__.__name__} worker running.")
 
-        if not self.llm_model or not self.prompt_template:
+        if not self.llm_model:
             if self.logger:
-                self.logger.error("LLM model or prompt template not available in DialogueService. Stopping worker.")
+                self.logger.error("LLM model not available in DialogueService. Stopping worker.")
             return
 
         if not self.speech_queue or not self.live_chat_queue or not self.llm_output_queue:
@@ -76,16 +74,13 @@ class DialogueService(BaseService):
                             self.logger.warning(f"Could not parse speaker from message: {message}. Using raw message as input.")
                 
                 history_for_llm_content = "\n".join(list(self.naive_short_term_memory))
-                content_for_template_hole = f"{self.prompt_template.instructions_str}\n\n{history_for_llm_content}\n{self.prompt_template.user_name}: {raw_input_text}\n{self.prompt_template.character_name}:"
-                chatml_template = self.prompt_template.capybaraChatML
-
+                content_for_template_hole = LLMUtils.prompt_wrapper(raw_input_text, history_for_llm_content)
                 # if self.logger:
                 #     self.logger.debug(f"Content for LLM template hole: {content_for_template_hole[:200]}...")
-                #     self.logger.debug(f"ChatML template: {chatml_template[:200]}...")
                 if not self.llm_output_queue.full():
                     if self.logger:
                         self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
-                    async_job = await self.llm_model.dialogue_generator(content_for_template_hole, chatml_template, max_tokens=100)
+                    async_job = await self.llm_model.dialogue_generator(content_for_template_hole, max_tokens=100)
                     if self.logger:
                         self.logger.debug(f"Got async_job: {type(async_job)}")
                     full_string = ""

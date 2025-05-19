@@ -33,14 +33,13 @@ import sys
 try:
     from LLM_Wizard.models import VtuberExllamav2
     from LLM_Wizard.model_utils import LLMUtils
-    from LLM_Wizard.llm_templates import PromptTemplate as LLMPromptTemplate # Renamed to avoid conflict
     # Imports for STT, TTS, LiveChat will be handled by their respective services
     # from TTS_Wizard.GPT_Test.tts_exp import send_tts_request, run_playback_thread, tts_queue as tts_output_queue_brain
     # from STT_Wizard.STT import speech_to_text # Assuming STT_Wizard/STT.py exists and has speech_to_text
     # from Livechat_Wizard.livechat import LiveChatController # Assuming Livechat_Wizard/livechat.py exists and has LiveChatController
 except ImportError as e:
     print(f"Critical Import Error: Could not import core AI modules (LLM, etc.): {e}. Ensure PYTHONPATH is set correctly or modules are accessible.")
-    VtuberExllamav2, LLMUtils, LLMPromptTemplate = None, None, None # Graceful degradation or error handling needed
+    VtuberExllamav2, LLMUtils = None, None # Graceful degradation or error handling needed
 import time
 class MainOrchestrator:
     live_chat_process = None # Class attribute to hold the live chat process
@@ -60,7 +59,6 @@ class MainOrchestrator:
 
         self.character_name = None
         self.user_name = None
-        self.llm_prompt_template = None
         self.character_model = None
         # LLM loading will be done in run_async_loop
 
@@ -91,7 +89,6 @@ class MainOrchestrator:
                 # Add other queues like tts_input_queue if they become shared
             },
             "character_model": self.character_model,
-            "llm_prompt_template": self.llm_prompt_template,
             "naive_short_term_memory": self.naive_short_term_memory,
             "character_name": self.character_name,
             "user_name": self.user_name,
@@ -109,11 +106,6 @@ class MainOrchestrator:
 
     async def load_character_and_llm(self):
         self.logger.info("Loading character and LLM...")
-        if not LLMUtils or not LLMPromptTemplate or not VtuberExllamav2:
-            self.logger.error("LLM utilities or models not imported. Cannot load character/LLM.")
-            # Potentially raise an error or handle this state appropriately
-            return
-
         character_info_json_path = self.config.get("character_info_json", "LLM_Wizard/characters/character.json")
         if not os.path.isabs(character_info_json_path):
             character_info_json_path = os.path.join(self.project_root, character_info_json_path)
@@ -124,7 +116,6 @@ class MainOrchestrator:
             return
 
         instructions, self.user_name, self.character_name = LLMUtils.load_character(character_info_json_path)
-        self.llm_prompt_template = LLMPromptTemplate(instructions, self.user_name, self.character_name)
         
         # For Exllamav2 model; configuration for other models would differ
         # Model path/config should ideally come from self.config
@@ -156,7 +147,6 @@ class MainOrchestrator:
 
         # Update shared_resources with loaded LLM components
         self.shared_resources["character_model"] = self.character_model
-        self.shared_resources["llm_prompt_template"] = self.llm_prompt_template
         self.shared_resources["character_name"] = self.character_name
         self.shared_resources["user_name"] = self.user_name
 

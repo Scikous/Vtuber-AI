@@ -69,30 +69,35 @@ class VtuberExllamav2:
         gc.collect()
         print("Deleted and garbage collected ExllamaV2 Model!")
 
-    async def dialogue_generator(self, prompt, PromptTemplate, max_tokens=200,):
+    async def dialogue_generator(self, prompt, max_tokens=200,):
         """
         Generates character's response to a given input (Message)
 
         For text length variety's sake, randomly selects token length to appear more natural
         """
         from exllamav2.generator import ExLlamaV2DynamicJobAsync
-        # print(self.tokenizer.encode("instructions", encode_special_tokens = False, add_bos = False))
-        # print("WHAHAHSSHSHS:\n\n", self.tokenizer.encode(prompt, encode_special_tokens = True, add_bos = False), self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
         prompt = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
-        # prompt = PromptTemplate(user_str=prompt)
-        # print("HAAAAA:\n", prompt, self.tokenizer.encode(prompt, encode_special_tokens = True, add_bos = False), self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
 
         max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
-        #prompt = ["Five good reasons to adopt a cat:","Tell 5 simple jokes:", "how much is 8 + 19?"],
-        # print(prompt)
-        # print(self.tokenizer.encode("foools"))
         async_job = ExLlamaV2DynamicJobAsync(
                         generator=self.generator,
+                        encode_special_tokens=False,
+                        decode_special_tokens=False,
+                        completion_only=True,
                         input_ids=prompt,
                         # input_ids=self.tokenizer.encode("foools"),
                         max_new_tokens=max_tokens,
+                        #     stop_conditions = [self.tokenizer.eos_token_id],
                         gen_settings=self.gen_settings,
-                        # identifier=f"job_{i}" # Optional identifier
+                        add_bos = False #if using apply_chat_template set to false -- only plain string should have True)
+                        #token_healing = False #True if output is weird, False if output is un-weird
+                        #return_logits = False #for analyzing model's probability distribution before sapling -- generally don't touch
+                        #return_probs = False #for understanding the model's confidence in its choices -- generally don't touch
+                        #filters = None #list[list[ExLlamaV2Filter]] | list[ExLlamaV2Filter] forcing/guiding text generation
+                        #identifier = None #object for tracking/associating metadata
+                        #banned_strings = None #list[str] for banning specific words/phrases
+                        #embeddings = None #list[ExLlamaV2MMEmbedding] can input images thathave been embedded into vectors
+
                     )
         return async_job
 
@@ -145,7 +150,7 @@ class VtuberLLM:
         tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
         return cls(model, tokenizer, character_name)
 
-    async def dialogue_generator(self, prompt, PromptTemplate):
+    async def dialogue_generator(self, prompt):
         """
         Generates character's response to a given input (Message)
         """
@@ -153,10 +158,9 @@ class VtuberLLM:
             return text.strip()[-1] not in {'.', '!', '?'}
 
         max_attempts = 7
-        prompt = PromptTemplate(user_str=prompt)
-        comment_tokenized = self.tokenizer(prompt, return_tensors="pt")
+        comment_tokenized = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
         print("HAAAAA:\n",comment_tokenized, self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
-        inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
 
         generated_text = ""
         print(len(comment_tokenized["input_ids"][0]))
