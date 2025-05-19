@@ -13,6 +13,8 @@ The aim of this project is both to give a good starting point for anyone to crea
     * [Dataset preparation](#dataset-preparation)
     * [Fine-tuning](#training-fine-tuning)
     * [Quantization](#training-fine-tuning)
+    * [Fine-tuning](#training-fine-tuning)
+    * [Quantization](#training-fine-tuning)
     * [Inference](#inference)
 * [Voice Model](#voice-model)
     * [Training](#training)
@@ -24,6 +26,7 @@ The aim of this project is both to give a good starting point for anyone to crea
     * [Training](#training-1)
     * [Inference](#inference-1)
 * [Testing](#testing)
+* [Testing](#testing)
 * [Acknowledgements](#acknowledgements)
 
 # Features
@@ -34,6 +37,8 @@ The aim of this project is both to give a good starting point for anyone to crea
   **Features:**
   - [X] Create a function to create a dataset for LLM training from a .csv file
   - [ ] Send audio data to Discord or other, so anyone in call can hear
+  - [X] Support for receiving and responding to YouTube live chat messages
+  - [X] Support for receiving and responding to Twitch live chat messages
   - [X] Support for receiving and responding to YouTube live chat messages
   - [X] Support for receiving and responding to Twitch live chat messages
   - [ ] Support for receiving and responding to Kick live chat messages
@@ -52,6 +57,7 @@ The aim of this project is both to give a good starting point for anyone to crea
   - [ ] Singing capability?
   - [ ] Vector database for improved RAG?
   - [ ] Different/Custom STT?
+
 
 # Setup
 This is developed and tested on Python 3.12.3.
@@ -94,6 +100,11 @@ python -m nltk.downloader averaged_perceptron_tagger_eng
 Rest of the requirements can be installed via:
 ```
 pip install -r requirements.txt
+```
+
+may need to use:
+```
+python -m nltk.downloader averaged_perceptron_tagger
 ```
 
 ## Virtual Environments
@@ -219,6 +230,102 @@ In Optional Path 1, the TW_ACCESS_TOKEN is technically the refresh token, only s
 
 The twitchio bot should presumably automatically renew your token upon expiration. This requires atleast **Client Secret** and maybe **Client ID** -- UNTESTED.
 
+:information_source: The next sub-sections are purely optional, only necessary if you want the AI to interact with livechat on YouTube/Twitch/Kick.
+
+## .env File Setup (Optional)
+Create a **.env** file inside of the root directory and add as much of the following as desired:
+
+:information_source: For information on YouTube/Twitch related variables refer to their respective sections: [YouTube API](#youtube-api) [Twitch API](#twitch-api).
+
+```
+#For all
+CONVERSATION_LOG_FILE=livechatAPI/data/llm_finetune_data.csv
+
+#For YouTube
+YT_FETCH=False
+YT_API_KEY=
+YT_CHANNEL_ID=
+LAST_NEXT_PAGE_TOKEN=
+
+#For Twitch
+TW_FETCH=False
+TW_CHANNEL=
+TW_BOT_NICK=Botty
+TW_CLIENT_ID=
+TW_CLIENT_SECRET=
+TW_ACCESS_TOKEN=
+TW_USE_THIRD_PARTY_TOKEN=False #True if using non-locally token
+```
+<details>
+<summary>Variable Explanations</summary>
+
+* CONVERSATION_LOG_FILE: The .csv file which the user message AND the LLM response is written to
+
+**YouTube**:
+* YT_FETCH: (Boolean) True if fetching youtube live chat messages
+* YT_API_KEY: Your YouTube project API key
+* YT_CHANNEL_ID: Your YouTube channel id (NOT channel name)
+* LAST_NEXT_PAGE_TOKEN: Last fetched messages from live chat -- HANDLED BY PROGRAM DO NOT TOUCH
+
+**TWITCH**:
+* TW_FETCH: (Boolean) True if fetching twitch live chat messages
+* TW_CHANNEL: Your Twitch channel name -- whatever you named your channel
+* TW_BOT_NICK: Default name is 'Botty', can be renamed to anything
+* TW_CLIENT_ID: Your App's client id
+* TW_CLIENT_ID: Your App's client secret
+* TW_ACCESS_TOKEN: If generated LOCALLY -> technically refresh access token, if using third party token -> is actually the access token
+* TW_USE_THIRD_PARTY_TOKEN: (Boolean) True if using a token NOT generated locally ex. https://twitchtokengenerator.com/
+
+</details>
+
+
+## YouTube API (Optional)
+The official guide here: https://developers.google.com/youtube/v3/live/getting-started
+
+Basic steps:
+1. Navigate to the [Google API Console](https://console.cloud.google.com/apis/credentials)
+2. Create a new project
+3. Back at the credentials page, use the **CREATE CREDENTIALS** to generate an API key
+4. Paste the API key in the **.env** file in the **YT_API_KEY**
+5. Go to Settings (click user icon top right)
+6. Go to Advanced settings and copy the **Channel ID** to **YT_CHANNEL_ID** in **.env** file
+
+The environment variable **LAST_NEXT_PAGE_TOKEN** is handled by the program itself (DO NOT TOUCH). It makes sure that upon program restart, we continue to fetch live chat messages from where we last left off.
+
+## Twitch API (Optional)
+:information_source: The twitchio bot automatically renews your token using the your twitch application client id and client secret
+
+Precursory steps:
+1. Set **TW_CHANNEL=<your twitch username>** and **TW_BOT_NICK=<any name for the bot>**
+2. You will first need to create an application. Navigate to the developer console: https://dev.twitch.tv/console/
+3. Click on **Register Your Application** -- right side
+4. Set the following:
+**Name**: the application name can be anything
+**OAuth Redirect URLs**: you can use your desired HTTPS URI, in Optional Path 1 the following is used:
+```
+https://localhost:8080
+```
+**Category**: Chat Bot -- could use others probably
+**Client Type**: Confidential -- could be Public if need be
+5. Back at the console page, click on **Manage**
+6. Copy the **Client ID** and **Client Secret** to the **.env** file's variables **TW_CLIENT_ID=<Client ID here>** and **TW_CLIENT_SECRET=<Client Secret here>**
+
+Optional Path 1:
+Basic steps:
+1. Run `run.py` OR `twitch.py` (may need to uncomment some code) -- assumes you have all the requirements installed
+2. A locally hosted HTTPS web server should be running and a web page should open on your default browser -- MOST LIKELY THE BROWSER WILL WARN ABOUT THE CONNECTION, JUST ALLOW IT... or don't (see optional path 2)
+3. Authorize yourself to generate your own tokens
+4. You're done! For the foreseeable future, the refresh token will handle everything automatically, no need for steps 2 and 3
+
+Optional Path 2:
+1. Navigate to and generate a token: https://twitchtokengenerator.com/
+2. Set **TW_THIRD_PARTY_TOKEN=** to `True` -- case sensitive
+3. Done!
+
+In Optional Path 1, the TW_ACCESS_TOKEN is technically the refresh token, only self.TOKEN in TwitchAuth class is an actual access token. This is ONLY a technicality and does not affect anything.
+
+The twitchio bot should presumably automatically renew your token upon expiration. This requires atleast **Client Secret** and maybe **Client ID** -- UNTESTED.
+
 # Large Language Model (LLM)
 >:information_source: HEAVY WIP
 ## Prompt Style
@@ -229,6 +336,7 @@ The twitchio bot should presumably automatically renew your token upon expiratio
 ```
 
 ## Dataset preparation
+For the WIP dataset creator, the base dataset will be expected to be in a .csv file format
 For the WIP dataset creator, the base dataset will be expected to be in a .csv file format
 
 
@@ -357,6 +465,24 @@ http://127.0.0.1:9880/set_sovits_weights?weights_path=GPT_SoVITS/pretrained_mode
 Do basic inference through browser:
 ```
 http://127.0.0.1:9880/tts?text=But truly, is a simple piece of paper worth the credit people give it?&text_lang=en&ref_audio_path=../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav&prompt_lang=en&prompt_text=But truly, is a simple piece of paper worth the credit people give it?&text_split_method=cut5&batch_size=1&media_type=wav&streaming_mode=true&top_k=7&top_p=0.87&temperature=0.87
+```
+
+# Testing
+:warning: Running just **pytest** will result in running all test files in the entire project which will inevitably fail. We are only concerned with the tests within the tests directory at the root.
+
+To run all tests use:
+```
+pytest -s tests
+```
+
+Only unit tests:
+```
+pytest -s tests -m "not integration"
+```
+
+Only integration tests
+```
+pytest -s tests -m integration
 ```
 
 # Testing
