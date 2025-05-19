@@ -27,14 +27,20 @@ class AudioStreamService(BaseService):
     async def run_worker(self):
         self._open_stream()
         audio_queue = self.shared_resources['queues']['audio_output_queue']
-        
+        prefetch_buffer = asyncio.Queue(maxsize=5)  # Buffer 5 chunks ahead
+
+        async def prefetch_task():
+            while True:
+                chunk = await audio_queue.get()
+                await prefetch_buffer.put(chunk)
+
+        asyncio.create_task(prefetch_task())
+
         while True:
             try:
-                wav_bytes = await audio_queue.get()
-                # with wave.open(wav_bytes, 'rb') as wav_file:
-                self.stream.write(wav_bytes)
-                # while wav_bytes:#data := wav_file.readframes(self.chunk_size):
-                #     data = wav_bytes[:self.chunk_size]
+                # Get next chunk while current plays
+                wav_bytes = await prefetch_buffer.get()
+                self.stream.write(wav_bytes[64:])
                 audio_queue.task_done()
             except asyncio.CancelledError:
                 break
