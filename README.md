@@ -54,21 +54,31 @@ The aim of this project is both to give a good starting point for anyone to crea
   - [ ] Different/Custom STT?
 
 # Setup
-This is developed and tested on Python 3.11.8.
+This is developed and tested on Python 3.12.3.
 
 ## installation
 
+:exclamation: This mainly works on Linux (Ubuntu 24.04 LTS, other distros may work), Windows support will be dropped soon.
+
 [flash-attention](https://github.com/Dao-AILab/flash-attention) is required (used by ExllamaV2).
 
-PyTorch (assumes you are using CudaToolkit 12.1)
+PyTorch (assumes you are using CudaToolkit 12.4)
 ```
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
-
-[ExllamaV2](https://github.com/turboderp/exllamav2) (assumes Windows, Torch 2.4.0, CudaToolkit 12.1, Python 3.11) - swap release version based on your needs.
+pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
 
 ```
-pip install https://github.com/turboderp/exllamav2/releases/download/v0.2.0/exllamav2-0.2.0+cu121.torch2.4.0-cp311-cp311-win_amd64.whl
+
+TensorboardX (PyTorch should install this automatically):
+```
+pip install tensorboardX
+```
+
+
+[ExllamaV2](https://github.com/turboderp/exllamav2) 
+:information_source: Assumes Pytorch 2.6.0, CudaToolkit 12.4, Python 3.12
+
+```
+pip install https://github.com/turboderp-org/exllamav2/releases/download/v0.2.9/exllamav2-0.2.9+cu124.torch2.6.0-cp312-cp312-linux_x86_64.whl
 ```
 
 The local version of Whisper needs to be installed manually
@@ -76,40 +86,39 @@ The local version of Whisper needs to be installed manually
 pip install SpeechRecognition[whisper-local]
 ```
 
-```
-pip install -r requirements.txt
-```
-
 may need to use:
 ```
-python -m nltk.downloader averaged_perceptron_tagger
+python -m nltk.downloader averaged_perceptron_tagger_eng
+```
+
+Rest of the requirements can be installed via:
+```
+pip install -r requirements.txt
 ```
 
 ## Virtual Environments
 The virtual environment simply helps to avoid package conflicts. Do note that this will take more space in the storage as each environment is its own.
 
-:information_source: Note that this is for CMD
-
 Create env (the last `venv` is the folder name/path where the venv will be created):
+
 ```
  python -m venv venv
 ```
 
 Activate env:
 ```
-venv\Scripts\activate
+venv/bin/activate
 ```
 
 Deactivate env:
 ```
- deactivate
+deactivate
 ```
-Then just delete the venv folder
 
 # Quick Start
 :exclamation: Heavy WIP
 
-after activating the venv, run the following in the root directory:
+After activating the venv, run the following in the root directory:
 ```
 python run.py
 ```
@@ -211,9 +220,9 @@ In Optional Path 1, the TW_ACCESS_TOKEN is technically the refresh token, only s
 The twitchio bot should presumably automatically renew your token upon expiration. This requires atleast **Client Secret** and maybe **Client ID** -- UNTESTED.
 
 # Large Language Model (LLM)
+>:information_source: HEAVY WIP
 ## Prompt Style
 
->:information_source: This is the prompt styling for inference -- WIP
 
 ```
 <|im_start|>system <character behaviour> <|im_end|> <|im_start|>context <information about current situation (previous dialogue or description of situation)> <|im_end|> <|im_start|>user <Question or Instruction> <|im_end|> <|im_start|>assistant <Model Answer>
@@ -234,7 +243,7 @@ For the WIP dataset creator, the base dataset will be expected to be in a .csv f
 Effectively a **System-Context-User-Assistant** format is being followed (**SCUA** referred to as **SICUEAC** in research.pdf [WIP]).
 
 ## Fine-tuning
-> :warning: Still slightly WIP, also fine-tuned model != quantized model
+> :warning: HEAVY WIP, also fine-tuned model != quantized model
 
 In the `finetune.py` file, only the **DATASET_PATH** must be changed:
 - **BASE_MODEL**: the base model that is to be fine-tuned -- currently uses [NousResearch/Hermes-2-Theta-Llama-3-8B](#acknowledgements)
@@ -243,13 +252,18 @@ In the `finetune.py` file, only the **DATASET_PATH** must be changed:
 - **DATASET_PATH**: path to the dataset file -- currently .txt, soon .parquet
 
 ## Quantization
-WIP
-pip install https://github.com/turboderp/exllamav2/releases/download/v0.1.9/exllamav2-0.1.9+cu121.torch2.4.0-cp311-cp311-win_amd64.whl
+
+
+:information_source: Assumes ExllamaV2 was installed via the wheel -- Works but still WIP guide
+
+```
+python -m exllamav2.conversion.convert_exl2
+```
 
 ## Inference
 :exclamation: HEAVY WIP
 
-eval.py with modifications can be used for the inference, this is planned to change very soon.
+text_gen_test.py currently works as the inference script.
 
 ## Huggingface Cache Cleaning
 
@@ -364,14 +378,12 @@ pytest -s tests -m integration
 ```
 
 # Acknowledgements
-> I used a mix of my own and other people's code for the LLM training and evaluation. I can't remember who the people are, sorry. I would cite otherwise.
-
 This project makes use of the following:
 
 * [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS/tree/main)
 * [CapybaraHermes](https://huggingface.co/TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ)
 * [NousResearch/Hermes-2-Theta-Llama-3-8B](https://huggingface.co/NousResearch/Hermes-2-Theta-Llama-3-8B/tree/main)
+* [Unsloth](https://github.com/unslothai/unsloth)
 * [Speech_Recognition](https://github.com/Uberi/speech_recognition)
-* [curiosily](https://github.com/curiousily/AI-Bootcamp/blob/master/15.fine-tuning-llama-3-llm-for-rag.ipynb)
 * [Dao-AILab](https://github.com/Dao-AILab/flash-attention)
 * [turboderp](https://github.com/turboderp/exllamav2)
