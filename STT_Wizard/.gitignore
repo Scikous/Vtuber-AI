@@ -94,6 +94,12 @@ ipython_config.py
 #   install all needed dependencies.
 #Pipfile.lock
 
+# UV
+#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#uv.lock
+
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
@@ -106,8 +112,10 @@ ipython_config.py
 #pdm.lock
 #   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
 #   in version control.
-#   https://pdm.fming.dev/#use-with-ide
+#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
 .pdm.toml
+.pdm-python
+.pdm-build/
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
@@ -159,77 +167,8 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-#ignore LLM models
-unnamedSICUA-7B-GPTQ
-unnamedSICUA
-unnamedSICUAC-7B-GPTQ
-unnamedSICUAC
-unnamedSICUACC-7B-GPTQ
-unnamedSICUACC
-unnamedSICUACCC-7B-GPTQ
-unnamedSICUACCC
-unnamedSICUACCT-7B-GPTQ
-unnamedSICUACCT
-unnamedSICUACCTT-7B-GPTQ
-unnamedSICUACCTT
-unnamedSICUACCTTT-7B-GPTQ
-unnamedSICUACCTTT
-unnamedSICUCA-7B-GPTQ
-unnamedSICUCA
-unnamedSICUEA-7B-GPTQ
-unnamedSICUEA
-unnamedSIUA-7B-GPTQ
-unnamedSIUA
-unnamedSIUAC-7B-GPTQ
-unnamedSIUAC
-unnamedSIUCA-7B-GPTQ
-unnamedSIUCA
-unnamedSIUEA-7B-GPTQ
-unnamedSIUEA
+# Ruff stuff:
+.ruff_cache/
 
-#ignore test files
-.env
-tt.py
-LLM.py
-model_losses.txt
-audio_response/*
-LLM/dataset/*
-LLM/offload/*
-!LLM/offload/.gitignore
-
-voiceAI/dataset/*
-!voiceAI/dataset/inference_testing
-LLM/characters/*
-!.gitignore
-!LLM/characters/character.json
-!LLM/dataset/template.csv
-
-#ignore dataset related files and weight files
-voiceAI/GPT-SoVITS-beta0217/
-# voiceAI/GPT-SoVITS-beta0217/output/uvr5_opt/*
-# voiceAI/GPT-SoVITS-beta0217/output/asr_opt/*
-# voiceAI/GPT-SoVITS-beta0217/output/slicer_opt/*
-# voiceAI/GPT-SoVITS-beta0217/SoVITS_weights/*
-# voiceAI/GPT-SoVITS-beta0217/GPT_weights/*
-# voiceAI/GPT-SoVITS-beta0217/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT-SoVITS-beta0217/logs/*
-# voiceAI/GPT-SoVITS-beta0217/TEMP/*
-# voiceAI/GPT-SoVITS-beta0217/ffmpeg.exe
-# voiceAI/GPT-SoVITS-beta0217/ffprobe.exe
-
-
-# #ignore from fast inference
-# voiceAI/GPT-SoVITS-fast_inference/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT-SoVITS-fast_inference/venv
-# voiceAI/GPT-SoVITS-fast_inference/ffmpeg.exe
-# voiceAI/GPT-SoVITS-fast_inference/ffprobe.exe
-
-# voiceAI/GPT_Test/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT_Test/ffmpeg.exe
-# voiceAI/GPT_Test/ffprobe.exe
-# voiceAI/GPT_Test/venv
-
-# livechatAPI/credentials/*
-# !livechatAPI/credentials/.gitignore
-# livechatAPI/data/*
-# !livechatAPI/data/.gitignore
+# PyPI configuration file
+.pypirc
