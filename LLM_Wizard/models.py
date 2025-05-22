@@ -54,14 +54,31 @@ class VtuberExllamav2:
 
         return cls(generator_async, gen_settings, tokenizer, character_name)
 
-    def __del__(self):
-        # Manual cleanup (if necessary)
-        del self.generator
-        del self.gen_settings
-        del self.tokenizer
-        torch.cuda.empty_cache()  # If using CUDA
+    def cleanup(self):
+        # Manual cleanup
+        if hasattr(self, 'generator') and self.generator:
+            del self.generator
+            self.generator = None
+        if hasattr(self, 'gen_settings') and self.gen_settings:
+            del self.gen_settings
+            self.gen_settings = None
+        if hasattr(self, 'tokenizer') and self.tokenizer:
+            del self.tokenizer
+            self.tokenizer = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()  # If using CUDA
         gc.collect()
-        print("Deleted and garbage collected ExllamaV2 Model!")
+        print("Cleaned up and garbage collected ExllamaV2 Model resources!")
+
+    # Context manager methods -- used with "with" statement
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
+        # Optionally, return False to propagate exceptions, True to suppress them
+        return False
+
 
     async def dialogue_generator(self, prompt, max_tokens=200):
         """
