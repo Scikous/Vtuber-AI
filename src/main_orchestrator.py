@@ -191,6 +191,12 @@ class MainOrchestrator:
             await self.service_manager.stop_all_services()
             self.logger.info("All async services stopped.")
 
+            # Cleanup character model
+            if self.character_model:
+                self.logger.info("Cleaning up character model...")
+                self.character_model.cleanup()
+                self.logger.info("Character model cleaned up.")
+
             # Terminate the live chat process
             if MainOrchestrator.live_chat_process and MainOrchestrator.live_chat_process.is_alive():
                 self.logger.info(f"Terminating live chat process (PID: {MainOrchestrator.live_chat_process.pid})...")
