@@ -75,8 +75,6 @@ class DialogueService(BaseService):
                 
                 history_for_llm_content = "\n".join(list(self.naive_short_term_memory))
                 content_for_template_hole = LLMUtils.prompt_wrapper(raw_input_text, history_for_llm_content)
-                # if self.logger:
-                #     self.logger.debug(f"Content for LLM template hole: {content_for_template_hole[:200]}...")
                 if not self.llm_output_queue.full():
                     if self.logger:
                         self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
@@ -129,16 +127,6 @@ class DialogueService(BaseService):
                                             "streaming_mode": False, # Keep true for chunk-by-chunk audio generation if supported by TTS
                                             "media_type": "wav",
                                         }
-                                        
-#                                     tts_params = {
-#                                         "text": text_to_send_chunk, # Send the whole chunk
-#                                         "text_lang": self.shared_resources.get("character_lang", "en"),
-#                                         "ref_audio_path": ref_audio_path,
-#                                         "prompt_text": self.shared_resources.get("character_prompt_text", ""),
-#                                         "prompt_lang": self.shared_resources.get("character_prompt_lang", "en"),
-#                                         "streaming_mode": False, # Static noise issue fix
-#                                         "media_type": "wav",
-#                                     }
                                         asyncio.create_task(self.llm_output_queue.put(tts_params))
                                         if self.logger:
                                             self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {sentence_to_send[:30]}...")
@@ -164,7 +152,6 @@ class DialogueService(BaseService):
                             self.logger.debug(f"Put remaining TTS params to llm_output_queue: {tts_buffer.strip()[:30]}...")
 
                     output = full_string
-                    # print("Wjssjsj"*1000) # Removed debug print
                     if self.logger:
                         self.logger.info(f"LLM generated response (first 100 chars): {output[:100]}...")
                         self.logger.debug(f"Total iterations for async_job: {iteration_count}")
