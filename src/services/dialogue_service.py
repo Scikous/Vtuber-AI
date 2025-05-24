@@ -98,19 +98,23 @@ class DialogueService(BaseService):
 
                             # Process buffer for complete sentences
                             while True:
-                                split_point = -1
-                                # Find the last occurrence of any sentence terminator
+                                earliest_split_point = float('inf')
+                                chosen_terminator_len = 0
+
+                                # Find the first occurrence of any sentence terminator
                                 for terminator in sentence_terminators:
-                                    current_split_point = tts_buffer.rfind(terminator)
-                                    if current_split_point > split_point:
-                                        split_point = current_split_point
+                                    current_split_point = tts_buffer.find(terminator)
+                                    if current_split_point != -1 and current_split_point < earliest_split_point:
+                                        earliest_split_point = current_split_point
+                                        chosen_terminator_len = len(terminator) # usually 1, but could be more for complex terminators
                                 
-                                if split_point != -1:
-                                    sentence_to_send = tts_buffer[:split_point+1].strip()
-                                    tts_buffer = tts_buffer[split_point+1:]
+                                if earliest_split_point != float('inf'):
+                                    # Ensure we split after the terminator
+                                    sentence_to_send = tts_buffer[:earliest_split_point + chosen_terminator_len].strip()
+                                    tts_buffer = tts_buffer[earliest_split_point + chosen_terminator_len:]
                                     
                                     if sentence_to_send: # Ensure we are sending non-empty sentence
-                                        print("Sending to TTS queue: ", sentence_to_send)
+                                        print("Sending to TTS queue: ", sentence_to_send) # Keep for debugging
                                         # Ensure ref_audio_path is valid
                                         ref_audio_path = self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
                                         if not ref_audio_path or not isinstance(ref_audio_path, str) or not ref_audio_path.strip():
@@ -121,17 +125,17 @@ class DialogueService(BaseService):
                                         tts_params = {
                                             "text": sentence_to_send,
                                             "text_lang": self.shared_resources.get("character_lang", "en"),
-                                            "ref_audio_path": ref_audio_path,#self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
+                                            "ref_audio_path": ref_audio_path,
                                             "prompt_text": self.shared_resources.get("character_prompt_text", ""),
                                             "prompt_lang": self.shared_resources.get("character_prompt_lang", "en"),
-                                            "streaming_mode": False, # Keep true for chunk-by-chunk audio generation if supported by TTS
+                                            "streaming_mode": False, # TTS might still buffer if this is False, but input is now sentenced.
                                             "media_type": "wav",
                                         }
                                         asyncio.create_task(self.llm_output_queue.put(tts_params))
                                         if self.logger:
                                             self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {sentence_to_send[:30]}...")
                                 else:
-                                    break # No more complete sentences in buffer
+                                    break # No more complete sentences in buffer at this point in the tts_buffer
                         else:
                             if self.logger:
                                 self.logger.debug("Received empty chunk_text.")
