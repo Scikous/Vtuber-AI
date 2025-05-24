@@ -5,6 +5,7 @@ Handles the generation of responses using the LLM.
 import asyncio
 from .base_service import BaseService
 from LLM_Wizard.model_utils import LLMUtils
+from TTS_Wizard.tts_utils import prepare_tts_params
 # Import necessary LLM utilities, prompt templates, etc.
 
 class DialogueService(BaseService):
@@ -83,82 +84,56 @@ class DialogueService(BaseService):
                         self.logger.debug(f"Got async_job: {type(async_job)}")
                     full_string = ""
                     tts_buffer = "" # Buffer for accumulating text for TTS
-                    iteration_count = 0
-                    sentence_terminators = [',','.', '!', '?']
 
                     async for result in async_job:
-                        iteration_count += 1
                         if self.logger:
-                            self.logger.debug(f"Async_job iteration {iteration_count}. Received result: {type(result)}")
+                            self.logger.debug(f"Received result: {type(result)}")
                         chunk_text = result.get("text", "")
                         
                         if chunk_text and len(chunk_text) > 0:  # Ensure non-empty chunks are processed
                             full_string += chunk_text # Accumulate full response for memory/logging
                             tts_buffer += chunk_text
-
-                            # Process buffer for complete sentences
-                            while True:
-                                earliest_split_point = float('inf')
-                                chosen_terminator_len = 0
-
-                                # Find the first occurrence of any sentence terminator
-                                for terminator in sentence_terminators:
-                                    current_split_point = tts_buffer.find(terminator)
-                                    if current_split_point != -1 and current_split_point < earliest_split_point:
-                                        earliest_split_point = current_split_point
-                                        chosen_terminator_len = len(terminator) # usually 1, but could be more for complex terminators
-                                
-                                if earliest_split_point != float('inf'):
-                                    # Ensure we split after the terminator
-                                    sentence_to_send = tts_buffer[:earliest_split_point + chosen_terminator_len].strip()
-                                    tts_buffer = tts_buffer[earliest_split_point + chosen_terminator_len:]
-                                    
-                                    if sentence_to_send: # Ensure we are sending non-empty sentence
-                                        print("Sending to TTS queue: ", sentence_to_send) # Keep for debugging
-                                        # Ensure ref_audio_path is valid
-                                        ref_audio_path = self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
-                                        if not ref_audio_path or not isinstance(ref_audio_path, str) or not ref_audio_path.strip():
-                                            if self.logger:
-                                                self.logger.warning(f"Invalid or missing ref_audio_path ('{ref_audio_path}'), falling back to default.")
-                                            ref_audio_path = "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav" # Known good default
-                                        
-                                        tts_params = {
-                                            "text": sentence_to_send,
-                                            "text_lang": self.shared_resources.get("character_lang", "en"),
-                                            "ref_audio_path": ref_audio_path,
-                                            "prompt_text": self.shared_resources.get("character_prompt_text", ""),
-                                            "prompt_lang": self.shared_resources.get("character_prompt_lang", "en"),
-                                            "streaming_mode": False, # TTS might still buffer if this is False, but input is now sentenced.
-                                            "media_type": "wav",
-                                        }
-                                        asyncio.create_task(self.llm_output_queue.put(tts_params))
-                                        if self.logger:
-                                            self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {sentence_to_send[:30]}...")
-                                else:
-                                    break # No more complete sentences in buffer at this point in the tts_buffer
+                            if LLMUtils.contains_sentence_terminator(chunk_text):
+                                text_to_send_to_tts = tts_buffer.strip()
+                                if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
+                                    print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
+                                    tts_params = prepare_tts_params(
+                                        text_to_speak=text_to_send_to_tts,
+                                        text_lang=self.shared_resources.get("character_lang", "en"),
+                                        ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
+                                        prompt_text=self.shared_resources.get("character_prompt_text", ""),
+                                        prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
+                                        logger=self.logger
+                                    )
+                                    asyncio.create_task(self.llm_output_queue.put(tts_params))
+                                    if self.logger:
+                                        self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
+                                    tts_buffer = "" # Reset buffer after sending
                         else:
                             if self.logger:
-                                self.logger.debug("Received empty chunk_text.")
+                                self.logger.debug("Received empty chunk_text or chunk_text is None.")
 
-                    # After the loop, send any remaining text in the buffer
+                    # After the loop, if there's anything left in tts_buffer that wasn't sent
+                    # (e.g., the LLM finished generating mid-sentence)
                     if tts_buffer.strip():
-                        tts_params = {
-                            "text": tts_buffer.strip(),
-                            "text_lang": self.shared_resources.get("character_lang", "en"),
-                            "ref_audio_path": self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
-                            "prompt_text": self.shared_resources.get("character_prompt_text", ""),
-                            "prompt_lang": self.shared_resources.get("character_prompt_lang", "en"),
-                            "streaming_mode": False, # Static noise fix - disable streaming
-                            "media_type": "wav",
-                        }
+                        remaining_text_for_tts = tts_buffer.strip()
+                        print("Sending remaining to TTS queue (end of generation): ", remaining_text_for_tts) # Keep for debugging
+                        tts_params = prepare_tts_params(
+                            text_to_speak=remaining_text_for_tts,
+                            text_lang=self.shared_resources.get("character_lang", "en"),
+                            ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
+                            prompt_text=self.shared_resources.get("character_prompt_text", ""),
+                            prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
+                            logger=self.logger
+                        )
                         asyncio.create_task(self.llm_output_queue.put(tts_params))
                         if self.logger:
-                            self.logger.debug(f"Put remaining TTS params to llm_output_queue: {tts_buffer.strip()[:30]}...")
+                            self.logger.debug(f"Put remaining TTS params to llm_output_queue: {remaining_text_for_tts[:30]}...")
+                        tts_buffer = "" # Clear the buffer
 
                     output = full_string
                     if self.logger:
                         self.logger.info(f"LLM generated response (first 100 chars): {output[:100]}...")
-                        self.logger.debug(f"Total iterations for async_job: {iteration_count}")
 
                     self.naive_short_term_memory.append(message) 
                     self.naive_short_term_memory.append(f"{self.character_name}: {output}")

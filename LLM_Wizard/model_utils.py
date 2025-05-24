@@ -99,4 +99,21 @@ class LLMUtils:
             
         reply = LLMUtils.sentence_reducer(reply)
         return reply
+
+    @staticmethod
+    def contains_sentence_terminator(chunk_text, sentence_terminators=['.', '!', '?', ',']):
+        """
+        Checks if the given text chunk contains any of the specified sentence terminators.
+
+        Args:
+            chunk_text (str): The text chunk to check.
+            sentence_terminators (list): A list of characters that denote the end of a sentence.
+
+        Returns:
+            bool: True if a sentence terminator is found in the chunk_text, False otherwise.
+        """
+        for terminator in sentence_terminators:
+            if terminator in chunk_text:
+                return True
+        return False
     
