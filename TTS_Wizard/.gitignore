@@ -179,5 +179,5 @@ dataset/*
 !dataset/inference_testing
 dataset/inference_testing/*
 !dataset/inference_testing/.gitkeep
-GPT_SoVITS
+# GPT_SoVITS
 GPT_Test
