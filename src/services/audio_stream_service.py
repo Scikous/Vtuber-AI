@@ -29,18 +29,17 @@ class AudioStreamService(BaseService):
             # Depending on the error, might want to re-raise or handle gracefully
             raise # Re-raise to stop the worker if stream cannot be opened
 
-    def _play_buffered_audio(self, playback_buffer: list):
-        """Plays the content of the playback_buffer and clears it."""
+    async def _play_buffered_audio(self, playback_buffer: list):
+        """Plays the content of the playback_buffer and clears it asynchronously."""
         if not playback_buffer:
             return
         try:
             self._ensure_stream_is_open()
-            # Assuming header skip of 64 bytes for each chunk.
-            # This logic should ideally be handled before putting data into audio_output_queue
-            # or the playback backend should be aware of the format.
             full_audio_data = b''.join(chunk for chunk in playback_buffer)
             if full_audio_data: # Ensure there's data to play
-                self.audio_playback_backend.write_chunk(full_audio_data)
+                loop = asyncio.get_running_loop()
+                # Run the blocking write_chunk in a separate thread
+                await loop.run_in_executor(None, self.audio_playback_backend.write_chunk, full_audio_data)
         except Exception as e:
             self.logger.error(f"Error playing buffered audio: {e}")
         finally:
@@ -71,7 +70,7 @@ class AudioStreamService(BaseService):
                     # If queue is empty and buffer has content, play it
                     if playback_buffer:
                         self.logger.debug(f"Audio queue empty, playing {len(playback_buffer)} buffered chunks.")
-                        self._play_buffered_audio(playback_buffer)
+                        await self._play_buffered_audio(playback_buffer)
                     await asyncio.sleep(0.05) # Brief sleep if queue was empty and buffer was also empty
                     continue # Go back to check queue
 
@@ -85,11 +84,12 @@ class AudioStreamService(BaseService):
 
                 if len(playback_buffer) >= buffer_chunk_count:
                     self.logger.debug(f"Buffer full ({len(playback_buffer)} chunks), playing audio.")
-                    self._play_buffered_audio(playback_buffer)
+                    await self._play_buffered_audio(playback_buffer)
 
             except asyncio.CancelledError:
                 self.logger.info("AudioStreamService worker cancelled. Playing any remaining buffered audio.")
-                self._play_buffered_audio(playback_buffer)
+                if playback_buffer: # Ensure buffer is not empty before attempting to play
+                    await self._play_buffered_audio(playback_buffer)
                 break
             except Exception as e:
                 self.logger.error(f"Error in AudioStreamService worker loop: {e}")

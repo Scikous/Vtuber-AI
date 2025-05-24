@@ -1,0 +1,10 @@
+{
+    "short_term_memory_maxlen": 6,
+    "speaker_name": "LMFAO",
+    "character_info_json": "LLM_Wizard/characters/character.json",
+
+    "format": "pyaudio.paInt16",
+    "channels": 1,
+    "rate": 32000,
+    "chunk_size": 1024
+}
