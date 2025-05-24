@@ -1,59 +1,19 @@
-import os
-import sys
-import importlib.util
 import asyncio
-from typing import Optional
+from TTS_Wizard.GPT_SoVITS import tts_exp
 from .base_service import BaseService
-from utils.app_utils import change_dir
 
 class TTSService(BaseService):
     def __init__(self, shared_resources=None):
         super().__init__(shared_resources)
-        # self.shared_resources = shared_resources
-        # Path to the TTS repo root (relative to this file or absolute)
-        # Path to the TTS repo root (relative to this file or absolute)
-        # self.tts_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../TTS_Wizard/GPT_Test')) # Old path
-        self.tts_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../TTS_Wizard/GPT_SoVITS')) # New path
-        self.tts_exp_path = os.path.join(self.tts_repo_root, 'tts_exp.py')
-        self.api_custom_path = os.path.join(self.tts_repo_root, 'api_custom.py')
-        self._ensure_tts_dependencies()
-        self.tts_module = self._import_tts_exp()
-        
-        # Initialize queue from shared resources
         self.queues = shared_resources.get("queues") if shared_resources else None
         self.llm_output_queue = self.queues.get("llm_output_queue") if self.queues else None
         self.logger = shared_resources.get("logger") if shared_resources else None
 
-    def _ensure_tts_dependencies(self):
-        # Add TTS repo root to sys.path if not already present
-        if self.tts_repo_root not in sys.path:
-            sys.path.insert(0, self.tts_repo_root)
-
-    def _import_tts_exp(self):
-        # Dynamically import tts_exp.py as a module
-        spec = importlib.util.spec_from_file_location('tts_exp', self.tts_exp_path)
-        tts_exp = importlib.util.module_from_spec(spec)
-        sys.modules['tts_exp'] = tts_exp
-        spec.loader.exec_module(tts_exp)
-        return tts_exp
-
     async def synthesize_streaming(self, tts_params: dict):
         """
-        Synthesize speech from text using the TTS repo's tts_exp.py interface (streaming).
-        `tts_params` is a dictionary containing all necessary parameters for send_tts_request.
+        Synthesize speech from text using the TTS module
         """
-        if hasattr(self.tts_module, 'send_tts_request'):
-            # Pass logger if available
-            if self.logger:
-                tts_params['logger'] = self.logger
-            # send_tts_request is now an async generator
-            return self.tts_module.send_tts_request(**tts_params)
-        else:
-            if self.logger:
-                self.logger.error('TTS module (tts_exp.py) does not have send_tts_request function.')
-            raise RuntimeError('TTS module (tts_exp.py) does not have send_tts_request function.')
-
-    # Optionally, add more methods to wrap other TTS repo functionality as needed
+        return tts_exp.send_tts_request(**tts_params)
 
     async def _process_tts_item(self, tts_params: dict, semaphore: asyncio.Semaphore):
         """Helper function to process a single TTS request with semaphore control."""
@@ -76,8 +36,6 @@ class TTSService(BaseService):
             finally:
                 if self.llm_output_queue: # Check if queue exists before calling task_done
                     self.llm_output_queue.task_done()
-                if self.logger:
-                    self.logger.debug(f"TTS Service: Finished processing for: {str(tts_params.get('text', ''))[:50]}...")
 
     async def run_worker(self):
         if self.logger:
