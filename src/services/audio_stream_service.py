@@ -1,8 +1,8 @@
 import asyncio
 from typing import Optional
 from .base_service import BaseService
-from .audio_playback_base import AudioPlaybackBase
-from .pyaudio_playback import PyAudioPlayback # Default backend
+from TTS_Wizard.utils.audio_playback_base import AudioPlaybackBase
+from TTS_Wizard.utils.pyaudio_playback import PyAudioPlayback # Default backend
 
 class AudioStreamService(BaseService):
     def __init__(self, shared_resources=None, audio_playback_backend: Optional[AudioPlaybackBase] = None):
