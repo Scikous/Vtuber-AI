@@ -6,8 +6,9 @@ import asyncio
 
 class VtuberLLMBase(ABC):
     """Abstract base class for Vtuber LLM models."""
-    def __init__(self, character_name):
+    def __init__(self, character_name, instructions):
         self.character_name = character_name
+        self.instructions = instructions
 
     @abstractmethod
     def load_model(cls, *args, **kwargs):
@@ -36,14 +37,14 @@ class VtuberExllamav2(VtuberLLMBase):
     Holds and handles all of the ExllamaV2 based tools
     """
 
-    def __init__(self, generator, gen_settings, tokenizer, character_name):
-        super().__init__(character_name)
+    def __init__(self, generator, gen_settings, tokenizer, character_name, instructions):
+        super().__init__(character_name, instructions)
         self.generator = generator
         self.gen_settings = gen_settings
         self.tokenizer = tokenizer
 
     @classmethod
-    def load_model(cls, model="./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ", character_name='assistant'):
+    def load_model(cls, model="./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ", character_name='assistant', instructions=""):
         """
         Loads an ExLlamaV2 compatible model
 
@@ -82,13 +83,13 @@ class VtuberExllamav2(VtuberLLMBase):
         )
         #default text generation settings, can be overridden
         gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = 1.97, 
+            temperature = 1.47, 
             top_p = 0.95,
             min_p=0.05,
             token_repetition_penalty = 1.035
         )
 
-        return cls(generator_async, gen_settings, tokenizer, character_name)
+        return cls(generator_async, gen_settings, tokenizer, character_name, instructions)
 
     def cleanup(self):
         # Manual cleanup
@@ -116,14 +117,14 @@ class VtuberExllamav2(VtuberLLMBase):
         return False
 
 
-    async def dialogue_generator(self, prompt, max_tokens=200):
+    async def dialogue_generator(self, prompt, conversation_history=None, max_tokens=200):
         """
         Generates character's response to a given input (Message)
 
         For text length variety's sake, randomly selects token length to appear more natural
         """
         from exllamav2.generator import ExLlamaV2DynamicJobAsync
-        prompt = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+        prompt = LLMUtils.apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer)
 
         max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
         async_job = ExLlamaV2DynamicJobAsync(

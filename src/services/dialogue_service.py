@@ -75,11 +75,11 @@ class DialogueService(BaseService):
                             self.logger.warning(f"Could not parse speaker from message: {message}. Using raw message as input.")
                 
                 history_for_llm_content = "\n".join(list(self.naive_short_term_memory))
-                content_for_template_hole = LLMUtils.prompt_wrapper(raw_input_text, history_for_llm_content)
+                content_for_template_hole = raw_input_text#LLMUtils.prompt_wrapper(raw_input_text, history_for_llm_content)
                 if not self.llm_output_queue.full():
                     if self.logger:
                         self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
-                    async_job = await self.llm_model.dialogue_generator(content_for_template_hole, max_tokens=100)
+                    async_job = await self.llm_model.dialogue_generator(content_for_template_hole, conversation_history=self.naive_short_term_memory max_tokens=100)
                     if self.logger:
                         self.logger.debug(f"Got async_job: {type(async_job)}")
                     full_string = ""
