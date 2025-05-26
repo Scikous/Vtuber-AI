@@ -5,21 +5,41 @@ import re
 
 class LLMUtils:
     @staticmethod
-    def apply_chat_template(instructions, prompt, tokenizer):
+    def apply_chat_template(instructions, prompt, tokenizer, conversation_history=None):
         """
-        Applies a chat template to the prompt.
+        Applies a chat template to the prompt with optional conversation history.
+        
+        Args:
+            instructions: System instructions string
+            prompt: Current user message string
+            tokenizer: Tokenizer to use
+            previous_conversation: List of previous messages in order [user_msg1, assistant_msg1, user_msg2, assistant_msg2, ...]
+                                First message should be user, then alternating user/assistant
         """
-
-        messages = [
-            {"role": "system", "content": instructions},
-            {"role": "user", "content": prompt},
-            # Add previous assistant messages if it's an ongoing conversation
-        ]
-        tokenized_chat = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt")
+        
+        messages = [{"role": "system", "content": instructions}]
+        
+        # Add previous conversation history if provided
+        if conversation_history:
+            for i, msg in enumerate(conversation_history):
+                # Alternate between user and assistant roles
+                # Even indices (0, 2, 4...) are user messages
+                # Odd indices (1, 3, 5...) are assistant messages
+                role = "user" if i % 2 == 0 else "assistant"
+                messages.append({"role": role, "content": msg})
+        
+        # Add the current prompt as the latest user message
+        messages.append({"role": "user", "content": prompt})
+        print("FINAL MESSAGES", messages)
+        tokenized_chat = tokenizer.apply_chat_template(
+            messages, 
+            tokenize=True, 
+            add_generation_prompt=True, 
+            return_tensors="pt"
+        )
         return tokenized_chat
-
     @staticmethod
-    def prompt_wrapper(message, context):
+    def prompt_wrapper(message, context=""):
         from textwrap import dedent
 
         """

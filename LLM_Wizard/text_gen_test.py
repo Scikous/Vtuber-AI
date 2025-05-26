@@ -24,11 +24,12 @@ tokenizer = AutoTokenizer.from_pretrained(model) # Example
 
 #test using the exllamav2
 async def exllamav2_test():
-    Character = VtuberExllamav2.load_model(model=model,character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
+    Character = VtuberExllamav2.load_model(model=model,character_name=character_name, instructions=instructions)#(generator, gen_settings, tokenizer, character_name)
 
     start = perf_counter()
-    prompt = LLMUtils.prompt_wrapper("Happy fun prompt!", "User is happy to talk with you")
-    response = await Character.dialogue_generator(prompt=prompt, max_tokens=200)
+    prompt = LLMUtils.prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
+    dummy_memory = ["Ahahahahah", "wowozers", "i like coke", "great to hear!"]
+    response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, max_tokens=200)
     print(type(response))
     async for result in response:
         output = result.get("text", "")
