@@ -1,5 +1,5 @@
 from models import VtuberExllamav2, VtuberLLM
-
+from huggingface_hub import snapshot_download
 from model_utils import LLMUtils
 from time import perf_counter
 import asyncio
@@ -15,14 +15,16 @@ instructions_string = f"""{instructions}"""
 dummy_data = ["Good day, state your name.", "What is your favorite drink?", "Do you edge?"]
 
 #LLM model to use
-model = "LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
-
+model = "TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+# model = snapshot_download(repo_id=model_name)
 from transformers import AutoTokenizer
 tokenizer = AutoTokenizer.from_pretrained(model) # Example
 
+# print(f"Model '{model_name}' is located locally at: {model}")
+
 #test using the exllamav2
 async def exllamav2_test():
-    Character = VtuberExllamav2.load_model_exllamav2(model_dir=model,character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
+    Character = VtuberExllamav2.load_model(model=model,character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
 
     start = perf_counter()
     prompt = LLMUtils.prompt_wrapper("Happy fun prompt!", "User is happy to talk with you")

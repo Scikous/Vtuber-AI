@@ -1,4 +1,6 @@
 {
+    "llm_class_name": "VtuberExllamav2",
+    "llm_model_path": "./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ",
     "short_term_memory_maxlen": 6,
     "speaker_name": "LMFAO",
     "character_info_json": "LLM_Wizard/characters/character.json",
