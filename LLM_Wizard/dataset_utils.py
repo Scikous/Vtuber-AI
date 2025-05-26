@@ -27,10 +27,9 @@ INSTRUCTIONS, USER_NAME, CHARACTER_NAME = LLMUtils.load_character(CHARACTER_JSON
 
 
 # --- Core Functions ---
-
 def prepare_finetuning_input_parquet(csv_path: str, output_parquet_path: str):
     """
-    Reads a CSV file, extracts user, character, and context columns,
+    Reads a CSV file, extracts user, character, context, and conversation_id columns,
     and saves them to a Parquet file for later chat templating.
     """
     try:
@@ -38,7 +37,7 @@ def prepare_finetuning_input_parquet(csv_path: str, output_parquet_path: str):
         df = df.fillna('') # Handle potential missing values
 
         # Ensure required columns exist
-        required_cols = ['user', 'character', 'context']
+        required_cols = ['user', 'character', 'context', 'conversation_id']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise ValueError(f"CSV file {csv_path} is missing required columns: {missing_cols}")
@@ -57,6 +56,19 @@ def prepare_finetuning_input_parquet(csv_path: str, output_parquet_path: str):
     except Exception as e:
         print(f"An unexpected error occurred in prepare_finetuning_input_parquet: {e}")
 
+def _build_conversation_messages(conversation_data: list, instructions: str):
+    """
+    Helper function to build messages array from conversation data.
+    conversation_data: List of dictionaries with 'user', 'character', 'context' keys, ordered by conversation flow.
+    """
+    messages = [{"role": "system", "content": instructions}]
+    
+    for turn in conversation_data:
+        prompt = LLMUtils.prompt_wrapper(turn["user"], turn["context"])
+        messages.append({"role": "user", "content": prompt.strip()})
+        messages.append({"role": "assistant", "content": turn["character"]})
+    
+    return messages
 
 def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: str):
     """
@@ -89,18 +101,11 @@ def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: st
 
 def _apply_chat_template_func(example: dict, instructions: str, tokenizer: AutoTokenizer):
     """
-    Helper function to apply chat template to a single example.
-    'example' is a dictionary expected to have 'user', 'context', and 'character' keys.
+    Helper function to apply chat template to a conversation example.
+    'example' is expected to have a 'conversation' key containing a list of turns.
     """
-    prompt = LLMUtils.prompt_wrapper(example["user"], example["context"])
-    messages = [
-        {"role": "system", "content": instructions},
-        {"role": "user", "content": prompt.strip()}, # Apply strip to prompt
-        {"role": "assistant", "content": example["character"]},
-    ]
-    # add_generation_prompt=False is typically used for training,
-    # as you provide both user and assistant messages.
-    # For inference, you might set it to True if your template requires it.
+    messages = _build_conversation_messages(example["conversation"], instructions)
+    
     formatted_chat = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -109,6 +114,35 @@ def _apply_chat_template_func(example: dict, instructions: str, tokenizer: AutoT
     return {"formatted_chat": formatted_chat}
 
 
+def _group_conversations_by_id(dataset):
+    """
+    Groups dataset rows by conversation_id and creates conversation objects.
+    Returns a new dataset where each row represents a complete conversation.
+    """
+    # Convert to pandas for easier grouping
+    df = dataset.to_pandas()
+    
+    conversations = []
+    for conv_id, group in df.groupby('conversation_id'):
+        # Sort by index to maintain conversation order (assuming data is pre-ordered)
+        group = group.sort_index()
+        
+        conversation_turns = []
+        for _, row in group.iterrows():
+            conversation_turns.append({
+                'user': row['user'],
+                'character': row['character'],
+                'context': row['context']
+            })
+        
+        conversations.append({
+            'conversation_id': conv_id,
+            'conversation': conversation_turns
+        })
+    
+    # Convert back to Dataset
+    return Dataset.from_list(conversations)
+
 def load_and_apply_chat_template(
     raw_finetuning_parquet_path: str,
     instructions: str,
@@ -116,35 +150,36 @@ def load_and_apply_chat_template(
     split: str = "train"
 ) -> Dataset:
     """
-    Loads a Parquet file containing 'user', 'character', and 'context' columns,
+    Loads a Parquet file containing conversation data, groups by conversation_id,
     applies the chat template, and returns the processed Hugging Face Dataset.
     """
     try:
-        # Load the dataset. load_dataset expects a dict of paths if multiple splits
-        # or just the path for a single file (which defaults to 'train' split).
+        # Load the dataset
         dataset_dict = load_dataset("parquet", data_files={split: raw_finetuning_parquet_path})
         
-        # Check if the specified split exists
         if split not in dataset_dict:
             raise ValueError(f"Split '{split}' not found in the loaded dataset. Available splits: {list(dataset_dict.keys())}")
         
         raw_dataset = dataset_dict[split]
 
-        # Verify columns before mapping
-        required_cols = ['user', 'character', 'context']
+        # Verify columns before processing
+        required_cols = ['user', 'character', 'context', 'conversation_id']
         if not all(col in raw_dataset.column_names for col in required_cols):
             raise ValueError(
                 f"Parquet file {raw_finetuning_parquet_path} is missing one or more required columns "
                 f"for chat templating: {required_cols}. Found: {raw_dataset.column_names}"
             )
 
-        # Use functools.partial or fn_kwargs to pass additional arguments to the map function
-        # fn_kwargs is generally preferred with datasets.map
-        formatted_dataset = raw_dataset.map(
+        # Group conversations by ID
+        conversation_dataset = _group_conversations_by_id(raw_dataset)
+        
+        # Apply chat template to each conversation
+        formatted_dataset = conversation_dataset.map(
             _apply_chat_template_func,
             fn_kwargs={'instructions': instructions, 'tokenizer': tokenizer}
         )
-        print(f"Successfully applied chat template to data from {raw_finetuning_parquet_path}")
+        
+        print(f"Successfully applied chat template to {len(formatted_dataset)} conversations from {raw_finetuning_parquet_path}")
         return formatted_dataset
     except FileNotFoundError:
         print(f"Error: Parquet file not found at {raw_finetuning_parquet_path}")
@@ -170,9 +205,34 @@ def main():
     if not os.path.exists(csv_path):
         print(f"Creating dummy CSV at {csv_path}")
         dummy_data = {
-            'user': ["Hello, who are you?", "What is the capital of France?", "Tell me a joke about capybaras."],
-            'character': ["I am Capybara, your assistant.", "The capital of France is Paris.", "Why did the capybara cross the road? To get to the other tide!"],
-            'context': ["General knowledge question.", "This is a geography question.", "This is a humor request."]
+            'user': [
+                "Hello, who are you?", 
+                "That's interesting, tell me more about yourself.",
+                "What is the capital of France?", 
+                "Tell me a joke about capybaras.",
+                "That was funny! Do you know any facts about capybaras?"
+            ],
+            'character': [
+                "I am Capybara, your assistant.", 
+                "I'm an AI designed to help with various tasks and provide information about wildlife, especially South American animals.",
+                "The capital of France is Paris.", 
+                "Why did the capybara cross the road? To get to the other tide!",
+                "Yes! Capybaras are the world's largest rodents and are excellent swimmers. They're native to South America."
+            ],
+            'context': [
+                "General introduction question.", 
+                "Follow-up about assistant capabilities.",
+                "This is a geography question.", 
+                "This is a humor request.",
+                "Follow-up question about capybara facts."
+            ],
+            'conversation_id': [
+                "conv_1", 
+                "conv_1",
+                "conv_2", 
+                "conv_3",
+                "conv_3"
+            ]
         }
         pd.DataFrame(dummy_data).to_csv(csv_path, index=False)
 
