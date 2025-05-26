@@ -1,21 +1,49 @@
+from abc import ABC, abstractmethod
 from model_utils import LLMUtils
 import torch
 import gc
 import asyncio
+
+class VtuberLLMBase(ABC):
+    """Abstract base class for Vtuber LLM models."""
+    def __init__(self, character_name):
+        self.character_name = character_name
+
+    @abstractmethod
+    def load_model(cls, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    async def dialogue_generator(self, prompt, **kwargs):
+        pass
+
+    @abstractmethod
+    def cleanup(self):
+        pass
+
+    # Context manager methods -- used with "with" statement
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
+        # Optionally, return False to propagate exceptions, True to suppress them
+        return False
+
 #current, lowest latency
-class VtuberExllamav2:
+class VtuberExllamav2(VtuberLLMBase):
     """
     Holds and handles all of the ExllamaV2 based tools
     """
 
     def __init__(self, generator, gen_settings, tokenizer, character_name):
+        super().__init__(character_name)
         self.generator = generator
         self.gen_settings = gen_settings
         self.tokenizer = tokenizer
-        self.character_name = character_name
 
     @classmethod
-    def load_model_exllamav2(cls, model_dir="./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ", character_name='assistant'):
+    def load_model(cls, model="./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ", character_name='assistant'):
         """
         Loads an ExLlamaV2 compatible model
 
@@ -30,11 +58,19 @@ class VtuberExllamav2:
         from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Cache, ExLlamaV2Tokenizer
         from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2DynamicGeneratorAsync, ExLlamaV2Sampler
         from transformers import AutoTokenizer
+        from huggingface_hub import snapshot_download
+        
         
         #transformers tokenizer, not exllamav2's tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(model_dir) # for applying chat template
-        
-        config = ExLlamaV2Config(model_dir)
+        tokenizer = AutoTokenizer.from_pretrained(model) # for applying chat template
+
+        #load exllamav2 model
+        try:
+            config = ExLlamaV2Config(model)
+        except:
+            hf_model = snapshot_download(repo_id=model)
+            config = ExLlamaV2Config(hf_model)
+
         model = ExLlamaV2(config)
         cache = ExLlamaV2Cache(model, max_seq_len = 65536, lazy = True)
         model.load_autosplit(cache, progress = True)
@@ -113,11 +149,11 @@ class VtuberExllamav2:
         return async_job    
 
 #legacy model, high latency
-class VtuberLLM:
+class VtuberLLM(VtuberLLMBase):
     def __init__(self, model, tokenizer, character_name):
+        super().__init__(character_name)
         self.model = model
         self.tokenizer = tokenizer
-        self.character_name = character_name
 
     @classmethod
     def load_model(cls, base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name="", character_name='assistant'):

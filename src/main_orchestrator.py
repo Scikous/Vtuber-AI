@@ -31,15 +31,11 @@ import sys
 
 
 try:
-    from LLM_Wizard.models import VtuberExllamav2
     from LLM_Wizard.model_utils import LLMUtils
-    # Imports for STT, TTS, LiveChat will be handled by their respective services
-    # from TTS_Wizard.GPT_Test.tts_exp import send_tts_request, run_playback_thread, tts_queue as tts_output_queue_brain
-    # from STT_Wizard.STT import speech_to_text # Assuming STT_Wizard/STT.py exists and has speech_to_text
-    # from Livechat_Wizard.livechat import LiveChatController # Assuming Livechat_Wizard/livechat.py exists and has LiveChatController
+    # LLM model will be imported dynamically
 except ImportError as e:
-    print(f"Critical Import Error: Could not import core AI modules (LLM, etc.): {e}. Ensure PYTHONPATH is set correctly or modules are accessible.")
-    VtuberExllamav2, LLMUtils = None, None # Graceful degradation or error handling needed
+    print(f"Critical Import Error: Could not import LLM_Wizard.model_utils: {e}. Ensure PYTHONPATH is set correctly or modules are accessible.")
+    LLMUtils = None # Graceful degradation or error handling needed
 import time
 class MainOrchestrator:
     live_chat_process = None # Class attribute to hold the live chat process
@@ -116,11 +112,28 @@ class MainOrchestrator:
             return
 
         instructions, self.user_name, self.character_name = LLMUtils.load_character(character_info_json_path)
+
+        llm_class_name = self.config.get("llm_class_name", "VtuberExllamav2") # Default to VtuberExllamav2
+        llm_model_path = self.config.get("llm_model_path", "./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ") # Default path
         
-        # For Exllamav2 model; configuration for other models would differ
-        # Model path/config should ideally come from self.config
-        self.character_model = VtuberExllamav2.load_model_exllamav2(character_name=self.character_name)
-        self.logger.info(f"Character '{self.character_name}' and LLM loaded.")
+        try:
+            # Dynamically import the LLM class from LLM_Wizard.models
+            module = __import__("LLM_Wizard.models", fromlist=[llm_class_name])
+            LLMClass = getattr(module, llm_class_name)
+        except (ImportError, AttributeError) as e:
+            self.logger.error(f"Failed to load LLM class '{llm_class_name}': {e}")
+            # Fallback or raise error
+            return
+
+        # Instantiate the model
+        # The load_model_exllamav2 and load_model methods are @classmethods, so they are called on the class itself.
+        if hasattr(LLMClass, 'load_model'): # Generic for other models
+             self.character_model = LLMClass.load_model(model=llm_model_path, character_name=self.character_name)
+        else:
+            self.logger.error(f"LLM class '{llm_class_name}' does not have a recognized load_model method.")
+            return
+
+        self.logger.info(f"Character '{self.character_name}' and LLM '{llm_class_name}' loaded from '{llm_model_path}'.")
 
     def register_services(self):
         self.logger.info("Registering services...")
