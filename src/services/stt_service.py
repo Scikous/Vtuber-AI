@@ -3,7 +3,7 @@ STT (Speech-to-Text) Service Module for Vtuber-AI
 """
 import asyncio
 from .base_service import BaseService
-from STT_Wizard.STT import speech_to_text # Import for STT functionality
+from STT_Wizard.STT import speech_to_text, RealTimeSTTProcessor # Import for STT functionality
 
 class STTService(BaseService):
     def __init__(self, shared_resources):
