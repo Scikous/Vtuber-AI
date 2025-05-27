@@ -8,6 +8,7 @@ class TTSService(BaseService):
         self.queues = shared_resources.get("queues") if shared_resources else None
         self.llm_output_queue = self.queues.get("llm_output_queue") if self.queues else None
         self.logger = shared_resources.get("logger") if shared_resources else None
+        self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event())
 
     async def synthesize_streaming(self, tts_params: dict):
         """
@@ -49,6 +50,19 @@ class TTSService(BaseService):
             while True:
                 # Clean up completed tasks
                 active_tts_tasks = [task for task in active_tts_tasks if not task.done()]
+
+                if self.terminate_current_dialogue_event.is_set():
+                    if self.logger:
+                        self.logger.info("TTS Service: Terminate current dialogue event set. Cancelling active TTS tasks...")
+                    for task in active_tts_tasks:
+                        task.cancel()
+                    await asyncio.gather(*active_tts_tasks, return_exceptions=True) # Wait for tasks to finish cancellation
+                    while not self.llm_output_queue.empty():
+                        try:
+                            item = self.llm_output_queue.get_nowait()
+                            self.logger.debug(f"Discarded LLM output from queue due to termination.")
+                        except asyncio.QueueEmpty:
+                            break
 
                 if self.llm_output_queue and not self.llm_output_queue.empty():
                     # Only fetch new item if semaphore allows and we have less than max concurrent tasks active
