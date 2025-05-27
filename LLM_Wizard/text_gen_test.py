@@ -36,6 +36,7 @@ async def exllamav2_test():
         # if len(output) != 0:
         print(output,  end = "")    
             # break
+        await Character.cancel_dialogue_generation()
 
     end = perf_counter()
     # print(f"Prompts: {msg}\n\nRESPONSE:\n{response}\n\nTime Taken (Seconds): {end-start}")
