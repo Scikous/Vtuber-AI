@@ -162,7 +162,7 @@ class VtuberExllamav2(VtuberLLMBase):
                     )
         return self.current_async_job    
 
-    def cancel_dialogue_generation(self):
+    async def cancel_dialogue_generation(self):
         """
         Cancels the currently ongoing ExLlamaV2DynamicJobAsync.
         """
@@ -170,7 +170,7 @@ class VtuberExllamav2(VtuberLLMBase):
             if hasattr(self.current_async_job, 'cancel') and callable(self.current_async_job.cancel):
                 print("VtuberExllamav2: Cancelling current dialogue generation job.")
                 try:
-                    self.current_async_job.cancel()
+                    await self.current_async_job.cancel()
                 except Exception as e:
                     print(f"VtuberExllamav2: Error trying to cancel async_job: {e}")
             else:
