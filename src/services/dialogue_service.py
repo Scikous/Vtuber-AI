@@ -79,7 +79,7 @@ class DialogueService(BaseService):
                 if not self.llm_output_queue.full():
                     if self.logger:
                         self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
-                    async_job = await self.llm_model.dialogue_generator(content_for_template_hole, conversation_history=self.naive_short_term_memory max_tokens=100)
+                    async_job = await self.llm_model.dialogue_generator(content_for_template_hole, conversation_history=self.naive_short_term_memory, max_tokens=100)
                     if self.logger:
                         self.logger.debug(f"Got async_job: {type(async_job)}")
                     full_string = ""
