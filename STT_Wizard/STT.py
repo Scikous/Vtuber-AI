@@ -302,131 +302,38 @@ async def speech_to_text(callback):
             print(f"Unexpected error in speech_to_text async loop: {e}")
             await asyncio.sleep(1)  # Wait a bit before retrying the loop
 
-
-class RealTimeSTTProcessor:
-    def __init__(self, energy_threshold, energy_callback, sample_rate=SAMPLE_RATE, channels=CHANNELS, frame_duration_ms=FRAME_DURATION_MS, dtype=AUDIO_DTYPE):
-        self.energy_threshold = energy_threshold
-        self.energy_callback = energy_callback
-        self.sample_rate = sample_rate
-        self.channels = channels
-        self.frame_duration_ms = frame_duration_ms
-        self.dtype = dtype
-        self.frame_size = int(self.sample_rate * self.frame_duration_ms / 1000)
-
-        self.stream = None
-        self._stop_event = threading.Event()
-
-    def _audio_callback(self, indata, frames, time_info, status):
-        if status:
-            print(f"RealTimeSTTProcessor: Audio callback status: {status}", flush=True)
-            return
-        if self._stop_event.is_set():
-            raise sd.CallbackStop
-
-        try:
-            # Calculate RMS energy
-            rms = np.sqrt(np.mean(indata**2))
-            # print(f"RMS: {rms:.4f}") # For debugging energy levels
-
-            if rms > self.energy_threshold:
-                if self.energy_callback:
-                    # Consider running callback in a separate thread to avoid blocking audio stream
-                    # For now, direct call for simplicity
-                    self.energy_callback()
-            
-            # Placeholder for further processing (VAD, buffering for transcription)
-            # For now, we only focus on energy detection.
-
-        except Exception as e:
-            print(f"Error in RealTimeSTTProcessor _audio_callback: {type(e).__name__} - {repr(e)}")
-            # Optionally, signal an error or attempt to stop the stream
-
-    def start_stream(self):
-        if self.stream is not None and self.stream.active:
-            print("RealTimeSTTProcessor: Stream is already active.")
-            return
-
-        print(f"RealTimeSTTProcessor: Starting audio stream with energy threshold: {self.energy_threshold}")
-        self._stop_event.clear()
-        try:
-            self.stream = sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                dtype=self.dtype,
-                blocksize=self.frame_size,
-                callback=self._audio_callback
-            )
-            self.stream.start()
-            print("RealTimeSTTProcessor: Audio stream started.")
-        except Exception as e:
-            print(f"RealTimeSTTProcessor: Error starting audio stream: {e}")
-            self.stream = None
-
-    def stop_stream(self):
-        if self.stream is None or not self.stream.active:
-            print("RealTimeSTTProcessor: Stream is not active or already stopped.")
-            return
-        
-        print("RealTimeSTTProcessor: Stopping audio stream...")
-        self._stop_event.set() # Signal callback to stop
-        if self.stream:
-            try:
-                # Wait a very short moment for the callback to see the stop event
-                # This is a bit of a race, but sd.CallbackStop from callback is cleaner
-                # Alternatively, rely on stream.stop() and stream.close()
-                time.sleep(self.frame_duration_ms / 1000 * 2) # Wait for a couple of frames time
-                self.stream.stop()
-                self.stream.close()
-                print("RealTimeSTTProcessor: Audio stream stopped and closed.")
-            except Exception as e:
-                print(f"RealTimeSTTProcessor: Error stopping/closing audio stream: {e}")
-            finally:
-                self.stream = None
-        self._stop_event.clear() # Reset for potential restart
-
-# --- Main block for testing ---
+# --- Main block for testing --- (largely same as original)
 if __name__ == "__main__":
-    print("Starting RealTimeSTTProcessor test...")
+    # Basic callback for testing
+    async def _stt_test_callback(speech_text):
+        print(f"CALLBACK RECEIVED: '{speech_text}'")
+        # Example: Add to a queue or process further
+        # For this test, we'll just print.
+        # If you have a test queue like before:
+        # await test_speech_queue.put(speech_text.strip())
+        # print(list(test_speech_queue._queue))
 
-    def energy_detected_callback_test():
-        print("*** Energy threshold breached! Possible user speech. ***")
+    # If using a test queue:
+    # test_speech_queue = asyncio.Queue(maxsize=4)
 
-    # Example energy threshold (needs tuning based on microphone and environment)
-    # Start with a relatively low value to ensure it triggers, then adjust upwards.
-    ENERGY_THRESHOLD_TEST = 0.01 # Adjust this value
-
-    processor = RealTimeSTTProcessor(
-        energy_threshold=ENERGY_THRESHOLD_TEST, 
-        energy_callback=energy_detected_callback_test
-    )
-
+    print("Starting STT test. Speak into the microphone.")
+    print("The program will listen for one utterance, transcribe it, then exit the speech_to_text call.")
+    print("The while True loop in __main__ will then call it again.")
+    
+    # Loop to continuously listen for speech utterances
     try:
-        processor.start_stream()
-        print(f"Listening for audio with energy threshold {ENERGY_THRESHOLD_TEST}. Speak to test.")
-        print("Test will run for 10 seconds...")
-        time.sleep(10) # Keep the stream running for 10 seconds
+        while True:
+            if not whisper_model:
+                print("Whisper model not available. Exiting test.")
+                break
+            asyncio.run(speech_to_text(_stt_test_callback))
+            print("-----------------------------------------------------")
+            print("Listening for next utterance (Ctrl+C to stop)...")
+            # Add a small delay if speech_to_text returns very quickly (e.g. on immediate timeout)
+            # asyncio.run(asyncio.sleep(0.1)) # This would need to be part of an async main
     except KeyboardInterrupt:
-        print("\nTest interrupted by user.")
+        print("\nSTT test stopped by user.")
     except Exception as e:
-        print(f"An error occurred during the RealTimeSTTProcessor test: {e}")
+        print(f"An error occurred in the main test loop: {e}")
     finally:
-        print("Stopping RealTimeSTTProcessor stream...")
-        processor.stop_stream()
-        print("RealTimeSTTProcessor test finished.")
-
-    # Original STT test (can be commented out or kept for separate testing)
-    # print("\n--- Starting original STT test (recognize_speech_sync via speech_to_text) ---")
-    # async def _stt_test_callback(speech_text):
-    #     print(f"CALLBACK RECEIVED: '{speech_text}'")
-
-    # try:
-    #     if whisper_model:
-    #         asyncio.run(speech_to_text(_stt_test_callback))
-    #     else:
-    #         print("Whisper model not available for original STT test.")
-    # except KeyboardInterrupt:
-    #     print("\nOriginal STT test stopped by user.")
-    # except Exception as e:
-    #     print(f"An error occurred in the original STT test loop: {e}")
-    # finally:
-    #     print("Exiting original STT test program section.")
+        print("Exiting STT test program.")

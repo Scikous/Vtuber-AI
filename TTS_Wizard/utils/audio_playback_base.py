@@ -43,6 +43,36 @@ class AudioPlaybackBase(ABC):
         """Stop and close the audio stream and release resources."""
         pass
 
+    @abstractmethod
+    def pause_stream(self):
+        """Pause the audio stream if it is currently playing."""
+        pass
+
+    @abstractmethod
+    def resume_stream(self):
+        """Resume the audio stream if it is currently paused."""
+        pass
+
+    @abstractmethod
+    def stop_and_clear_internal_buffers(self):
+        """
+        Stop the audio stream immediately and clear any internal hardware/driver buffers.
+        This does not necessarily close the stream, but ensures playback ceases and
+        pending data in low-level buffers is discarded.
+        The service using this backend is responsible for clearing its own software buffers.
+        """
+        pass
+
+    @abstractmethod
+    def is_paused(self) -> bool:
+        """Check if the audio stream is currently paused.
+
+        Returns:
+            bool: True if the stream is paused, False otherwise.
+        """
+        pass
+
+
     def __enter__(self):
         self.open_stream()
         return self
