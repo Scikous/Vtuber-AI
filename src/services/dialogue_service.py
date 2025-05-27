@@ -24,6 +24,9 @@ class DialogueService(BaseService):
         self.live_chat_queue = self.queues.get("live_chat_queue") # Input from LiveChat
         self.llm_output_queue = self.queues.get("llm_output_queue") # Output to TTS/other consumers
 
+        self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event())
+
+
     async def run_worker(self):
         """Main logic for the Dialogue service worker."""
         if self.logger:
@@ -86,6 +89,11 @@ class DialogueService(BaseService):
                     tts_buffer = "" # Buffer for accumulating text for TTS
 
                     async for result in async_job:
+                        if self.terminate_current_dialogue_event.is_set() and not self.llm_output_queue.empty():
+                            if self.logger:
+                                self.logger.info("Terminate current dialogue event set. Stopping DialogueService worker.")
+                            await self.llm_model.cancel_dialogue_generation()
+                            break
                         if self.logger:
                             self.logger.debug(f"Received result: {type(result)}")
                         chunk_text = result.get("text", "")

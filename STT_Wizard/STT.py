@@ -66,7 +66,7 @@ SILENCE_AFTER_SPEECH_S = 1.0   # Seconds of silence to consider a phrase ended
 
 # Energy threshold for pausing TTS (in dBFS). Adjust as needed.
 # Lower values (more negative) mean more sensitive to sound.
-ENERGY_THRESHOLD_DBFS = -45.0  # Example: -40dBFS is a reasonable starting point
+ENERGY_THRESHOLD_DBFS = -8.0  # Example: -40dBFS is a reasonable starting point
 # RMS equivalent can also be used if preferred, but dBFS is often more intuitive.
 # MAX_RMS_FOR_FLOAT32 = 1.0 (for dBFS calculation with float32 audio)
 
@@ -318,7 +318,8 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
 # --- speech_to_text now accepts shared events ---
 async def speech_to_text(callback, 
                          user_speaking_pause_event: asyncio.Event, 
-                         terminate_current_dialogue_event: asyncio.Event):
+                         terminate_current_dialogue_event: asyncio.Event,
+                         is_audio_stream_active: bool = True):
     """
     Speech-To-Text (STT) -- Listens to microphone and turns recognized speech to text.
     Non-blocking implementation using asyncio and ThreadPoolExecutor.

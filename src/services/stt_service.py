@@ -11,6 +11,10 @@ class STTService(BaseService):
         self.speech_queue = self.queues.get("speech_queue") # Output queue for STT results
         self.speaker_name = self.shared_resources.get("speaker_name", "User") # Get speaker name from shared resources
 
+        # Shared state events (to be managed/set externally)
+        self.user_speaking_pause_event = shared_resources.get("user_speaking_pause_event", asyncio.Event()) # Pauses playback when user speaks
+        self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) # Stops current dialogue playback
+
     async def run_worker(self):
         """Main logic for the STT service worker."""
         if self.logger:
@@ -30,7 +34,7 @@ class STTService(BaseService):
                 #     self.logger.debug("STT ignored 'Thank you.'")
 
             while True:
-                await speech_to_text(stt_callback) # speech_to_text is a blocking call in a loop, ensure it yields or is async
+                await speech_to_text(stt_callback, self.user_speaking_pause_event, self.terminate_current_dialogue_event) # speech_to_text is a blocking call in a loop, ensure it yields or is async
                 await asyncio.sleep(0.1) # Brief sleep to yield control
         except asyncio.CancelledError:
             if self.logger:

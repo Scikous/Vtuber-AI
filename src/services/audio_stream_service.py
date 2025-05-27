@@ -42,8 +42,6 @@ class AudioStreamService(BaseService):
 
 
 
-
-
     async def _play_buffered_audio(self, playback_buffer: list):
         """Plays the content of the playback_buffer and clears it asynchronously."""
         if not playback_buffer:

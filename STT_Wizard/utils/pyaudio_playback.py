@@ -86,7 +86,7 @@ class PyAudioPlayback(AudioPlaybackBase):
                 self.logger.error(f"Error pausing PyAudio stream: {e}")
         elif self._is_paused:
             self.logger.info("PyAudio stream is already paused.")
-        elif not self.stream or not self.stream.is_open(): # PyAudio < 0.2.14 might not have is_open
+        elif not self.stream or not self.stream.is_active(): # PyAudio < 0.2.14 might not have is_active
              self.logger.warning("Cannot pause: PyAudio stream is not open.")
         else: # Stream exists but is not active (e.g. already stopped but not by our pause)
             self.logger.info("Cannot pause: PyAudio stream is not currently active (might be already stopped or closed).")
@@ -98,7 +98,7 @@ class PyAudioPlayback(AudioPlaybackBase):
                 # Ensure stream is open before trying to start it.
                 # PyAudio stream.is_stopped() is true if stop_stream() was called and stream is not closed.
                 # PyAudio stream.is_active() is true if start_stream() was called and stream is not closed/stopped.
-                if hasattr(self.stream, 'is_open') and not self.stream.is_open(): # Check for newer PyAudio
+                if hasattr(self.stream, 'is_active') and not self.stream.is_active(): # Check for newer PyAudio
                     self.logger.warning("Cannot resume: Stream is closed. Needs to be reopened.")
                     # self._is_paused = False # It's not paused if it's closed
                     return
