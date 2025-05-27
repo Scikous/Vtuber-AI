@@ -19,6 +19,14 @@ class VtuberLLMBase(ABC):
         pass
 
     @abstractmethod
+    def cancel_dialogue_generation(self):
+        """
+        Requests the cancellation of the currently ongoing dialogue generation,
+        if one exists and is cancellable.
+        """
+        pass
+
+    @abstractmethod
     def cleanup(self):
         pass
 
@@ -42,6 +50,7 @@ class VtuberExllamav2(VtuberLLMBase):
         self.generator = generator
         self.gen_settings = gen_settings
         self.tokenizer = tokenizer
+        self.current_async_job = None # Moved to VtuberLLMBase
 
     @classmethod
     def load_model(cls, model="./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ", character_name='assistant', instructions=""):
@@ -93,6 +102,10 @@ class VtuberExllamav2(VtuberLLMBase):
 
     def cleanup(self):
         # Manual cleanup
+        if self.current_async_job:
+            print("Attempting to cancel ongoing async_job during cleanup...")
+            self.cancel_dialogue_generation() # Calls the new cancel method
+            self.current_async_job = None
         if hasattr(self, 'generator') and self.generator:
             del self.generator
             self.generator = None
@@ -127,7 +140,7 @@ class VtuberExllamav2(VtuberLLMBase):
         prompt = LLMUtils.apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer)
 
         max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
-        async_job = ExLlamaV2DynamicJobAsync(
+        self.current_async_job = ExLlamaV2DynamicJobAsync(
                         generator=self.generator,
                         encode_special_tokens=False,
                         decode_special_tokens=False,
@@ -147,7 +160,25 @@ class VtuberExllamav2(VtuberLLMBase):
                         #embeddings = None #list[ExLlamaV2MMEmbedding] can input images thathave been embedded into vectors
 
                     )
-        return async_job    
+        return self.current_async_job    
+
+    def cancel_dialogue_generation(self):
+        """
+        Cancels the currently ongoing ExLlamaV2DynamicJobAsync.
+        """
+        if self.current_async_job:
+            if hasattr(self.current_async_job, 'cancel') and callable(self.current_async_job.cancel):
+                print("VtuberExllamav2: Cancelling current dialogue generation job.")
+                try:
+                    self.current_async_job.cancel()
+                except Exception as e:
+                    print(f"VtuberExllamav2: Error trying to cancel async_job: {e}")
+            else:
+                print("VtuberExllamav2: current_async_job does not have a callable 'cancel' method.")
+        else:
+            print("VtuberExllamav2: No current dialogue generation job to cancel.")
+
+
 
 #legacy model, high latency
 class VtuberLLM(VtuberLLMBase):
