@@ -51,10 +51,11 @@ class TTSService(BaseService):
                 # Clean up completed tasks
                 active_tts_tasks = [task for task in active_tts_tasks if not task.done()]
 
-                if self.terminate_current_dialogue_event.is_set():
+                if self.terminate_current_dialogue_event.is_set() and not self.llm_output_queue.empty() and not active_tts_tasks:
                     while not self.llm_output_queue.empty():
                         try:
                             item = self.llm_output_queue.get_nowait()
+                            self.llm_output_queue.task_done()
                             self.logger.debug(f"Discarded LLM output from queue due to termination.")
                         except asyncio.QueueEmpty:
                             break
@@ -64,7 +65,7 @@ class TTSService(BaseService):
                         if not task.done(): # Only cancel if not already done
                             task.cancel()
                     await asyncio.sleep(0.1) # Wait if queue is empty
-                    
+                    # self.terminate_current_dialogue_event.clear()
                     continue
                     # asyncio.gather(*active_tts_tasks, return_exceptions=True) # Wait for tasks to finish cancellation
 

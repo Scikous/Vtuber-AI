@@ -92,7 +92,6 @@ class MainOrchestrator:
             "conversation_log_file": self.conversation_log_file,
             "write_to_log_fn": self.write_to_log_fn,
             "project_root": self.project_root,
-            "user_speaking_pause_event": asyncio.Event(), # Event for pausing playback when user speaks
             "terminate_current_dialogue_event": asyncio.Event(),
             "is_audio_streaming_event": asyncio.Event()
             # LLM specific resources will be added in run_async_loop
