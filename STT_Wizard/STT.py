@@ -66,7 +66,7 @@ SILENCE_AFTER_SPEECH_S = 1.0   # Seconds of silence to consider a phrase ended
 
 # Energy threshold for pausing TTS (in dBFS). Adjust as needed.
 # Lower values (more negative) mean more sensitive to sound.
-ENERGY_THRESHOLD_DBFS = -8.0  # Example: -40dBFS is a reasonable starting point
+ENERGY_THRESHOLD_DBFS = -31.0  # Example: -40dBFS is a reasonable starting point
 # RMS equivalent can also be used if preferred, but dBFS is often more intuitive.
 # MAX_RMS_FOR_FLOAT32 = 1.0 (for dBFS calculation with float32 audio)
 
@@ -79,7 +79,8 @@ executor = ThreadPoolExecutor(max_workers=1)
 
 
 def recognize_speech_sync(user_speaking_pause_event: asyncio.Event, 
-                          terminate_current_dialogue_event: asyncio.Event):
+                          terminate_current_dialogue_event: asyncio.Event,
+                          is_audio_streaming_event: asyncio.Event):
     """
     Listens for a single utterance using VAD, records it, and transcribes with faster-whisper.
     This function is blocking and designed to be run in a separate thread.
@@ -141,8 +142,9 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
             current_dbfs = calculate_dbfs(current_rms) # Max RMS for float32 is 1.0
 
             if current_dbfs > ENERGY_THRESHOLD_DBFS:
-                if not user_speaking_pause_event.is_set():
-                    # print(f"Energy {current_dbfs:.2f} dBFS > {ENERGY_THRESHOLD_DBFS} dBFS. Setting user_speaking_pause_event.")
+                
+                if not user_speaking_pause_event.is_set() and is_audio_streaming_event.is_set():
+                    print(f"Energy {current_dbfs:.2f} dBFS > {ENERGY_THRESHOLD_DBFS} dBFS. Setting user_speaking_pause_event.")
                     # Call set_pause_event_threadsafe for thread safety if events are shared across threads.
                     # For asyncio.Event, if modified by non-asyncio thread, use loop.call_soon_threadsafe
                     # However, this callback is in a thread managed by sounddevice.
@@ -193,7 +195,7 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
                     # If VAD confirms no speech, and we had set the pause event due to energy,
                     # it's safer to clear it.
                     # print(f"VAD: No speech & energy low. Clearing user_speaking_pause_event.")
-                    user_speaking_pause_event.clear()
+                    pass
                     pause_event_set_by_current_stt = False # We've acted on it.
             
             # Timeout and phrase completion checks (existing logic)
@@ -201,10 +203,12 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
                 if (current_time - speech_started_time) > MAX_PHRASE_DURATION_S:
                     print("Max phrase duration reached.")
                     capture_done_event.set()
+                    # if is_audio_streaming_event.is_set(): user_speaking_pause_event.clear()
                     raise sd.CallbackStop
                 if not is_currently_speech_by_vad and (current_time - last_speech_time) > SILENCE_AFTER_SPEECH_S:
                     print("Silence after speech detected by VAD.")
                     capture_done_event.set()
+                    # if is_audio_streaming_event.is_set(): user_speaking_pause_event.clear()
                     raise sd.CallbackStop
             
         except sd.CallbackStop:
@@ -228,7 +232,7 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
                     print("Initial speech timeout: No speech detected by VAD.")
                     # Ensure pause event is cleared if STT times out before VAD speech ---
                     if pause_event_set_by_current_stt and user_speaking_pause_event.is_set():
-                        user_speaking_pause_event.clear()
+                        pass
                         pause_event_set_by_current_stt = False
                     break 
                 
@@ -242,7 +246,7 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
     except Exception as e:
         print(f"Error during audio capture stream: {e}")
         if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): # Ensure cleanup on error
-            user_speaking_pause_event.clear()
+            pass
         return None 
     finally:
         capture_done_event.set()
@@ -250,7 +254,7 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
     if callback_exception:
         print(f"Error from audio callback processing: {callback_exception}")
         if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): # Ensure cleanup on error
-            user_speaking_pause_event.clear()
+            pass
         return None
 
     # If VAD never detected speech, but energy might have set the event ---
@@ -259,7 +263,7 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
         print("No speech frames recorded by VAD.")
         if pause_event_set_by_current_stt and user_speaking_pause_event.is_set():
             # print("Clearing pause_event as no VAD speech was confirmed.")
-            user_speaking_pause_event.clear()
+            pass
         return None
 
     try:
@@ -268,12 +272,12 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
             audio_data_np = audio_data_np.flatten()
     except ValueError:
         print("No voiced frames to concatenate, or frames are empty.")
-        if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): user_speaking_pause_event.clear()
+        if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): pass
         return None
     
     if audio_data_np.size == 0:
         print("Concatenated audio data is empty.")
-        if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): user_speaking_pause_event.clear()
+        if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): pass
         return None
 
     print(f"Processing {len(voiced_frames)} VAD voiced frames, total duration: {len(audio_data_np)/SAMPLE_RATE:.2f}s")
@@ -292,34 +296,37 @@ def recognize_speech_sync(user_speaking_pause_event: asyncio.Event,
             num_words = count_words(transcribed_text)
             print(f"Word count: {num_words}")
             if num_words >= USER_SPEECH_WORD_COUNT_TERMINATION:
-                if not terminate_current_dialogue_event.is_set():
+                if not terminate_current_dialogue_event.is_set() and is_audio_streaming_event.is_set():
                     print(f"Word count {num_words} >= {USER_SPEECH_WORD_COUNT_TERMINATION}. Setting terminate_current_dialogue_event.")
                     terminate_current_dialogue_event.set()
-            
+            if user_speaking_pause_event.is_set():
+                print("Clearing user_speaking_pause_event after transcription.")
+                return
+                # pause_event_set_by_current_stt = False # Reset for next cycle if any
             # --- Clear pause event after successful transcription if VAD confirmed speech ---
             # If we reached here, VAD confirmed speech. The user has spoken.
             # The pause event's job (to pause TTS while user might speak) is done for this utterance.
             # AudioStreamService will see this event clear and can resume TTS *if no other pause conditions exist*.
             if pause_event_set_by_current_stt and user_speaking_pause_event.is_set():
                 # print("Clearing user_speaking_pause_event after successful transcription of VAD speech.")
-                user_speaking_pause_event.clear()
+                pass
                 # pause_event_set_by_current_stt = False # Reset for next cycle if any
 
             return transcribed_text
         else:
             print("Transcription resulted in empty text.")
-            if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): user_speaking_pause_event.clear()
+            if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): pass
             return None
     except Exception as e:
         print(f"Error during faster-whisper transcription: {e}")
-        if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): user_speaking_pause_event.clear()
+        if pause_event_set_by_current_stt and user_speaking_pause_event.is_set(): pass
         return None
 
 # --- speech_to_text now accepts shared events ---
 async def speech_to_text(callback, 
                          user_speaking_pause_event: asyncio.Event, 
                          terminate_current_dialogue_event: asyncio.Event,
-                         is_audio_stream_active: bool = True):
+                         is_audio_streaming_event: asyncio.Event):
     """
     Speech-To-Text (STT) -- Listens to microphone and turns recognized speech to text.
     Non-blocking implementation using asyncio and ThreadPoolExecutor.
@@ -332,7 +339,7 @@ async def speech_to_text(callback,
         return 
 
     # Ensure events are passed correctly
-    if user_speaking_pause_event is None or terminate_current_dialogue_event is None:
+    if user_speaking_pause_event is None or terminate_current_dialogue_event is None or is_audio_streaming_event is None:
         print("STT Error: Shared events not provided to speech_to_text function.")
         # Decide how to handle: raise error, log, or try to use dummy events (not recommended for prod)
         # For now, let's log and return to prevent further issues.
@@ -350,7 +357,8 @@ async def speech_to_text(callback,
         try:
             text = await asyncio.to_thread(recognize_speech_sync, 
                                            user_speaking_pause_event, 
-                                           terminate_current_dialogue_event)
+                                           terminate_current_dialogue_event,
+                                           is_audio_streaming_event)
             
             if text:
                 await callback(text)
@@ -406,7 +414,7 @@ if __name__ == "__main__":
                     break
                 
                 # Reset events for each cycle in test for clarity, though STT should manage them
-                # test_user_speaking_pause_event.clear() 
+                # test_pass 
                 # test_terminate_current_dialogue_event.clear()
 
                 await speech_to_text(_stt_test_callback, 
@@ -426,7 +434,7 @@ if __name__ == "__main__":
                 # For testing, we might clear it here if we want each cycle fresh.
                 # if test_user_speaking_pause_event.is_set():
                 #     print("Pause event is still set. Clearing for next test cycle.")
-                #     test_user_speaking_pause_event.clear()
+                #     test_pass
 
 
                 print("Listening for next utterance (Ctrl+C to stop)...")

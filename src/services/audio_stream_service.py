@@ -3,7 +3,6 @@ from typing import Optional
 from .base_service import BaseService
 from TTS_Wizard.utils.audio_playback_base import AudioPlaybackBase
 from TTS_Wizard.utils.pyaudio_playback import PyAudioPlayback # Default backend
-
 class AudioStreamService(BaseService):
     def __init__(self, shared_resources=None, audio_playback_backend: Optional[AudioPlaybackBase] = None):
         super().__init__(shared_resources)
@@ -15,14 +14,15 @@ class AudioStreamService(BaseService):
             # Configuration for the default backend can be passed via shared_resources or a dedicated config
             backend_config = self.shared_resources.get('config', {}).get('audio_backend_settings', {})
             self.audio_playback_backend = PyAudioPlayback(config=backend_config, logger=self.logger)
-        
+   
         self.logger.info(f"AudioStreamService initialized with backend: {type(self.audio_playback_backend).__name__}")
-        self._playback_paused_event = asyncio.Event() # Internal event to signal worker to pause processing
+ asyncio.Event() # Internal event to signal worker to pause processing
         self._service_stop_event = asyncio.Event() # Event to signal the worker to stop completely
 
         # Shared state events (to be managed/set externally)
         self.user_speaking_pause_event = shared_resources.get("user_speaking_pause_event", asyncio.Event()) # Pauses playback when user speaks
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) # Stops current dialogue playback
+        self.is_audio_streaming_event = shared_resources.get("is_audio_streaming_event", asyncio.Event()) # Stops current dialogue playback
 
 
 
@@ -60,44 +60,28 @@ class AudioStreamService(BaseService):
             if not self.audio_playback_backend.is_active():
                 self.logger.warning("Audio stream not active after attempting to open/resume. Cannot play.")
                 return
+            self.is_audio_streaming_event.set() # Signal that audio is streaming
+            full_audio_data = b''.join(chunk for chunki_audio_data:
+                loop = asyncio.get_running_loop
 
-            full_audio_data = b''.join(chunk for chunk in playback_buffer)
-            if full_audio_data:
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, self.audio_playback_backend.write_chunk, full_audio_data)
-                self.logger.debug(f"Played {len(playback_buffer)} buffered audio chunks.")
-            playback_buffer.clear()
-        except Exception as e:
-            self.logger.error(f"Error playing buffered audio: {e}")
-            # Consider how to handle errors: clear buffer? try again?
-            playback_buffer.clear() # Clear buffer on error to avoid replaying bad data
+            await loop.run_in_executor(None, seudio_playback_backend.write_chunk, full_audio_data)              self.logger.debug(f"Played {len(playback_buffer)} buffered audio chunks.")
+            playbauffer.clear()
+            self.is_audio_streaming_event.clear() # Signstrea
 
-
-    async def run_worker(self):
-        self.logger.info("AudioStreamService worker starting...")
-        try:
-            self._ensure_stream_is_open() 
-        except Exception as e:
-            self.logger.error(f"AudioStreamService could not start stream: {e}. Worker will not run.")
-            return
-
-        audio_queue = self.shared_resources['queues']['audio_output_queue']
-        playback_buffer = []
-        buffer_chunk_count = self.shared_resources.get('config', {}).get('audio_buffer_chunk_count', 2) 
-        self.logger.info(f"AudioStreamService will buffer {buffer_chunk_count} chunks before playback.")
-
-        self._service_stop_event.clear() # Ensure stop event is clear at start
-        self._playback_paused_event.clear() # Ensure pause event is clear at start
-
-        while not self._service_stop_event.is_set():
-            try:
-                # Handle pause state from internal command or external event (user speaking)
+        except Exception as e:r
+            self.is_audio_streaming_event.clear() # Signal that audio is streaming
+om internal command or external event (user speaking)
                 if self._playback_paused_event.is_set() or self.user_speaking_pause_event.is_set():
                     if not self.audio_playback_backend.is_paused():
                         self.logger.info("AudioStreamService: Playback pause detected. Pausing backend stream.")
                         self.audio_playback_backend.pause_stream()
-                    await asyncio.sleep(0.1) # Sleep while paused
+                        self.is_audio_streaming_event.clear() # Signal that stream is open
+
+                    await asyncio.sleep(5.1) # Sleep while paused
+                    self.user_speaking_pause_event.clear()
                     continue
+
+
                 else: # Not paused by service or user speaking
                     if self.audio_playback_backend.is_paused():
                         self.logger.info("AudioStreamService: Playback resume detected. Resuming backend stream.")
@@ -109,9 +93,14 @@ class AudioStreamService(BaseService):
                     if playback_buffer:
                         self.logger.info(f"Clearing {len(playback_buffer)} chunks from playback_buffer due to dialogue termination.")
                         playback_buffer.clear()
+                    
                     # Drain the audio_output_queue of any remaining chunks for this dialogue.
                     # This assumes that once terminate is set, new audio from TTS for this dialogue will stop.
-                    # A more robust system might use utterance IDs to clear specific items.
+                    # A more robust system 05ght use utterance IDs t
+                     self.user_speaking_pause_event.clear()
+ck_backend.stop_and_ lear_in
+
+al_buffers() # Stop any sound already in hardware buffer
                     while not audio_queue.empty():
                         try:
                             item = audio_queue.get_nowait()
@@ -120,7 +109,6 @@ class AudioStreamService(BaseService):
                         except asyncio.QueueEmpty:
                             break
                     
-                    self.audio_playback_backend.stop_and_clear_internal_buffers() # Stop any sound already in hardware buffer
                     self.terminate_current_dialogue_event.clear() # Reset the event
                     self.logger.info("Audio playback for current dialogue terminated and buffer/queue cleared.")
                     # After termination, continue to next iteration to check for new audio/pause states.

@@ -52,17 +52,21 @@ class TTSService(BaseService):
                 active_tts_tasks = [task for task in active_tts_tasks if not task.done()]
 
                 if self.terminate_current_dialogue_event.is_set():
-                    if self.logger:
-                        self.logger.info("TTS Service: Terminate current dialogue event set. Cancelling active TTS tasks...")
-                    for task in active_tts_tasks:
-                        task.cancel()
-                    await asyncio.gather(*active_tts_tasks, return_exceptions=True) # Wait for tasks to finish cancellation
                     while not self.llm_output_queue.empty():
                         try:
                             item = self.llm_output_queue.get_nowait()
                             self.logger.debug(f"Discarded LLM output from queue due to termination.")
                         except asyncio.QueueEmpty:
                             break
+                    if self.logger:
+                        self.logger.info("TTS Service: Terminate current dialogue event set. Cancelling active TTS tasks...")
+                    for task in active_tts_tasks:
+                        if not task.done(): # Only cancel if not already done
+                            task.cancel()
+                    await asyncio.sleep(0.1) # Wait if queue is empty
+                    
+                    continue
+                    # asyncio.gather(*active_tts_tasks, return_exceptions=True) # Wait for tasks to finish cancellation
 
                 if self.llm_output_queue and not self.llm_output_queue.empty():
                     # Only fetch new item if semaphore allows and we have less than max concurrent tasks active

@@ -89,7 +89,7 @@ class DialogueService(BaseService):
                     tts_buffer = "" # Buffer for accumulating text for TTS
 
                     async for result in async_job:
-                        if self.terminate_current_dialogue_event.is_set() and not self.llm_output_queue.empty():
+                        if self.terminate_current_dialogue_event.is_set():
                             if self.logger:
                                 self.logger.info("Terminate current dialogue event set. Stopping DialogueService worker.")
                             await self.llm_model.cancel_dialogue_generation()
