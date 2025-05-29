@@ -1,5 +1,5 @@
 import asyncio
-from TTS_Wizard.GPT_SoVITS import tts_exp
+from TTS_Wizard import tts_client
 from .base_service import BaseService
 
 class TTSService(BaseService):
@@ -14,7 +14,7 @@ class TTSService(BaseService):
         """
         Synthesize speech from text using the TTS module
         """
-        return tts_exp.send_tts_request(**tts_params)
+        return tts_client.send_tts_request(**tts_params)
 
     async def _process_tts_item(self, tts_params: dict, semaphore: asyncio.Semaphore):
         """Helper function to process a single TTS request with semaphore control."""
