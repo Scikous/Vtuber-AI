@@ -1,5 +1,5 @@
 import pyaudio
-from .audio_playback_base import AudioPlaybackBase
+from bases.audio_playback_base import AudioPlaybackBase
 import logging # Import logging for default logger
 
 class PyAudioPlayback(AudioPlaybackBase):
