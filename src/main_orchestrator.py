@@ -31,11 +31,11 @@ import sys
 
 
 try:
-    from LLM_Wizard.model_utils import LLMUtils
+    from LLM_Wizard.model_utils import load_character
     # LLM model will be imported dynamically
 except ImportError as e:
     print(f"Critical Import Error: Could not import LLM_Wizard.model_utils: {e}. Ensure PYTHONPATH is set correctly or modules are accessible.")
-    LLMUtils = None # Graceful degradation or error handling needed
+    load_character = None # Graceful degradation or error handling needed
 import time
 class MainOrchestrator:
     live_chat_process = None # Class attribute to hold the live chat process
@@ -113,7 +113,7 @@ class MainOrchestrator:
             # Handle error: maybe load defaults or raise exception
             return
 
-        instructions, self.user_name, self.character_name = LLMUtils.load_character(character_info_json_path)
+        instructions, self.user_name, self.character_name = load_character(character_info_json_path)
 
         llm_class_name = self.config.get("llm_class_name", "VtuberExllamav2") # Default to VtuberExllamav2
         llm_model_path = self.config.get("llm_model_path", "./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ") # Default path

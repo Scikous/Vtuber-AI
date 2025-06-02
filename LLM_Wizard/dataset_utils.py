@@ -2,8 +2,8 @@ import sys
 import pandas as pd
 from datasets import load_dataset, DatasetDict, Dataset
 from transformers import AutoTokenizer
-import json # For LLMUtils placeholder
-from model_utils import LLMUtils # character_loader
+import json # For model_utils placeholder
+from model_utils import load_character, prompt_wrapper
 # --- Configuration & Setup ---
 # MODEL_PATH = "NousResearch/Meta-Llama-3-8B" # Using a more common model for example
 # If you have a local model:
@@ -23,7 +23,7 @@ TOKENIZER = AutoTokenizer.from_pretrained(MODEL_PATH)
 #   "character_name": "Capybara"
 # }
 CHARACTER_JSON_PATH = 'LLM_Wizard/characters/character.json'
-INSTRUCTIONS, USER_NAME, CHARACTER_NAME = LLMUtils.load_character(CHARACTER_JSON_PATH)
+INSTRUCTIONS, USER_NAME, CHARACTER_NAME = load_character(CHARACTER_JSON_PATH)
 
 
 # --- Core Functions ---
@@ -64,7 +64,7 @@ def _build_conversation_messages(conversation_data: list, instructions: str):
     messages = [{"role": "system", "content": instructions}]
     
     for turn in conversation_data:
-        prompt = LLMUtils.prompt_wrapper(turn["user"], turn["context"])
+        prompt = prompt_wrapper(turn["user"], turn["context"])
         messages.append({"role": "user", "content": prompt.strip()})
         messages.append({"role": "assistant", "content": turn["character"]})
     
@@ -247,7 +247,7 @@ def main():
             json.dump(dummy_char_info, f, indent=2)
         # Reload instructions if dummy was created
         global INSTRUCTIONS, USER_NAME, CHARACTER_NAME
-        INSTRUCTIONS, USER_NAME, CHARACTER_NAME = LLMUtils.load_character(CHARACTER_JSON_PATH)
+        INSTRUCTIONS, USER_NAME, CHARACTER_NAME = load_character(CHARACTER_JSON_PATH)
 
 
     raw_finetuning_parquet_path = base_path + "finetuning_input.parquet"

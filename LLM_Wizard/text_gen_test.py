@@ -1,6 +1,6 @@
 from models import VtuberExllamav2, VtuberLLM
 from huggingface_hub import snapshot_download
-from model_utils import LLMUtils
+from model_utils import load_character, prompt_wrapper
 from time import perf_counter
 import asyncio
 
@@ -8,7 +8,7 @@ import asyncio
 
 #get current character's information to use
 character_info_json = "LLM_Wizard/characters/character.json"
-instructions, user_name, character_name = LLMUtils.load_character(character_info_json)
+instructions, user_name, character_name = load_character(character_info_json)
 
 #set prompt template to follow current character's instruction set and name
 instructions_string = f"""{instructions}"""
@@ -27,7 +27,7 @@ async def exllamav2_test():
     Character = VtuberExllamav2.load_model(model=model,character_name=character_name, instructions=instructions)#(generator, gen_settings, tokenizer, character_name)
 
     start = perf_counter()
-    prompt = LLMUtils.prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
+    prompt = prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
     dummy_memory = ["Ahahahahah", "wowozers", "i like coke", "great to hear!"]
     response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, max_tokens=200)
     print(type(response))

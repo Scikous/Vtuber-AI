@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from model_utils import LLMUtils
+from model_utils import apply_chat_template, get_rand_token_len, character_reply_cleaner
 import torch
 import gc
 import asyncio
@@ -137,9 +137,9 @@ class VtuberExllamav2(VtuberLLMBase):
         For text length variety's sake, randomly selects token length to appear more natural
         """
         from exllamav2.generator import ExLlamaV2DynamicJobAsync
-        prompt = LLMUtils.apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer)
+        prompt = apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer)
 
-        max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
+        max_tokens = get_rand_token_len(max_tokens=max_tokens)
         self.current_async_job = ExLlamaV2DynamicJobAsync(
                         generator=self.generator,
                         encode_special_tokens=False,
@@ -215,21 +215,21 @@ class VtuberLLM(VtuberLLMBase):
             return text.strip()[-1] not in {'.', '!', '?'}
 
         max_attempts = 7
-        comment_tokenized = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+        comment_tokenized = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
         print("HAAAAA:\n",comment_tokenized, self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
-        inputs = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+        inputs = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
 
         generated_text = ""
         print(len(comment_tokenized["input_ids"][0]))
         for attempt in range(max_attempts):
-            max_new_tokens = LLMUtils.get_rand_token_len(input_len=len(comment_tokenized["input_ids"][0]))
+            max_new_tokens = get_rand_token_len(input_len=len(comment_tokenized["input_ids"][0]))
             results = self.model.generate(input_ids=inputs["input_ids"].to("cuda"),
                                           max_new_tokens=max_new_tokens,
                                           top_p=0.8, top_k=50, temperature=1.1,
                                           repetition_penalty=1.2, do_sample=True, num_return_sequences=10)
             output = self.tokenizer.batch_decode(results, skip_special_tokens=True)[0]
             # print(f"{'#' * 30}\n{output}\n{'#' * 30}")
-            output_clean = LLMUtils.character_reply_cleaner(output, self.character_name).lower()
+            output_clean = character_reply_cleaner(output, self.character_name).lower()
             # print(f"{'#' * 30}\n{output_clean}\n{'#' * 30}")
             generated_text = output_clean
             if not is_incomplete_sentence(generated_text) or attempt == max_attempts:

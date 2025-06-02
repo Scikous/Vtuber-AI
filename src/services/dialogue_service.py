@@ -3,8 +3,8 @@ Dialogue Service Module for Vtuber-AI
 Handles the generation of responses using the LLM.
 """
 import asyncio
+from LLM_Wizard.model_utils import contains_sentence_terminator
 from .base_service import BaseService
-from LLM_Wizard.model_utils import LLMUtils
 from TTS_Wizard.tts_utils import prepare_tts_params
 # Import necessary LLM utilities, prompt templates, etc.
 
@@ -78,7 +78,7 @@ class DialogueService(BaseService):
                             self.logger.warning(f"Could not parse speaker from message: {message}. Using raw message as input.")
                 
                 history_for_llm_content = "\n".join(list(self.naive_short_term_memory))
-                content_for_template_hole = raw_input_text#LLMUtils.prompt_wrapper(raw_input_text, history_for_llm_content)
+                content_for_template_hole = raw_input_text#model_utils.prompt_wrapper(raw_input_text, history_for_llm_content)
                 if not self.llm_output_queue.full():
                     if self.logger:
                         self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
@@ -101,7 +101,7 @@ class DialogueService(BaseService):
                         if chunk_text and len(chunk_text) > 0:  # Ensure non-empty chunks are processed
                             full_string += chunk_text # Accumulate full response for memory/logging
                             tts_buffer += chunk_text
-                            if LLMUtils.contains_sentence_terminator(chunk_text):
+                            if contains_sentence_terminator(chunk_text):
                                 text_to_send_to_tts = tts_buffer.strip()
                                 if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
                                     print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
