@@ -1,5 +1,7 @@
 {
     "MODEL_SIZE": "large-v3",
+    "LANGUAGE": "en",
+    "BEAM_SIZE": 5,
 
     "SAMPLE_RATE": 16000,
     "CHANNELS": 1,

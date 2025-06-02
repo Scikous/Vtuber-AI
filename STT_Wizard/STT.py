@@ -29,6 +29,8 @@ config = load_config()
 
 # --- Configuration for faster-whisper and VAD ---
 MODEL_SIZE = config.MODEL_SIZE  # Options: "tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3"
+LANGUAGE = config.LANGUAGE  # Language code for transcription
+BEAM_SIZE = config.BEAM_SIZE  # Beam size for beam search
 # Determine device and compute type (GPU if available, else CPU)
 try:
     import torch
@@ -299,7 +301,7 @@ def recognize_speech_sync(
 
     try:
         print("Transcribing audio with faster-whisper...")
-        segments, info = whisper_model.transcribe(audio_data_np, language='en', beam_size=5) # TODO: Make language configurable
+        segments, info = whisper_model.transcribe(audio_data_np, language=LANGUAGE, beam_size=BEAM_SIZE) # TODO: Make language configurable
         
         transcribed_text = "".join(segment.text for segment in segments).strip()
         
