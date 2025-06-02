@@ -144,7 +144,7 @@ class DialogueService(BaseService):
                         self.logger.info(f"LLM generated response (first 100 chars): {output[:100]}...")
 
                     self.naive_short_term_memory.append(message) 
-                    self.naive_short_term_memory.append(f"{self.character_name}: {output}")
+                    # self.naive_short_term_memory.append(f"{self.character_name}: {output}")
                     
                     if self.write_to_log_fn and self.conversation_log_file:
                         try:
