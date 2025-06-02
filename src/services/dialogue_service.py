@@ -68,58 +68,57 @@ class DialogueService(BaseService):
                 if self.logger:
                     self.logger.info(f"Dialogue service received message: {message}")
 
-                parsed_speaker = self.user_name 
-                raw_input_text = message
-                if ": " in message:
-                    try:
-                        parsed_speaker, raw_input_text = message.split(": ", 1)
-                    except ValueError:
-                        if self.logger:
-                            self.logger.warning(f"Could not parse speaker from message: {message}. Using raw message as input.")
+                ##will be replaced with better util
+                # parsed_speaker = self.user_name 
+                # raw_input_text = message
+                # if ": " in message:
+                #     try:
+                #         parsed_speaker, raw_input_text = message.split(": ", 1)
+                #     except ValueError:
+                #         if self.logger:
+                #             self.logger.warning(f"Could not parse speaker from message: {message}. Using raw message as input.")
                 
-                history_for_llm_content = "\n".join(list(self.naive_short_term_memory))
-                content_for_template_hole = raw_input_text#model_utils.prompt_wrapper(raw_input_text, history_for_llm_content)
-                if not self.llm_output_queue.full():
-                    if self.logger:
-                        self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
-                    async_job = await self.llm_model.dialogue_generator(content_for_template_hole, conversation_history=self.naive_short_term_memory, max_tokens=100)
-                    if self.logger:
-                        self.logger.debug(f"Got async_job: {type(async_job)}")
-                    full_string = ""
-                    tts_buffer = "" # Buffer for accumulating text for TTS
+                content_for_template_hole = message#model_utils.prompt_wrapper(raw_input_text, history_for_llm_content)
+                if self.logger:
+                    self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
+                async_job = await self.llm_model.dialogue_generator(content_for_template_hole, conversation_history=self.naive_short_term_memory, max_tokens=100)
+                if self.logger:
+                    self.logger.debug(f"Got async_job: {type(async_job)}")
+                full_string = ""
+                tts_buffer = "" # Buffer for accumulating text for TTS
 
-                    async for result in async_job:
-                        if self.terminate_current_dialogue_event.is_set():
-                            if self.logger:
-                                self.logger.info("Terminate current dialogue event set. Stopping DialogueService worker.")
-                            await self.llm_model.cancel_dialogue_generation()
-                            break
+                async for result in async_job:
+                    if self.terminate_current_dialogue_event.is_set():
                         if self.logger:
-                            self.logger.debug(f"Received result: {type(result)}")
-                        chunk_text = result.get("text", "")
-                        
-                        if chunk_text and len(chunk_text) > 0:  # Ensure non-empty chunks are processed
-                            full_string += chunk_text # Accumulate full response for memory/logging
-                            tts_buffer += chunk_text
-                            if contains_sentence_terminator(chunk_text):
-                                text_to_send_to_tts = tts_buffer.strip()
-                                if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
-                                    print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
-                                    tts_params = prepare_tts_params(
-                                        text_to_speak=text_to_send_to_tts,
-                                        text_lang=self.shared_resources.get("character_lang", "en"),
-                                        ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
-                                        prompt_text=self.shared_resources.get("character_prompt_text", ""),
-                                        prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
-                                        logger=self.logger
-                                    )
-                                    asyncio.create_task(self.llm_output_queue.put(tts_params))
-                                    if self.logger:
-                                        self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
-                                    tts_buffer = "" # Reset buffer after sending
-                        else:
-                            if self.logger:
-                                self.logger.debug("Received empty chunk_text or chunk_text is None.")
+                            self.logger.info("Terminate current dialogue event set. Stopping DialogueService worker.")
+                        await self.llm_model.cancel_dialogue_generation()
+                        break
+                    if self.logger:
+                        self.logger.debug(f"Received result: {type(result)}")
+                    chunk_text = result.get("text", "")
+                    
+                    if chunk_text and len(chunk_text) > 0:  # Ensure non-empty chunks are processed
+                        full_string += chunk_text # Accumulate full response for memory/logging
+                        tts_buffer += chunk_text
+                        if contains_sentence_terminator(chunk_text):
+                            text_to_send_to_tts = tts_buffer.strip()
+                            if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
+                                print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
+                                tts_params = prepare_tts_params(
+                                    text_to_speak=text_to_send_to_tts,
+                                    text_lang=self.shared_resources.get("character_lang", "en"),
+                                    ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
+                                    prompt_text=self.shared_resources.get("character_prompt_text", ""),
+                                    prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
+                                    logger=self.logger
+                                )
+                                asyncio.create_task(self.llm_output_queue.put(tts_params))
+                                if self.logger:
+                                    self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
+                                tts_buffer = "" # Reset buffer after sending
+                    else:
+                        if self.logger:
+                            self.logger.debug("Received empty chunk_text or chunk_text is None.")
 
                     # After the loop, if there's anything left in tts_buffer that wasn't sent
                     # (e.g., the LLM finished generating mid-sentence)
@@ -156,9 +155,6 @@ class DialogueService(BaseService):
                             await self.write_to_log_fn(self.conversation_log_file, ("UnknownSpeaker", message))
                         
                         await self.write_to_log_fn(self.conversation_log_file, (self.character_name, output))
-                else:
-                    if self.logger:
-                        self.logger.warning("LLM output queue is full, skipping generation.")
 
         except asyncio.CancelledError:
             if self.logger:
