@@ -13,6 +13,7 @@ try:
     import threading
     import io
     import wave
+    from utils.config import load_config
     
 except ImportError as e:
     print(f"Error importing necessary libraries for STT: {e}")
@@ -23,11 +24,12 @@ except ImportError as e:
 
 from .utils.stt_utils import calculate_audio_energy_rms, calculate_dbfs, count_words
 
+# Load configuration
+config = load_config()
+
 # --- Configuration for faster-whisper and VAD ---
-MODEL_SIZE = "large-v3"  # Options: "tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3"
+MODEL_SIZE = config.MODEL_SIZE  # Options: "tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3"
 # Determine device and compute type (GPU if available, else CPU)
-MODEL_DEVICE = "cpu"
-MODEL_COMPUTE_TYPE = "int8" # or "float32" for CPU
 try:
     import torch
     if torch.cuda.is_available():
@@ -35,6 +37,8 @@ try:
         MODEL_COMPUTE_TYPE = "float16" # or "int8_float16" for mixed precision
     print(f"PyTorch found. Using device: {MODEL_DEVICE} with compute type: {MODEL_COMPUTE_TYPE}")
 except ImportError:
+    MODEL_DEVICE = "cpu"
+    MODEL_COMPUTE_TYPE = "int8" # or "float32" for CPU
     print("PyTorch not found. Defaulting to CPU for faster-whisper.")
 
 # Initialize WhisperModel (globally, once)
@@ -51,27 +55,24 @@ else:
     print("WhisperModel could not be imported. STT will not function.")
 
 # Audio parameters for VAD and recording
-SAMPLE_RATE = 16000  # Whisper models are trained on 16kHz audio
-CHANNELS = 1
-AUDIO_DTYPE = 'float32'  # Data type for audio, faster-whisper expects float32
-FRAME_DURATION_MS = 30  # VAD frame duration (10, 20, or 30 ms)
+SAMPLE_RATE = config.SAMPLE_RATE  # Whisper models are trained on 16kHz audio
+CHANNELS = config.CHANNELS
+AUDIO_DTYPE = config.AUDIO_DTYPE  # Data type for audio, faster-whisper expects float32
+FRAME_DURATION_MS = config.FRAME_DURATION_MS  # VAD frame duration (10, 20, or 30 ms)
 FRAME_SIZE = int(SAMPLE_RATE * FRAME_DURATION_MS / 1000)  # Samples per frame
-VAD_AGGRESSIVENESS = 3  # VAD aggressiveness (0-3, 3 is most aggressive)
+VAD_AGGRESSIVENESS = config.VAD_AGGRESSIVENESS  # VAD aggressiveness (0-3, 3 is most aggressive)
 
 # Timeouts and thresholds for speech detection
-INITIAL_SPEECH_TIMEOUT_S = 5.0  # Max seconds to wait for speech to start
-MAX_PHRASE_DURATION_S = 15.0   # Max duration of a single speech phrase
-SILENCE_AFTER_SPEECH_S = 1.0   # Seconds of silence to consider a phrase ended
+INITIAL_SPEECH_TIMEOUT_S = config.INITIAL_SPEECH_TIMEOUT_S  # Max seconds to wait for speech to start
+MAX_PHRASE_DURATION_S = config.MAX_PHRASE_DURATION_S   # Max duration of a single speech phrase
+SILENCE_AFTER_SPEECH_S = config.SILENCE_AFTER_SPEECH_S   # Seconds of silence to consider a phrase ended
 
 
 # Energy threshold for pausing TTS (in dBFS). Adjust as needed.
 # Lower values (more negative) mean more sensitive to sound.
-ENERGY_THRESHOLD_DBFS = -31.0  # Example: -40dBFS is a reasonable starting point
+ENERGY_THRESHOLD_DBFS = config.ENERGY_THRESHOLD_DBFS  # Example: -40dBFS is a reasonable starting point
 # RMS equivalent can also be used if preferred, but dBFS is often more intuitive.
 # MAX_RMS_FOR_FLOAT32 = 1.0 (for dBFS calculation with float32 audio)
-
-# Word count for terminating current character dialogue.
-USER_SPEECH_WORD_COUNT_TERMINATION = 3 # Example: if user says 3 or more words.
 
 # Thread pool executor (remains from original code)
 executor = ThreadPoolExecutor(max_workers=1)
@@ -133,7 +134,7 @@ def recognize_speech_sync(
     pause_event_set_by_current_stt = False
 
 
-    print(f"Listening for speech (VAD: {VAD_AGGRESSIVENESS}, Energy Threshold: {ENERGY_THRESHOLD_DBFS} dBFS, Word Term: {USER_SPEECH_WORD_COUNT_TERMINATION})...")
+    print(f"Listening for speech (VAD: {VAD_AGGRESSIVENESS}, Energy Threshold: {ENERGY_THRESHOLD_DBFS} dBFS...")
 
     def audio_callback(indata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
         nonlocal is_currently_speech_by_vad, speech_started_time, last_speech_time, voiced_frames
@@ -163,7 +164,7 @@ def recognize_speech_sync(
                     # However, this callback is in a thread managed by sounddevice.
                     # The event itself is thread-safe for set/clear/is_set.
                     terminate_current_dialogue_event.set()
-                    pause_event_set_by_current_stt = True 
+                    # pause_event_set_by_current_stt = True 
             # else: # Energy below threshold
                 # We want VAD to primarily control clearing the pause event if speech ends.
                 # If energy drops but VAD still thinks it's speech, event remains set.
@@ -305,15 +306,6 @@ def recognize_speech_sync(
         if transcribed_text:
             print(f"Detected language '{info.language}' with probability {info.language_probability:.2f}")
             print(f"Transcription: {transcribed_text}")
-
-            # --- Word Count Termination ---
-            num_words = count_words(transcribed_text)
-            print(f"Word count: {num_words}")
-            if num_words >= USER_SPEECH_WORD_COUNT_TERMINATION:
-                if not terminate_current_dialogue_event.is_set() and is_audio_streaming_event.is_set():
-                    print(f"Word count {num_words} >= {USER_SPEECH_WORD_COUNT_TERMINATION}. Setting terminate_current_dialogue_event.")
-                    terminate_current_dialogue_event.set()
-                    return
 
                 # pause_event_set_by_current_stt = False # Reset for next cycle if any
             # --- Clear pause event after successful transcription if VAD confirmed speech ---
