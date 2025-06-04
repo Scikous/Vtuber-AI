@@ -13,7 +13,7 @@ try:
     import threading
     import io
     import wave
-    from utils.config import load_config
+    from .utils.config import load_config
     
 except ImportError as e:
     print(f"Error importing necessary libraries for STT: {e}")
@@ -28,9 +28,9 @@ from .utils.stt_utils import calculate_audio_energy_rms, calculate_dbfs, count_w
 config = load_config()
 
 # --- Configuration for faster-whisper and VAD ---
-MODEL_SIZE = config.MODEL_SIZE  # Options: "tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3"
-LANGUAGE = config.LANGUAGE  # Language code for transcription
-BEAM_SIZE = config.BEAM_SIZE  # Beam size for beam search
+MODEL_SIZE = config.get("MODEL_SIZE", "large-v3")  # Options: "tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3"
+LANGUAGE = config.get("LANGUAGE", "en")  # Language code for transcription
+BEAM_SIZE = config.get("BEAM_SIZE", 5)  # Beam size for beam search
 # Determine device and compute type (GPU if available, else CPU)
 try:
     import torch
@@ -57,22 +57,21 @@ else:
     print("WhisperModel could not be imported. STT will not function.")
 
 # Audio parameters for VAD and recording
-SAMPLE_RATE = config.SAMPLE_RATE  # Whisper models are trained on 16kHz audio
-CHANNELS = config.CHANNELS
-AUDIO_DTYPE = config.AUDIO_DTYPE  # Data type for audio, faster-whisper expects float32
-FRAME_DURATION_MS = config.FRAME_DURATION_MS  # VAD frame duration (10, 20, or 30 ms)
+SAMPLE_RATE = config.get("SAMPLE_RATE", 16000)  # Whisper models are trained on 16kHz audio
+CHANNELS = config.get("CHANNELS", 1)
+AUDIO_DTYPE = config.get("AUDIO_DTYPE", "float32")  # Data type for audio, faster-whisper expects float32
+FRAME_DURATION_MS = config.get("FRAME_DURATION_MS", 30)  # VAD frame duration (10, 20, or 30 ms)
 FRAME_SIZE = int(SAMPLE_RATE * FRAME_DURATION_MS / 1000)  # Samples per frame
-VAD_AGGRESSIVENESS = config.VAD_AGGRESSIVENESS  # VAD aggressiveness (0-3, 3 is most aggressive)
+VAD_AGGRESSIVENESS = config.get("VAD_AGGRESSIVENESS", 3)  # VAD aggressiveness (0-3, 3 is most aggressive)
 
 # Timeouts and thresholds for speech detection
-INITIAL_SPEECH_TIMEOUT_S = config.INITIAL_SPEECH_TIMEOUT_S  # Max seconds to wait for speech to start
-MAX_PHRASE_DURATION_S = config.MAX_PHRASE_DURATION_S   # Max duration of a single speech phrase
-SILENCE_AFTER_SPEECH_S = config.SILENCE_AFTER_SPEECH_S   # Seconds of silence to consider a phrase ended
-
+INITIAL_SPEECH_TIMEOUT_S = config.get("INITIAL_SPEECH_TIMEOUT_S", 5)  # Max seconds to wait for speech to start
+MAX_PHRASE_DURATION_S = config.get("MAX_PHRASE_DURATION_S", 10)   # Max duration of a single speech phrase
+SILENCE_AFTER_SPEECH_S = config.get("SILENCE_AFTER_SPEECH_S", 0.5)   # Seconds of silence to consider a phrase ended
 
 # Energy threshold for pausing TTS (in dBFS). Adjust as needed.
 # Lower values (more negative) mean more sensitive to sound.
-ENERGY_THRESHOLD_DBFS = config.ENERGY_THRESHOLD_DBFS  # Example: -40dBFS is a reasonable starting point
+ENERGY_THRESHOLD_DBFS = config.get("ENERGY_THRESHOLD_DBFS", -40)  # Example: -40dBFS is a reasonable starting point
 # RMS equivalent can also be used if preferred, but dBFS is often more intuitive.
 # MAX_RMS_FOR_FLOAT32 = 1.0 (for dBFS calculation with float32 audio)
 
