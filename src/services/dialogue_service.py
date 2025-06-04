@@ -3,7 +3,7 @@ Dialogue Service Module for Vtuber-AI
 Handles the generation of responses using the LLM.
 """
 import asyncio
-from LLM_Wizard.model_utils import contains_sentence_terminator
+from LLM_Wizard.model_utils import contains_sentence_terminator, extract_name_message
 from .base_service import BaseService
 from TTS_Wizard.tts_utils import prepare_tts_params
 # Import necessary LLM utilities, prompt templates, etc.
@@ -78,7 +78,7 @@ class DialogueService(BaseService):
                 #         if self.logger:
                 #             self.logger.warning(f"Could not parse speaker from message: {message}. Using raw message as input.")
                 
-                content_for_template_hole = message#model_utils.prompt_wrapper(raw_input_text, history_for_llm_content)
+                content_for_template_hole = extract_name_message(message)#model_utils.prompt_wrapper(raw_input_text, history_for_llm_content)
                 if self.logger:
                     self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
                 async_job = await self.llm_model.dialogue_generator(content_for_template_hole, conversation_history=self.naive_short_term_memory, max_tokens=100)

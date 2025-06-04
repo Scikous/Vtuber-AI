@@ -130,3 +130,22 @@ def character_reply_cleaner(reply, character_name):
         
     reply = sentence_reducer(reply)
     return reply
+
+def extract_name_message(input_string):
+    """
+    Extracts the name and message from a formatted string.
+
+    Args:
+        input_string (str): The formatted string containing a name and a message.
+                            E.g., "RestreamBot:[YouTube: Michael] hello"
+
+    Returns:
+        str: The extracted name and message in the format "Michael: hello"
+    """
+    # Use regular expression to match the pattern
+    match = re.search(r'\[(\w+:\s?\w+)\]\s?(.+)', input_string)
+    if match:
+        name, message = match.groups()
+        return f"{name.split(':')[1].strip()}: {message.strip()}"
+    else:
+        return input_string  # Return the original string if no match is found
