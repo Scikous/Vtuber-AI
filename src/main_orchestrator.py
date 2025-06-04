@@ -130,12 +130,12 @@ class MainOrchestrator:
         # Instantiate the model
         # The load_model_exllamav2 and load_model methods are @classmethods, so they are called on the class itself.
         if hasattr(LLMClass, 'load_model'): # Generic for other models
-             self.character_model = LLMClass.load_model(model=llm_model_path, character_name=self.character_name)
+             self.character_model = LLMClass.load_model(model=llm_model_path, character_name=self.character_name, instructions=instructions)
         else:
             self.logger.error(f"LLM class '{llm_class_name}' does not have a recognized load_model method.")
             return
 
-        self.logger.info(f"Character '{self.character_name}' and LLM '{llm_class_name}' loaded from '{llm_model_path}'.")
+        self.logger.info(f"Character '{self.character_name}' Instructions: {instructions} and LLM '{llm_class_name}' loaded from '{llm_model_path}'.")
 
     def register_services(self):
         self.logger.info("Registering services...")
