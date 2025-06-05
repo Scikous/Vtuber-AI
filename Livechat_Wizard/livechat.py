@@ -93,6 +93,7 @@ class LiveChatController:
 
         #take messages in order
         self.all_messages.extend(self.twitch_chat_msgs)
+        self.twitch_chat_msgs.clear()
         if self.all_messages:
             message = random.choice(self.all_messages)
             self.all_messages.remove(message)
