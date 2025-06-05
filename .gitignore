@@ -192,46 +192,7 @@ unnamedSIUEA
 client_secret_YT.json
 token.pickle
 tt.py
+t.py
 LLM.py
 model_losses.txt
 audio_response/*
-LLM/dataset/*
-LLM/offload/*
-!LLM/offload/.gitignore
-
-voiceAI/dataset/*
-!voiceAI/dataset/inference_testing
-LLM/characters/*
-!.gitignore
-!LLM/characters/character.json
-!LLM/dataset/template.csv
-
-#ignore dataset related files and weight files
-voiceAI/GPT-SoVITS-beta0217/
-# voiceAI/GPT-SoVITS-beta0217/output/uvr5_opt/*
-# voiceAI/GPT-SoVITS-beta0217/output/asr_opt/*
-# voiceAI/GPT-SoVITS-beta0217/output/slicer_opt/*
-# voiceAI/GPT-SoVITS-beta0217/SoVITS_weights/*
-# voiceAI/GPT-SoVITS-beta0217/GPT_weights/*
-# voiceAI/GPT-SoVITS-beta0217/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT-SoVITS-beta0217/logs/*
-# voiceAI/GPT-SoVITS-beta0217/TEMP/*
-# voiceAI/GPT-SoVITS-beta0217/ffmpeg.exe
-# voiceAI/GPT-SoVITS-beta0217/ffprobe.exe
-
-
-# #ignore from fast inference
-# voiceAI/GPT-SoVITS-fast_inference/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT-SoVITS-fast_inference/venv
-# voiceAI/GPT-SoVITS-fast_inference/ffmpeg.exe
-# voiceAI/GPT-SoVITS-fast_inference/ffprobe.exe
-
-# voiceAI/GPT_Test/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT_Test/ffmpeg.exe
-# voiceAI/GPT_Test/ffprobe.exe
-# voiceAI/GPT_Test/venv
-
-# livechatAPI/credentials/*
-# !livechatAPI/credentials/.gitignore
-# livechatAPI/data/*
-# !livechatAPI/data/.gitignore
