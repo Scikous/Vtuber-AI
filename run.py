@@ -9,20 +9,37 @@ VENV_NAME_TTS = 'venvTTS'
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 VENV_PATH = '/home/santa/' # Make sure this is correct for your Linux setup
 
-
-# def get_venv_environment(venv_name):
-#     """Get the environment variables for a virtual environment."""
-#     venv_path = os.path.join(VENV_PATH, venv_name)
-#     env = os.environ.copy()  # Copy the current environment
-#     if sys.platform != "win32":
-#         # Update PATH to include the virtual environment's bin directory
-#         env["PATH"] = f"{os.path.join(venv_path, 'bin')}:{env.get('PATH', '')}"
-#         # Update LD_LIBRARY_PATH to include CUDA/cuDNN libraries if needed
-#         cuda_lib_path = "/usr/local/cuda/lib64"  # Adjust based on your CUDA installation
-#         cudnn_lib_path = "/usr/lib/x86_64-linux-gnu"  # Adjust based on your cuDNN installation
-#         env["LD_LIBRARY_PATH"] = f"{cuda_lib_path}:{cudnn_lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
-#         env["CUDA_HOME"] = "/usr/local/cuda"  # Adjust if CUDA is installed elsewhere
-#     return env
+def get_venv_environment(venv_name):
+    """Get the environment variables for a virtual environment."""
+    venv_path = os.path.join(VENV_PATH, venv_name)
+    env = os.environ.copy()  # Copy the current environment
+    if sys.platform != "win32":
+        # Update PATH to include the virtual environment's bin directory
+        env["PATH"] = f"{os.path.join(venv_path, 'bin')}:{env.get('PATH', '')}"
+        # Dynamically set LD_LIBRARY_PATH to include the virtual environment's cuDNN library path
+        lib_dir = os.path.join(venv_path, 'lib')
+        try:
+            # Find the pythonX.Y directory (e.g., python3.12)
+            python_dirs = [d for d in os.listdir(lib_dir) if d.startswith('python')]
+            if not python_dirs:
+                print(f"Warning: No pythonX.Y directory found in {lib_dir} for {venv_name}")
+                return env
+            if len(python_dirs) > 1:
+                print(f"Warning: Multiple pythonX.Y directories found in {lib_dir}: {python_dirs}. Using the first one.")
+            python_dir = python_dirs[0]
+            # Construct the path to site-packages and cuDNN libraries
+            site_packages = os.path.join(lib_dir, python_dir, 'site-packages')
+            cudnn_lib_path = os.path.join(site_packages, 'nvidia', 'cudnn', 'lib')
+            if os.path.exists(cudnn_lib_path):
+                # Prepend the cuDNN path to LD_LIBRARY_PATH
+                existing_ld_library_path = env.get('LD_LIBRARY_PATH', '')
+                env["LD_LIBRARY_PATH"] = f"{cudnn_lib_path}:{existing_ld_library_path}"
+                print(f"Added {cudnn_lib_path} to LD_LIBRARY_PATH for {venv_name}")
+            else:
+                print(f"Warning: cuDNN library path {cudnn_lib_path} does not exist for {venv_name}")
+        except FileNotFoundError:
+            print(f"Warning: lib directory not found in {venv_path} for {venv_name}")
+    return env
 
 
 def get_python_executable(venv_name):
@@ -84,13 +101,13 @@ def main():
 
     if python_executable_tts:
         print(f"Using Python from virtual environment: {python_executable_tts}")
-        command_tts = [python_executable_tts, tts_script, "-a", "0.0.0.0", "-p", "9880", "-c", tts_config]
+        command_tts = [python_executable_tts, tts_script, "-a", "127.0.0.1", "-p", "9880", "-c", tts_config]
     else:
         print(f"Warning: Virtual environment '{VENV_NAME_TTS}' Python not found. "
               f"Attempting to use system 'python'.")
         print("Please ensure the virtual environment is activated and contains all dependencies, "
               "or that dependencies are installed globally.")
-        command_tts = ["python", tts_script, "-a", "0.0.0.0", "-p", "9880", "-c", tts_config]
+        command_tts = ["python", tts_script, "-a", "127.0.0.1", "-p", "9880", "-c", tts_config]
 
     print(f"Executing AI: {' '.join(command_ai)}")
     print(f"Executing TTS: {' '.join(command_tts)}")
@@ -100,9 +117,9 @@ def main():
     process_tts = None
 
     try:
-        # # Get environment for each virtual environment
-        # env_ai = get_venv_environment(VENV_NAME_AI)
-        # env_tts = get_venv_environment(VENV_NAME_TTS)
+        # Get environment for each virtual environment
+        env_ai = get_venv_environment(VENV_NAME_AI)
+        env_tts = get_venv_environment(VENV_NAME_TTS)
 
         # For Windows, CREATE_NEW_PROCESS_GROUP allows sending CTRL_BREAK_EVENT to the group.
         # For Unix, preexec_fn=os.setsid creates a new session and process group.
@@ -114,15 +131,15 @@ def main():
             common_popen_kwargs['preexec_fn'] = os.setsid
 
         # Run the main_orchestrator.py script
-        process_ai = subprocess.Popen(command_ai, cwd=PROJECT_ROOT, **common_popen_kwargs)
-        # process_ai = subprocess.Popen(command_ai, cwd=PROJECT_ROOT, env=env_ai, **common_popen_kwargs)
+        # process_ai = subprocess.Popen(command_ai, cwd=PROJECT_ROOT, **common_popen_kwargs)
+        process_ai = subprocess.Popen(command_ai, cwd=PROJECT_ROOT, env=env_ai, **common_popen_kwargs)
 
         print(f"Started AI process with PID: {process_ai.pid}")
 
         # Run the TTS service in the TTS_Wizard/GPT_SoVITS directory
         tts_cwd = os.path.join(PROJECT_ROOT, "TTS_Wizard", "GPT_SoVITS")
-        process_tts = subprocess.Popen(command_tts, cwd=tts_cwd, **common_popen_kwargs)
-        # process_tts = subprocess.Popen(command_tts, cwd=tts_cwd, env=env_tts, **common_popen_kwargs)
+        # process_tts = subprocess.Popen(command_tts, cwd=tts_cwd, **common_popen_kwargs)
+        process_tts = subprocess.Popen(command_tts, cwd=tts_cwd, env=env_tts, **common_popen_kwargs)
 
         print(f"Started TTS process with PID: {process_tts.pid}")
 
