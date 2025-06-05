@@ -11,11 +11,23 @@ class PyAudioPlayback(AudioPlaybackBase):
         self.stream = None
         self._is_paused = False # Internal state for pause/resume
 
+        format_map = {
+            'paInt8': pyaudio.paInt8,
+            'paInt16': pyaudio.paInt16,
+            'paInt24': pyaudio.paInt24,
+            'paInt32': pyaudio.paInt32,
+            'paFloat32': pyaudio.paFloat32,
+            'paUInt8': pyaudio.paUInt8
+            # Add other formats as needed
+        }
+
         # Default configuration, can be overridden by config dict
-        self.format = config.get('format', pyaudio.paInt16) if config else pyaudio.paInt16
+        self.format = config.get('format', 'paInt16') if config else 'paInt16'
+        self.format = format_map.get(self.format, pyaudio.paInt16)
         self.channels = config.get('channels', 1) if config else 1
         self.rate = config.get('rate', 32000) if config else 32000
         self.chunk_size = config.get('chunk_size', 1024) if config else 1024
+        print("COMPLAIN"*20, type(self.format), type(self.channels), type(self.rate), type(self.chunk_size))
         
         self.logger = logger if logger else logging.getLogger(__name__)
         self.logger.info("PyAudioPlayback initialized.")
