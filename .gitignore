@@ -189,6 +189,8 @@ unnamedSIUEA
 
 #ignore test files
 .env
+client_secret_YT.json
+token.pickle
 tt.py
 LLM.py
 model_losses.txt
