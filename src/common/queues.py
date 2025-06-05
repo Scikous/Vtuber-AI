@@ -12,7 +12,6 @@ llm_output_queue = asyncio.Queue()
 
 # Multiprocessing queue for inter-process communication (e.g., for live chat process)
 # This specific queue is intended for the live_chat_process to send messages to the main process.
-mp_live_chat_message_queue = MPQueue()
 
 # Potentially other queues can be added here as needed, for example:
 # tts_input_queue = asyncio.Queue(maxsize=1) # If TTS worker takes text input via a dedicated queue
@@ -33,16 +32,11 @@ def get_llm_output_queue():
 def get_audio_output_queue():
     return audio_output_queue
 
-
-def get_mp_live_chat_message_queue():
-    return mp_live_chat_message_queue
-
 # Example of how you might want to group them if they were part of a class
 # class AppQueues:
 #     def __init__(self):
 #         self.speech_queue = asyncio.Queue(maxsize=1)
 #         self.live_chat_queue = asyncio.Queue(maxsize=1)
 #         self.llm_output_queue = asyncio.Queue(maxsize=1)
-#         self.mp_live_chat_message_queue = MPQueue()
 
 # app_queues = AppQueues() # Then use app_queues.speech_queue etc.

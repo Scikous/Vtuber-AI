@@ -71,7 +71,7 @@ class YTLive:
         else:
             raise ValueError("No livestream ID provided!")
 
-    def get_live_chat_messages(self, next_page_token=None):
+    async def get_live_chat_messages(self, next_page_token=None):
         """Fetch live chat messages from the current livestream."""
         response = self.youtube.liveChatMessages().list(
             liveChatId=self.live_chat_id,
@@ -81,7 +81,7 @@ class YTLive:
         messages = response.get('items', [])
         if messages:
             yt_new_messages = [
-                (message['authorDetails']['displayName'], message['snippet']['displayMessage'])
+                f"{message['authorDetails']['displayName']}: {message['snippet']['displayMessage']}"
                 for message in messages
             ]
             self.yt_messages.extend(yt_new_messages)

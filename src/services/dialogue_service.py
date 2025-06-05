@@ -3,7 +3,7 @@ Dialogue Service Module for Vtuber-AI
 Handles the generation of responses using the LLM.
 """
 import asyncio
-from LLM_Wizard.model_utils import contains_sentence_terminator, extract_name_message
+from LLM_Wizard.model_utils import contains_sentence_terminator, extract_name_message, prompt_wrapper
 from .base_service import BaseService
 from TTS_Wizard.tts_utils import prepare_tts_params
 # Import necessary LLM utilities, prompt templates, etc.
@@ -45,12 +45,13 @@ class DialogueService(BaseService):
         try:
             while True:
                 message = None
+                context = None
                 try:
                     if self.speech_queue and not self.speech_queue.empty():
                         message = await self.speech_queue.get()
                         self.speech_queue.task_done()
                     elif self.live_chat_queue and not self.live_chat_queue.empty():
-                        message = await self.live_chat_queue.get()
+                        message, context = await self.live_chat_queue.get()
                         self.live_chat_queue.task_done()
                     else:
                         await asyncio.sleep(0.1)
@@ -67,21 +68,13 @@ class DialogueService(BaseService):
 
                 if self.logger:
                     self.logger.info(f"Dialogue service received message: {message}")
-
-                ##will be replaced with better util
-                # parsed_speaker = self.user_name 
-                # raw_input_text = message
-                # if ": " in message:
-                #     try:
-                #         parsed_speaker, raw_input_text = message.split(": ", 1)
-                #     except ValueError:
-                #         if self.logger:
-                #             self.logger.warning(f"Could not parse speaker from message: {message}. Using raw message as input.")
                 
-                content_for_template_hole = extract_name_message(message)#model_utils.prompt_wrapper(raw_input_text, history_for_llm_content)
+                prompt = extract_name_message(message)#model_utils.prompt_wrapper(raw_input_text, history_for_llm_content)
+                if context: prompt = prompt_wrapper(prompt, context=context)
+                
                 if self.logger:
-                    self.logger.debug(f"Calling llm_model.dialogue_generator for: {content_for_template_hole[:100]}...")
-                async_job = await self.llm_model.dialogue_generator(content_for_template_hole, conversation_history=self.naive_short_term_memory, max_tokens=100)
+                    self.logger.debug(f"Calling llm_model.dialogue_generator for: {prompt[:100]}...")
+                async_job = await self.llm_model.dialogue_generator(prompt, conversation_history=self.naive_short_term_memory, max_tokens=100)
                 if self.logger:
                     self.logger.debug(f"Got async_job: {type(async_job)}")
                 full_string = ""

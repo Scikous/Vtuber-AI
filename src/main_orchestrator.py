@@ -51,7 +51,6 @@ class MainOrchestrator:
         self.live_chat_queue = queues.get_live_chat_queue()
         self.llm_output_queue = queues.get_llm_output_queue()
         self.audio_output_queue = queues.get_audio_output_queue()
-        self.mp_live_chat_message_queue = queues.get_mp_live_chat_message_queue()
 
         self.character_name = None
         self.user_name = None
@@ -81,7 +80,6 @@ class MainOrchestrator:
                 "live_chat_queue": self.live_chat_queue,
                 "llm_output_queue": self.llm_output_queue,
                 "audio_output_queue": self.audio_output_queue,
-                "mp_live_chat_message_queue": self.mp_live_chat_message_queue,
                 # Add other queues like tts_input_queue if they become shared
             },
             "character_model": self.character_model,
@@ -93,7 +91,8 @@ class MainOrchestrator:
             "write_to_log_fn": self.write_to_log_fn,
             "project_root": self.project_root,
             "terminate_current_dialogue_event": asyncio.Event(),
-            "is_audio_streaming_event": asyncio.Event()
+            "is_audio_streaming_event": asyncio.Event(),
+            "immediate_livechat_fetch_event": asyncio.Event()
             # LLM specific resources will be added in run_async_loop
         }
 
@@ -169,23 +168,6 @@ class MainOrchestrator:
         self.service_manager = ServiceManager(self.shared_resources)
         self.register_services()
 
-        # Start the separate live chat process if the queue is available
-        if self.mp_live_chat_message_queue:
-            self.logger.info("Starting live chat process...")
-            try:
-                MainOrchestrator.live_chat_process = multiprocessing.Process(
-                    target=live_chat_process_target, 
-                    args=(self.mp_live_chat_message_queue,)
-                )
-                MainOrchestrator.live_chat_process.daemon = True # Ensure it exits when main process exits
-                MainOrchestrator.live_chat_process.start()
-                self.logger.info(f"Live chat process started with PID: {MainOrchestrator.live_chat_process.pid}")
-            except Exception as e:
-                self.logger.error(f"Failed to start live chat process: {e}", exc_info=True)
-                MainOrchestrator.live_chat_process = None # Ensure it's None if start fails
-        else:
-            self.logger.warning("mp_live_chat_message_queue not available, live chat process will not be started.")
-        
         # Start all registered async services
         if self.service_manager:
             await self.service_manager.start_all_services()

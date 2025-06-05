@@ -121,7 +121,8 @@ class Bot(commands.Bot):
         # print(f'{message.author.name}: {message.content}')
         if '!' in message.content:
             await self.handle_commands(message)
-        user_msg = (message.author.name, message.content)
+
+        user_msg = f"{message.author.name}: {message.content}"
         self.twitch_chat_msgs.append(user_msg)
         # print("Twitch msg:", user_msg)
 

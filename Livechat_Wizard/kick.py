@@ -28,7 +28,7 @@ class KickClient:
         return data["id"]
 
     #returns all messages and their data, also no need to fetch all
-    def fetch_raw_messages(self, num_to_fetch=10):
+    async def fetch_raw_messages(self, num_to_fetch=10):
         """
         Fetches all messages and their respective data (timestamp, user, message, color, etc.)
 
@@ -44,7 +44,7 @@ class KickClient:
         return data["messages"][:num_to_fetch]
 
     #used alongside listen, writes message to console, appends to running list
-    def process_message(self, message):
+    async def process_message(self, message):
         """
         Used when using listen() method
 
@@ -65,7 +65,7 @@ class KickClient:
         print(user_msg)
 
     #basically intented for polling -- fetch_raw_messages -> process_messages
-    def process_messages(self, messages):
+    async def process_messages(self, messages):
         """
         Used as a standalone
 
@@ -74,7 +74,7 @@ class KickClient:
         if messages:
             #get only username and message -- (<username>, <message>)
             new_clean_messages = [
-                (msg["sender"]["username"], msg['content']) for msg in messages 
+                f"{msg['sender']['username']}: {msg['content']}" for msg in messages 
                 if datetime.fromisoformat(msg["created_at"].replace("Z", "+00:00")) > self.last_message_time
             ]
 

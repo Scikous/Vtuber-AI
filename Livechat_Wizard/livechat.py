@@ -15,7 +15,7 @@ class LiveChatController:
         self.KICK_CLIENT = None
         self.HIGH_CHAT_VOLUME = get_env_var("HIGH_CHAT_VOLUME") #high volume chats will create an enormous list of messages very quickly
 
-        self.all_messages = []
+        self._all_messages = []
 
         if fetch_youtube:
             self.setup_youtube()
@@ -43,7 +43,7 @@ class LiveChatController:
 
     #get token and prepare for fetching youtube livechat messages
     def setup_youtube(self):
-        self.youtube = YTLive(self.all_messages)
+        self.youtube = YTLive(self._all_messages)
 
     #get token and start twitch bot on a separate thread for livechat messages
     @staticmethod
@@ -66,31 +66,31 @@ class LiveChatController:
     #WIP
     def setup_kick(self):
         kick_channel = get_env_var("KI_CHANNEL")
-        self.KICK_CLIENT = KickClient(username=kick_channel, kick_chat_msgs=self.all_messages)
+        self.KICK_CLIENT = KickClient(username=kick_channel, kick_chat_msgs=self._all_messages)
         # KICK_CLIENT.listen() #uncomment for retrieving messages as they come in*
     
     #fetch a random message from 
     async def fetch_chat_message(self):
-        self.all_messages.clear()
-        if self.HIGH_CHAT_VOLUME: self.all_messages.clear()
+        self._all_messages.clear()
+        if self.HIGH_CHAT_VOLUME: self._all_messages.clear()
         #fetch raw youtube messages and process them automatically -- adds automatically to yt_messages
         if self.youtube:
-            self.next_page_token = self.youtube.get_live_chat_messages(next_page_token=self.next_page_token)
+            self.next_page_token = await self.youtube.get_live_chat_messages(next_page_token=self.next_page_token)
         
         #fetch raw kick messages and process them automatically -- adds automatically to kick_messages
         if self.KICK_CLIENT:
-            raw_messages = self.KICK_CLIENT.fetch_raw_messages(num_to_fetch=10)
-            self.KICK_CLIENT.process_messages(raw_messages)
+            raw_messages = await self.KICK_CLIENT.fetch_raw_messages(num_to_fetch=10)
+            await self.KICK_CLIENT.process_messages(raw_messages)
 
         #take messages in order
-        self.all_messages.extend(self.twitch_chat_msgs)
+        self._all_messages.extend(self.twitch_chat_msgs)
         self.twitch_chat_msgs[:] = []
-        if self.all_messages:
-            message = random.choice(self.all_messages)
-            self.all_messages.remove(message)
-            # print("PICKED MESSAGE:", message, self.twitch_chat_msgs, self.all_messages)
-            return message, self.all_messages
-        return None
+        if self._all_messages:
+            message = random.choice(self._all_messages)
+            self._all_messages.remove(message)
+            # print("PICKED MESSAGE:", message, self.twitch_chat_msgs, self._all_messages)
+            return message, self._all_messages
+        return None, None
 
 
 # Example usage:
