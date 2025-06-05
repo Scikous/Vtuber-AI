@@ -3,7 +3,6 @@ from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import multiprocessing
 from general_utils import get_env_var
-from livechat_utils import append_livechat_message
 import dotenv
 
 # manager = multiprocessing.Manager()
@@ -124,10 +123,7 @@ class Bot(commands.Bot):
             await self.handle_commands(message)
         user_msg = (message.author.name, message.content)
         self.twitch_chat_msgs.append(user_msg)
-        # append_livechat_message(self.twitch_chat_msgs, user_msg)
-            
         # print("Twitch msg:", user_msg)
-        # append_livechat_message(twitch_chat_msgs, user_msg)
 
     @commands.command(name='hello')
     async def hello(self, ctx):

@@ -3,7 +3,6 @@ from general_utils import get_env_var
 from youtube import YTLive
 from twitch import TwitchAuth, Bot
 from kick import KickClient
-from livechat_utils import ChatPicker
 import time
 import multiprocessing
 import random
@@ -14,30 +13,21 @@ class LiveChatController:
         self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
         self.twitch_bot = None
         self.KICK_CLIENT = None
-
         self.HIGH_CHAT_VOLUME = get_env_var("HIGH_CHAT_VOLUME") #high volume chats will create an enormous list of messages very quickly
 
         self.all_messages = []
-        # chat_sources = []
 
         if fetch_youtube:
-            # self.yt_messages = []
-            # chat_sources.append(self.yt_messages)
             self.setup_youtube()
         
         if fetch_twitch:
             manager = multiprocessing.Manager()
             self.twitch_chat_msgs = manager.list()
-            # chat_sources.append(self.twitch_chat_msgs)
             self.setup_twitch()
 
         if fetch_kick:
-            # self.kick_messages = []  # Placeholder for Kick messages
-            # chat_sources.append(self.kick_messages)
             self.setup_kick()
 
-        #only desired chats should be included in the random message picking
-        # self.picker = ChatPicker(*chat_sources)
 
     @classmethod
     def create(cls):

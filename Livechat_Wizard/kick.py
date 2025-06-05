@@ -4,7 +4,6 @@ import time
 from datetime import datetime, timezone
 from curl_cffi import requests
 from general_utils import get_env_var
-from livechat_utils import append_livechat_message
 import dotenv
 
 def hex_to_rgb(val: str) -> tuple[int, int, int]:
@@ -80,8 +79,8 @@ class KickClient:
             ]
 
             #add newest messages to kick live chat list
-            for user_message in new_clean_messages:
-                self.kick_chat_msgs.append(user_message)
+
+            self.kick_chat_msgs.extend(new_clean_messages)
             
             #most recent message is always first, set last fetch time to it
             recent_message_time = messages[0]["created_at"]
