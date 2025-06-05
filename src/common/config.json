@@ -1,10 +1,9 @@
 {
     "llm_class_name": "VtuberExllamav2",
     "llm_model_path": "./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ",
-    "short_term_memory_maxlen": 6,
+    "short_term_memory_maxlen": 12,
     "speaker_name": "LMFAO",
     "character_info_json": "LLM_Wizard/characters/character.json",
-    "stt_energy_threshold": 0.01,
 
     "format": "pyaudio.paInt16",
     "channels": 1,
