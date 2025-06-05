@@ -11,11 +11,23 @@ class PyAudioPlayback(AudioPlaybackBase):
         self.stream = None
         self._is_paused = False # Internal state for pause/resume
 
+        format_map = {
+            'paInt8': pyaudio.paInt8,
+            'paInt16': pyaudio.paInt16,
+            'paInt24': pyaudio.paInt24,
+            'paInt32': pyaudio.paInt32,
+            'paFloat32': pyaudio.paFloat32,
+            'paUInt8': pyaudio.paUInt8
+            # Add other formats as needed
+        }
+
         # Default configuration, can be overridden by config dict
-        self.format = config.get('format', pyaudio.paInt16) if config else pyaudio.paInt16
+        self.format = config.get('format', 'paInt16') if config else 'paInt16'
+        self.format = format_map.get(self.format, pyaudio.paInt16)
         self.channels = config.get('channels', 1) if config else 1
         self.rate = config.get('rate', 32000) if config else 32000
         self.chunk_size = config.get('chunk_size', 1024) if config else 1024
+        print("COMPLAIN"*20, type(self.format), type(self.channels), type(self.rate), type(self.chunk_size))
         
         self.logger = logger if logger else logging.getLogger(__name__)
         self.logger.info("PyAudioPlayback initialized.")
@@ -86,7 +98,7 @@ class PyAudioPlayback(AudioPlaybackBase):
                 self.logger.error(f"Error pausing PyAudio stream: {e}")
         elif self._is_paused:
             self.logger.info("PyAudio stream is already paused.")
-        elif not self.stream or not self.stream.is_active(): # PyAudio < 0.2.14 might not have is_active
+        elif not self.stream: # PyAudio < 0.2.14 might not have is_open
              self.logger.warning("Cannot pause: PyAudio stream is not open.")
         else: # Stream exists but is not active (e.g. already stopped but not by our pause)
             self.logger.info("Cannot pause: PyAudio stream is not currently active (might be already stopped or closed).")
@@ -98,11 +110,11 @@ class PyAudioPlayback(AudioPlaybackBase):
                 # Ensure stream is open before trying to start it.
                 # PyAudio stream.is_stopped() is true if stop_stream() was called and stream is not closed.
                 # PyAudio stream.is_active() is true if start_stream() was called and stream is not closed/stopped.
-                if hasattr(self.stream, 'is_active') and not self.stream.is_active(): # Check for newer PyAudio
-                    self.logger.warning("Cannot resume: Stream is closed. Needs to be reopened.")
-                    # self._is_paused = False # It's not paused if it's closed
-                    return
-                elif not self.stream.is_active() and (hasattr(self.stream, 'is_stopped') and self.stream.is_stopped() or not hasattr(self.stream, 'is_stopped')):
+                # if hasattr(self.stream, 'is_ac') and not self.stream.is_open(): # Check for newer PyAudio
+                #     self.logger.warning("Cannot resume: Stream is closed. Needs to be reopened.")
+                #     # self._is_paused = False # It's not paused if it's closed
+                #     return
+                if not self.stream.is_active() and (hasattr(self.stream, 'is_stopped') and self.stream.is_stopped() or not hasattr(self.stream, 'is_stopped')):
                     # If it's stopped (which our pause does) or we can't check is_stopped (older PyAudio)
                     self.stream.start_stream()
                     # self._is_paused = False

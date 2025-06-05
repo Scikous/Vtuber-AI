@@ -16,10 +16,10 @@ class AudioStreamService(BaseService):
             backend_config = self.shared_resources.get('config', {}).get('audio_backend_settings', {})
             self.audio_playback_backend = PyAudioPlayback(config=backend_config, logger=self.logger)
         
+        self._chunk_size = backend_config.get('chunk_size', 512) if backend_config else 512
         self.logger.info(f"AudioStreamService initialized with backend: {type(self.audio_playback_backend).__name__}")
         self._playback_paused_event = asyncio.Event() # Internal event to signal worker to pause processing
         self._service_stop_event = asyncio.Event() # Event to signal the worker to stop completely
-        self._chunk_size = 512
         # Shared state events (to be managed/set externally)
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) # Stops current dialogue playback
         self.is_audio_streaming_event = shared_resources.get("is_audio_streaming_event", asyncio.Event()) # Pauses playback when user speaks

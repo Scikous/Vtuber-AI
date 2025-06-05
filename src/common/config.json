@@ -5,8 +5,11 @@
     "speaker_name": "LMFAO",
     "character_info_json": "LLM_Wizard/characters/character.json",
 
-    "format": "pyaudio.paInt16",
-    "channels": 1,
-    "rate": 32000,
-    "chunk_size": 1024
+    "audio_backend_settings": {
+        "format": "paInt16",
+        "channels": 1,
+        "rate": 32000,
+        "chunk_size": 512
+    }
+
 }
