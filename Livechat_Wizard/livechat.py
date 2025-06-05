@@ -13,26 +13,28 @@ class LiveChatController:
         self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
         self.twitch_bot = None
         self.KICK_CLIENT = None
-        chat_sources = []
+
+        self.all_messages = []
+        # chat_sources = []
 
         if fetch_youtube:
-            self.yt_messages = []
-            chat_sources.append(self.yt_messages)
+            # self.yt_messages = []
+            # chat_sources.append(self.yt_messages)
             self.setup_youtube()
         
         if fetch_twitch:
             manager = multiprocessing.Manager()
             self.twitch_chat_msgs = manager.list()
-            chat_sources.append(self.twitch_chat_msgs)
+            # chat_sources.append(self.twitch_chat_msgs)
             self.setup_twitch()
 
         if fetch_kick:
-            self.kick_messages = []  # Placeholder for Kick messages
-            chat_sources.append(self.kick_messages)
+            # self.kick_messages = []  # Placeholder for Kick messages
+            # chat_sources.append(self.kick_messages)
             self.setup_kick()
 
         #only desired chats should be included in the random message picking
-        self.picker = ChatPicker(*chat_sources)
+        # self.picker = ChatPicker(*chat_sources)
 
     @classmethod
     def create(cls):
@@ -48,7 +50,7 @@ class LiveChatController:
 
     #get token and prepare for fetching youtube livechat messages
     def setup_youtube(self):
-        self.youtube = YTLive(self.yt_messages)
+        self.youtube = YTLive(self.all_messages)
 
     #get token and start twitch bot on a separate thread for livechat messages
     @staticmethod
@@ -71,7 +73,7 @@ class LiveChatController:
     #WIP
     def setup_kick(self):
         kick_channel = get_env_var("KI_CHANNEL")
-        self.KICK_CLIENT = KickClient(username=kick_channel, kick_chat_msgs=self.kick_messages)
+        self.KICK_CLIENT = KickClient(username=kick_channel, kick_chat_msgs=self.all_messages)
         # KICK_CLIENT.listen() #uncomment for retrieving messages as they come in*
 
     #fetch a random message from 
@@ -85,9 +87,14 @@ class LiveChatController:
             raw_messages = self.KICK_CLIENT.fetch_raw_messages(num_to_fetch=10)
             self.KICK_CLIENT.process_messages(raw_messages)
 
-        message = self.picker.pick_rand_message()
-        print("PICKED MESSAGE:", message)
-        return message
+        #take messages in order
+        self.all_messages.extend(self.twitch_chat_msgs)
+        print(self.all_messages, type(self.twitch_chat_msgs))
+        if self.all_messages:
+            message = self.all_messages.pop(0)
+            print("PICKED MESSAGE:", message)
+            return message
+        return None
 
 
 # Example usage:

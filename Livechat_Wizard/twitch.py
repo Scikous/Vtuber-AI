@@ -123,7 +123,8 @@ class Bot(commands.Bot):
         if '!' in message.content:
             await self.handle_commands(message)
         user_msg = (message.author.name, message.content)
-        append_livechat_message(self.twitch_chat_msgs, user_msg)
+        self.twitch_chat_msgs.append(user_msg)
+        # append_livechat_message(self.twitch_chat_msgs, user_msg)
             
         # print("Twitch msg:", user_msg)
         # append_livechat_message(twitch_chat_msgs, user_msg)

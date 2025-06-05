@@ -9,7 +9,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
 class YTLive:
-    def __init__(self, yt_messages):
+    def __init__(self, yt_messages: list):
         # Load channel ID from environment variable
         self.channel_id = get_env_var("YT_CHANNEL_ID")
         # Load OAuth2 credentials and build the YouTube service
@@ -22,7 +22,7 @@ class YTLive:
 
     def _load_credentials(self):
         # Define the scope for read-only access to YouTube live chat data
-        SCOPES = 'https://www.googleapis.com/auth/youtube.readonly'
+        SCOPES = ['https://www.googleapis.com/auth/youtube.readonly']
         creds = None
         # Check if token.pickle exists and load credentials
         if os.path.exists('token.pickle'):
@@ -85,7 +85,8 @@ class YTLive:
                 (message['authorDetails']['displayName'], message['snippet']['displayMessage'])
                 for message in messages
             ]
-            append_livechat_message(self.yt_messages, yt_new_messages)
+            self.yt_messages.append(yt_new_messages)
+            # append_livechat_message(self.yt_messages, yt_new_messages)
             next_page_token = response.get('nextPageToken')
             dotenv.set_key(
                 dotenv_path=dotenv.find_dotenv(),
