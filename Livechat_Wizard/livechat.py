@@ -71,6 +71,7 @@ class LiveChatController:
     
     #fetch a random message from 
     async def fetch_chat_message(self):
+        self.all_messages.clear()
         if self.HIGH_CHAT_VOLUME: self.all_messages.clear()
         #fetch raw youtube messages and process them automatically -- adds automatically to yt_messages
         if self.youtube:
@@ -83,11 +84,11 @@ class LiveChatController:
 
         #take messages in order
         self.all_messages.extend(self.twitch_chat_msgs)
-        self.twitch_chat_msgs.clear()
+        self.twitch_chat_msgs[:] = []
         if self.all_messages:
             message = random.choice(self.all_messages)
             self.all_messages.remove(message)
-            # print("PICKED MESSAGE:", message)
+            # print("PICKED MESSAGE:", message, self.twitch_chat_msgs, self.all_messages)
             return message, self.all_messages
         return None
 
