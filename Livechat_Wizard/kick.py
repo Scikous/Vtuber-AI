@@ -11,7 +11,7 @@ def hex_to_rgb(val: str) -> tuple[int, int, int]:
     return (int(val[i : i + 2], 16) for i in (1, 3, 5))
 
 class KickClient:
-    def __init__(self, *, username: str, kick_chat_msgs):
+    def __init__(self, *, username: str, kick_chat_msgs: list):
         self.username = username
         self.kick_chat_msgs = kick_chat_msgs
         self.channel_id = self.get_channel_id()
@@ -81,7 +81,7 @@ class KickClient:
 
             #add newest messages to kick live chat list
             for user_message in new_clean_messages:
-                append_livechat_message(self.kick_chat_msgs, user_message)
+                self.kick_chat_msgs.append(user_message)
             
             #most recent message is always first, set last fetch time to it
             recent_message_time = messages[0]["created_at"]

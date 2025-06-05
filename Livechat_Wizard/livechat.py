@@ -6,6 +6,7 @@ from kick import KickClient
 from livechat_utils import ChatPicker
 import time
 import multiprocessing
+import random
 
 class LiveChatController:
     def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False):
@@ -13,6 +14,8 @@ class LiveChatController:
         self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
         self.twitch_bot = None
         self.KICK_CLIENT = None
+
+        self.HIGH_CHAT_VOLUME = get_env_var("HIGH_CHAT_VOLUME") #high volume chats will create an enormous list of messages very quickly
 
         self.all_messages = []
         # chat_sources = []
@@ -75,9 +78,10 @@ class LiveChatController:
         kick_channel = get_env_var("KI_CHANNEL")
         self.KICK_CLIENT = KickClient(username=kick_channel, kick_chat_msgs=self.all_messages)
         # KICK_CLIENT.listen() #uncomment for retrieving messages as they come in*
-
+    
     #fetch a random message from 
     async def fetch_chat_message(self):
+        if self.HIGH_CHAT_VOLUME: self.all_messages.clear()
         #fetch raw youtube messages and process them automatically -- adds automatically to yt_messages
         if self.youtube:
             self.next_page_token = self.youtube.get_live_chat_messages(next_page_token=self.next_page_token)
@@ -89,11 +93,11 @@ class LiveChatController:
 
         #take messages in order
         self.all_messages.extend(self.twitch_chat_msgs)
-        print(self.all_messages, type(self.twitch_chat_msgs))
         if self.all_messages:
-            message = self.all_messages.pop(0)
-            print("PICKED MESSAGE:", message)
-            return message
+            message = random.choice(self.all_messages)
+            self.all_messages.remove(message)
+            # print("PICKED MESSAGE:", message)
+            return message, self.all_messages
         return None
 
 
