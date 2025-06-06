@@ -131,6 +131,28 @@ def character_reply_cleaner(reply, character_name):
     reply = sentence_reducer(reply)
     return reply
 
+# def extract_name_message(input_string):
+#     """
+#     Extracts the name and message from a formatted string.
+
+#     Args:
+#         input_string (str): The formatted string containing a name and a message.
+#                             E.g., "RestreamBot:[YouTube: Michael] hello"
+
+#     Returns:
+#         str: The extracted name and message in the format "Michael: hello"
+#     """
+#     # Use regular expression to match the pattern
+#     match = re.search(r'\[\w+:\s?(.+?)\]\s?(.+)', input_string)
+
+#     # match = re.search(r'\[(\w+:\s?\w+)\]\s?(.+)', input_string)
+#     if match:
+
+#         name, message = match.groups()
+#         return f"{name.split(':', 1)[1].strip()}: {message.strip()}"
+
+#     else:
+#         return input_string  # Return the original string if no match is found
 def extract_name_message(input_string):
     """
     Extracts the name and message from a formatted string.
@@ -142,10 +164,24 @@ def extract_name_message(input_string):
     Returns:
         str: The extracted name and message in the format "Michael: hello"
     """
-    # Use regular expression to match the pattern
-    match = re.search(r'\[(\w+:\s?\w+)\]\s?(.+)', input_string)
+    # New regular expression:
+    # r'\[(\w+):\s*(.+?)\]\s*(.+)'
+    # Breakdown:
+    # \[              - Matches the literal opening square bracket
+    # (\w+)           - Group 1: Captures the platform/channel type (e.g., "YouTube")
+    # :               - Matches the literal colon
+    # \s* - Matches zero or more whitespace characters
+    # (.+?)           - Group 2 (non-greedy): Captures the name (allowing spaces)
+    # \]              - Matches the literal closing square bracket
+    # \s* - Matches zero or more whitespace characters before the message
+    # (.+)            - Group 3: Captures the message
+    match = re.search(r'\[(\w+):\s*(.+?)\]\s*(.+)', input_string)
     if match:
-        name, message = match.groups()
-        return f"{name.split(':')[1].strip()}: {message.strip()}"
+        # channel_type is match.group(1) (e.g., "YouTube")
+        extracted_name = match.group(2).strip() # This is the name we want (e.g., "zaza dznelashvili")
+        message = match.group(3).strip()       # This is the message
+
+        return f"{extracted_name}: {message}"
     else:
-        return input_string  # Return the original string if no match is found
+        # If no match, return the original string or handle as appropriate
+        return input_string
