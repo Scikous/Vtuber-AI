@@ -6,7 +6,7 @@ import csv
 from collections import deque
 import os
 
-async def write_messages_csv(file_path, message_data):
+def write_messages_csv(file_path, message_data):
     """
     Intended for writing tuples of chat message_data -> ('<user name>: <message>', '<LLM output>')
     Can technically be any format.
@@ -18,7 +18,7 @@ async def write_messages_csv(file_path, message_data):
         csv_writer = csv.writer(file, quoting=csv.QUOTE_ALL)
         csv_writer.writerow(message_data)
 
-async def read_messages_csv(file_path, num_messages=10):
+def read_messages_csv(file_path, num_messages=10):
     """
     Intended for returning tuples of chat messages -> (<user name>, <message>)
     Can technically be any format.

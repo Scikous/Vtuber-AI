@@ -1,6 +1,8 @@
 import asyncio
 from TTS_Wizard import tts_client
 from TTS_Wizard.tts_exp import XTTS_Service
+from TTS_Wizard.tts_utils import prepare_tts_params_gpt_sovits
+
 from .base_service import BaseService
 
 class TTSService(BaseService):
@@ -10,7 +12,7 @@ class TTSService(BaseService):
         self.llm_output_queue = self.queues.get("llm_output_queue") if self.queues else None
         self.logger = shared_resources.get("logger") if shared_resources else None
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) if shared_resources else asyncio.Event()
-        self.TTS_SERVICE = XTTS_Service("TTS_Wizard/dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
+        self.TTS_SERVICE = tts_client#XTTS_Service("TTS_Wizard/dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
 
     async def synthesize_streaming(self, tts_params: dict):
         """
@@ -76,7 +78,7 @@ class TTSService(BaseService):
                     # This check helps prevent overwhelming with too many scheduled tasks if semaphore is busy
                     if len(active_tts_tasks) < tts_concurrency * 2: # Allow some tasks to be queued up waiting for semaphore
                         try:
-                            tts_params_from_queue = await asyncio.wait_for(self.llm_output_queue.get(), timeout=0.1) 
+                            llm_message = await asyncio.wait_for(self.llm_output_queue.get(), timeout=0.1) 
                         except asyncio.TimeoutError:
                             await asyncio.sleep(0.05) # Short sleep if queue was empty during check
                             continue
@@ -87,16 +89,19 @@ class TTSService(BaseService):
                             continue
 
                         if self.logger:
-                            self.logger.debug(f"TTS Service received params: {str(tts_params_from_queue)[:100]}...")
+                            self.logger.debug(f"TTS Service received message: {str(llm_message)[:100]}...")
                         
-                        if not all(k in tts_params_from_queue for k in ['text', 'language', "speech_speed"]):
-                            if self.logger:
-                                self.logger.error(f"TTS Service: Missing required parameters: {tts_params_from_queue}")
-                            self.llm_output_queue.task_done()
-                            continue
+
+                        tts_params = self.prepare_tts_params(llm_message,
+                                                        text_lang=self.shared_resources.get("character_lang", "en"),
+                                                        ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
+                                                        prompt_text=self.shared_resources.get("character_prompt_text", ""),
+                                                        prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
+                                                        logger=self.logger
+                                                        )
                         
                         # Create a new task to process this TTS item
-                        task = asyncio.create_task(self._process_tts_item(tts_params_from_queue, semaphore))
+                        task = asyncio.create_task(self._process_tts_item(tts_params, semaphore))
                         active_tts_tasks.append(task)
                     else:
                         # Max tasks scheduled, wait for some to complete

@@ -5,7 +5,6 @@ Handles the generation of responses using the LLM.
 import asyncio
 from LLM_Wizard.model_utils import contains_sentence_terminator, extract_name_message, prompt_wrapper
 from .base_service import BaseService
-from TTS_Wizard.tts_utils import prepare_tts_params
 # Import necessary LLM utilities, prompt templates, etc.
 
 class DialogueService(BaseService):
@@ -74,9 +73,11 @@ class DialogueService(BaseService):
                 
                 if self.logger:
                     self.logger.debug(f"Calling llm_model.dialogue_generator for: {prompt[:100]}...")
+
                 async_job = await self.llm_model.dialogue_generator(prompt, conversation_history=self.naive_short_term_memory, max_tokens=100)
                 if self.logger:
                     self.logger.debug(f"Got async_job: {type(async_job)}")
+
                 full_string = ""
                 tts_buffer = "" # Buffer for accumulating text for TTS
 
@@ -97,16 +98,7 @@ class DialogueService(BaseService):
                             text_to_send_to_tts = tts_buffer.strip()
                             if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
                                 print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
-                                # tts_params = prepare_tts_params(
-                                #     text_to_speak=text_to_send_to_tts,
-                                #     text_lang=self.shared_resources.get("character_lang", "en"),
-                                #     ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
-                                #     prompt_text=self.shared_resources.get("character_prompt_text", ""),
-                                #     prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
-                                #     logger=self.logger
-                                # )
-                                tts_params = {"text": text_to_send_to_tts, "language": "en", "speech_speed": 1.0}
-                                asyncio.create_task(self.llm_output_queue.put(tts_params))
+                                asyncio.create_task(self.llm_output_queue.put(text_to_send_to_tts))
                                 if self.logger:
                                     self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
                                 tts_buffer = "" # Reset buffer after sending
@@ -119,18 +111,7 @@ class DialogueService(BaseService):
                 if tts_buffer.strip():
                     remaining_text_for_tts = tts_buffer.strip()
                     print("Sending remaining to TTS queue (end of generation): ", remaining_text_for_tts) # Keep for debugging
-                    # tts_params = prepare_tts_params(
-                    #     text_to_speak=remaining_text_for_tts,
-                    #     text_lang=self.shared_resources.get("character_lang", "en"),
-                    #     ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
-                    #     prompt_text=self.shared_resources.get("character_prompt_text", ""),
-                    #     prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
-                    #     logger=self.logger
-                    # )
-                    tts_params = {"text": text_to_send_to_tts, "language": "en", "speech_speed": 1.0}
-
-
-                    asyncio.create_task(self.llm_output_queue.put(tts_params))
+                    asyncio.create_task(self.llm_output_queue.put(remaining_text_for_tts))
                     if self.logger:
                         self.logger.debug(f"Put remaining TTS params to llm_output_queue: {remaining_text_for_tts[:30]}...")
                     tts_buffer = "" # Clear the buffer
@@ -145,13 +126,13 @@ class DialogueService(BaseService):
                 if self.write_to_log_fn and self.conversation_log_file:
                     try:
                         msg_speaker, msg_text = message.split(": ", 1)
-                        await self.write_to_log_fn(self.conversation_log_file, (msg_speaker, msg_text))
+                        self.write_to_log_fn(self.conversation_log_file, (msg_speaker, msg_text))
                     except ValueError:
                         if self.logger:
                             self.logger.warning(f"Could not parse speaker/text from incoming message for logging: {message}")
-                        await self.write_to_log_fn(self.conversation_log_file, ("UnknownSpeaker", message))
+                        self.write_to_log_fn(self.conversation_log_file, ("UnknownSpeaker", message))
                     
-                    await self.write_to_log_fn(self.conversation_log_file, (self.character_name, output))
+                    self.write_to_log_fn(self.conversation_log_file, (self.character_name, output))
 
         except asyncio.CancelledError:
             if self.logger:
