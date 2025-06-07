@@ -15,28 +15,31 @@ instructions_string = f"""{instructions}"""
 dummy_data = ["Good day, state your name.", "What is your favorite drink?", "Do you edge?"]
 
 #LLM model to use
-model = "TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+main_model = "turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+tokenizer_model = "Qwen/Qwen2.5-VL-7B-Instruct"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+revision ="8.0bpw"
 # model = snapshot_download(repo_id=model_name)
-from transformers import AutoTokenizer
-tokenizer = AutoTokenizer.from_pretrained(model) # Example
+# from transformers import AutoTokenizer
+# # tokenizer = AutoTokenizer.from_pretrained(model) # Example
 
 # print(f"Model '{model_name}' is located locally at: {model}")
 
 #test using the exllamav2
 async def exllamav2_test():
-    Character = VtuberExllamav2.load_model(model=model,character_name=character_name, instructions=instructions)#(generator, gen_settings, tokenizer, character_name)
+    Character = VtuberExllamav2.load_model(main_model=main_model, tokenizer_model=tokenizer_model, revision=revision, character_name=character_name, instructions=instructions)#(generator, gen_settings, tokenizer, character_name)
 
     start = perf_counter()
     prompt = prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
     dummy_memory = ["Ahahahahah", "wowozers", "i like coke", "great to hear!"]
-    response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, max_tokens=200)
+    response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, max_tokens=512)
     print(type(response))
     async for result in response:
         output = result.get("text", "")
         # if len(output) != 0:
+        #     await Character.cancel_dialogue_generation()
+
         print(output,  end = "")    
             # break
-        await Character.cancel_dialogue_generation()
 
     end = perf_counter()
     # print(f"Prompts: {msg}\n\nRESPONSE:\n{response}\n\nTime Taken (Seconds): {end-start}")

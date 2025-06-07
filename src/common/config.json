@@ -1,6 +1,8 @@
 {
     "llm_class_name": "VtuberExllamav2",
-    "llm_model_path": "./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ",
+    "llm_model_path": "turboderp/Qwen2.5-VL-7B-Instruct-exl2",
+    "tokenizer_model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "llm_model_revision": "8.0bpw",
     "short_term_memory_maxlen": 12,
     "speaker_name": "LMFAO",
     "character_info_json": "LLM_Wizard/characters/character.json",

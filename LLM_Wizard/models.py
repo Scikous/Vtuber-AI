@@ -53,9 +53,15 @@ class VtuberExllamav2(VtuberLLMBase):
         self.current_async_job = None # Moved to VtuberLLMBase
 
     @classmethod
-    def load_model(cls, model="./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ", character_name='assistant', instructions=""):
+    def load_model(cls, main_model="turboderp/Qwen2.5-VL-7B-Instruct-exl2", tokenizer_model="Qwen/Qwen2.5-VL-7B-Instruct", revision="8.0bpw", character_name='assistant', instructions=""):
         """
         Loads an ExLlamaV2 compatible model
+
+        main_model: str -- the actual model to use for generation
+        tokenizer_model: str -- the tokenizer model to use for applying appropriate chat template
+        revision: str -- the revision of the model to use
+        character_name: str -- the name of the character the model is speaking as
+        instructions: str -- the instructions for the model to follow
 
         Returns:
         
@@ -72,13 +78,13 @@ class VtuberExllamav2(VtuberLLMBase):
         
         
         #transformers tokenizer, not exllamav2's tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(model) # for applying chat template
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_model) # for applying chat template
 
         #load exllamav2 model
         try:
-            config = ExLlamaV2Config(model)
+            config = ExLlamaV2Config(main_model)
         except:
-            hf_model = snapshot_download(repo_id=model)
+            hf_model = snapshot_download(repo_id=main_model, revision=revision)
             config = ExLlamaV2Config(hf_model)
 
         model = ExLlamaV2(config)
@@ -92,10 +98,11 @@ class VtuberExllamav2(VtuberLLMBase):
         )
         #default text generation settings, can be overridden
         gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = 1.47, 
+            temperature = 1.8, 
             top_p = 0.95,
-            min_p=0.05,
-            token_repetition_penalty = 1.035
+            min_p=0.08,
+            top_k=50,
+            token_repetition_penalty = 1.05
         )
 
         return cls(generator_async, gen_settings, tokenizer, character_name, instructions)
@@ -150,7 +157,8 @@ class VtuberExllamav2(VtuberLLMBase):
                         max_new_tokens=max_tokens,
                         #     stop_conditions = [self.tokenizer.eos_token_id],
                         gen_settings=self.gen_settings,
-                        add_bos = False #if using apply_chat_template set to false -- only plain string should have True)
+                        add_bos = False, #if using apply_chat_template set to false -- only plain string should have True)
+                        stop_conditions= [self.tokenizer.eos_token_id], #for stopping generation when a specific token is generated
                         #token_healing = False #True if output is weird, False if output is un-weird
                         #return_logits = False #for analyzing model's probability distribution before sapling -- generally don't touch
                         #return_probs = False #for understanding the model's confidence in its choices -- generally don't touch

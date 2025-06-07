@@ -118,7 +118,9 @@ class MainOrchestrator:
         instructions, self.user_name, self.character_name = load_character(character_info_json_path)
 
         llm_class_name = self.config.get("llm_class_name", "VtuberExllamav2") # Default to VtuberExllamav2
-        llm_model_path = self.config.get("llm_model_path", "./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ") # Default path
+        llm_model_path = self.config.get("llm_model_path", "turboderp/Qwen2.5-VL-7B-Instruct-exl2") # Default path
+        tokenizer_model_path = self.config.get("tokenizer_model_path", "Qwen/Qwen2.5-VL-7B-Instruct") # Default path
+        llm_model_revision = self.config.get("llm_model_revision", "6.0bpw") # Default path
         
         try:
             # Dynamically import the LLM class from LLM_Wizard.models
@@ -132,7 +134,7 @@ class MainOrchestrator:
         # Instantiate the model
         # The load_model_exllamav2 and load_model methods are @classmethods, so they are called on the class itself.
         if hasattr(LLMClass, 'load_model'): # Generic for other models
-             self.character_model = LLMClass.load_model(model=llm_model_path, character_name=self.character_name, instructions=instructions)
+             self.character_model = LLMClass.load_model(main_model=llm_model_path, tokenizer_model=tokenizer_model_path, revision=llm_model_revision, character_name=self.character_name, instructions=instructions)
         else:
             self.logger.error(f"LLM class '{llm_class_name}' does not have a recognized load_model method.")
             return
