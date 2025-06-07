@@ -1,6 +1,6 @@
 import aiohttp
 import asyncio
-
+import time
 # API_BASE_URL = "http://127.0.0.1:9880"  # Default, should be configurable if needed
 API_BASE_URL = "http://0.0.0.0:9880"  # Default, should be configurable if needed
 
@@ -68,6 +68,7 @@ async def send_tts_request(text: str,
 
     if logger:
         logger.debug(f"TTS Request to {endpoint} with params: {text[:50]}..., lang:{text_lang}, streaming:{streaming_mode}")
+    start = time.perf_counter()
     session = aiohttp.ClientSession()
     try:
         async with session.get(endpoint, params=params) as response:
@@ -80,6 +81,8 @@ async def send_tts_request(text: str,
                     else:
                         # For non-streaming, read the whole content, though this path isn't expected for this use case
                         audio_data = await response.read()
+                        end = time.perf_counter()
+                        print("AUDIO GEN TIME)"*10, end-start)
                         yield audio_data[64:]
                 else:
                     error_content = await response.text()
