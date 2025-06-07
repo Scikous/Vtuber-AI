@@ -22,12 +22,11 @@ class PyAudioPlayback(AudioPlaybackBase):
         }
 
         # Default configuration, can be overridden by config dict
-        self.format = config.get('format', 'paInt16') if config else 'paInt16'
+        self.format = config.get('format', 'paInt16') if config else 'paFloat32'
         self.format = format_map.get(self.format, pyaudio.paInt16)
         self.channels = config.get('channels', 1) if config else 1
-        self.rate = config.get('rate', 32000) if config else 32000
+        self.rate = config.get('rate', 32000) if config else 24000
         self.chunk_size = config.get('chunk_size', 1024) if config else 1024
-        print("COMPLAIN"*20, type(self.format), type(self.channels), type(self.rate), type(self.chunk_size))
         
         self.logger = logger if logger else logging.getLogger(__name__)
         self.logger.info("PyAudioPlayback initialized.")

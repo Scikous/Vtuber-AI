@@ -60,6 +60,8 @@ class MainOrchestrator:
         self.naive_short_term_memory = deque(maxlen=self.config.get("short_term_memory_maxlen", 6))
         self.speaker_name = self.config.get("speaker_name", "_") # Default speaker name
 
+        self.tts_concurrency = self.config.get("tts_concurrency", 2) # Default to 2 concurrent tasks
+
         self.conversation_log_file = get_env_var("CONVERSATION_LOG_FILE")
         if self.conversation_log_file and not os.path.isabs(self.conversation_log_file):
             self.conversation_log_file = os.path.join(self.project_root, self.conversation_log_file)
@@ -87,6 +89,7 @@ class MainOrchestrator:
             "character_name": self.character_name,
             "user_name": self.user_name,
             "speaker_name": self.speaker_name,
+            "tts_concurrency": self.tts_concurrency,
             "conversation_log_file": self.conversation_log_file,
             "write_to_log_fn": self.write_to_log_fn,
             "project_root": self.project_root,

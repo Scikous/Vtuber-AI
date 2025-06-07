@@ -7,9 +7,9 @@ from abc import ABC, abstractmethod
 
 class BaseService(ABC):
     def __init__(self, shared_resources):
-        self.config = shared_resources.get("config", {})
-        self.logger = shared_resources.get("logger")
-        self.queues = shared_resources.get("queues", {})
+        self.config = shared_resources.get("config", {}) if shared_resources else None
+        self.logger = shared_resources.get("logger") if shared_resources else None
+        self.queues = shared_resources.get("queues", {}) if shared_resources else None
         self.shared_resources = shared_resources # Store all shared resources
         self._task = None # To keep track of the running asyncio task
 

@@ -1,5 +1,5 @@
 {
-    "MODEL_SIZE": "large-v3",
+    "MODEL_SIZE": "large-v1",
     "LANGUAGE": "en",
     "BEAM_SIZE": 5,
 

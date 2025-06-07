@@ -5,10 +5,12 @@
     "speaker_name": "LMFAO",
     "character_info_json": "LLM_Wizard/characters/character.json",
 
+    "tts_concurrency": 1,
+
     "audio_backend_settings": {
-        "format": "paInt16",
+        "format": "paFloat32",
         "channels": 1,
-        "rate": 32000,
+        "rate": 24000,
         "chunk_size": 512
     }
 

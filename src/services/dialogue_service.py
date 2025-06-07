@@ -97,14 +97,15 @@ class DialogueService(BaseService):
                             text_to_send_to_tts = tts_buffer.strip()
                             if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
                                 print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
-                                tts_params = prepare_tts_params(
-                                    text_to_speak=text_to_send_to_tts,
-                                    text_lang=self.shared_resources.get("character_lang", "en"),
-                                    ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
-                                    prompt_text=self.shared_resources.get("character_prompt_text", ""),
-                                    prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
-                                    logger=self.logger
-                                )
+                                # tts_params = prepare_tts_params(
+                                #     text_to_speak=text_to_send_to_tts,
+                                #     text_lang=self.shared_resources.get("character_lang", "en"),
+                                #     ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
+                                #     prompt_text=self.shared_resources.get("character_prompt_text", ""),
+                                #     prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
+                                #     logger=self.logger
+                                # )
+                                tts_params = {"text": text_to_send_to_tts, "language": "en", "speech_speed": 1.0}
                                 asyncio.create_task(self.llm_output_queue.put(tts_params))
                                 if self.logger:
                                     self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
@@ -118,14 +119,17 @@ class DialogueService(BaseService):
                 if tts_buffer.strip():
                     remaining_text_for_tts = tts_buffer.strip()
                     print("Sending remaining to TTS queue (end of generation): ", remaining_text_for_tts) # Keep for debugging
-                    tts_params = prepare_tts_params(
-                        text_to_speak=remaining_text_for_tts,
-                        text_lang=self.shared_resources.get("character_lang", "en"),
-                        ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
-                        prompt_text=self.shared_resources.get("character_prompt_text", ""),
-                        prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
-                        logger=self.logger
-                    )
+                    # tts_params = prepare_tts_params(
+                    #     text_to_speak=remaining_text_for_tts,
+                    #     text_lang=self.shared_resources.get("character_lang", "en"),
+                    #     ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
+                    #     prompt_text=self.shared_resources.get("character_prompt_text", ""),
+                    #     prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
+                    #     logger=self.logger
+                    # )
+                    tts_params = {"text": text_to_send_to_tts, "language": "en", "speech_speed": 1.0}
+
+
                     asyncio.create_task(self.llm_output_queue.put(tts_params))
                     if self.logger:
                         self.logger.debug(f"Put remaining TTS params to llm_output_queue: {remaining_text_for_tts[:30]}...")

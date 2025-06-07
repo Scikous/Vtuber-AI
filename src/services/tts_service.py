@@ -1,5 +1,6 @@
 import asyncio
 from TTS_Wizard import tts_client
+from TTS_Wizard.tts_exp import XTTS_Service
 from .base_service import BaseService
 
 class TTSService(BaseService):
@@ -8,13 +9,14 @@ class TTSService(BaseService):
         self.queues = shared_resources.get("queues") if shared_resources else None
         self.llm_output_queue = self.queues.get("llm_output_queue") if self.queues else None
         self.logger = shared_resources.get("logger") if shared_resources else None
-        self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event())
+        self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) if shared_resources else asyncio.Event()
+        self.TTS_SERVICE = XTTS_Service("TTS_Wizard/dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
 
     async def synthesize_streaming(self, tts_params: dict):
         """
         Synthesize speech from text using the TTS module
         """
-        return tts_client.send_tts_request(**tts_params)
+        return self.TTS_SERVICE.send_tts_request(**tts_params)
 
     async def _process_tts_item(self, tts_params: dict, semaphore: asyncio.Semaphore):
         """Helper function to process a single TTS request with semaphore control."""
@@ -87,7 +89,7 @@ class TTSService(BaseService):
                         if self.logger:
                             self.logger.debug(f"TTS Service received params: {str(tts_params_from_queue)[:100]}...")
                         
-                        if not all(k in tts_params_from_queue for k in ['text', 'text_lang', 'ref_audio_path', 'prompt_lang']):
+                        if not all(k in tts_params_from_queue for k in ['text', 'language', "speech_speed"]):
                             if self.logger:
                                 self.logger.error(f"TTS Service: Missing required parameters: {tts_params_from_queue}")
                             self.llm_output_queue.task_done()
