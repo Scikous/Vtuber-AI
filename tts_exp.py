@@ -1,230 +1,37 @@
-# import torch
+# import sys
 # from pathlib import Path
-# import time
-# import logging
 
-# # Set up a logger for this module
-# logger = logging.getLogger(__name__)
-
-# # Imports from the coqui-ai-TTS library
-# from .Coqui_TTS.TTS.utils.manage import ModelManager
-# from .Coqui_TTS.TTS.tts.configs.xtts_config import XttsConfig
-# from .Coqui_TTS.TTS.tts.models.xtts import Xtts
-# # This import is now only needed for the demonstration part
-# from .utils.pyaudio_playback import PyAudioPlayback
-
-# class XTTS_Service:
-#     """
-#     A service class for Text-to-Speech using Coqui's XTTS model.
-#     It handles model loading, setup, and provides a method for streaming TTS inference.
-#     """
-#     def __init__(self, speaker_wav_path: str, device: str = "auto"):
-#         """
-#         Initializes the XTTS service. This is a heavy operation as it loads the model into memory.
-
-#         Args:
-#             speaker_wav_path (str): The path to the speaker reference audio file.
-#             device (str, optional): The device to run the model on ('cuda', 'cpu', or 'auto'). Defaults to "auto".
-#         """
-#         self.device = self._determine_device(device)
-#         logger.info(f"Using device: {self.device}")
-
-#         # --- 1. Load Model and Config ---
-#         self.config, self.model = self._load_model()
-        
-#         # --- 2. Get Speaker Conditioning Latents ---
-#         if not Path(speaker_wav_path).exists():
-#             raise FileNotFoundError(f"Speaker reference audio file not found: {speaker_wav_path}")
-        
-#         logger.info(f"Computing speaker conditioning latents from: {speaker_wav_path}")
-#         self.gpt_cond_latents, self.speaker_embedding = self.model.get_conditioning_latents(
-#             audio_path=speaker_wav_path,
-#             gpt_cond_len=self.config.model_args.get("gpt_cond_len", 30),
-#             gpt_cond_chunk_len=self.config.model_args.get("gpt_cond_chunk_len", 4),
-#             max_ref_length=self.config.model_args.get("max_ref_len", 30),
-#             sound_norm_refs=self.config.model_args.get("sound_norm_refs", False)
-#         )
-#         logger.info("Speaker conditioning latents computed. XTTS_Service is ready.")
-
-#     def _determine_device(self, device_str: str) -> str:
-#         if device_str == "auto":
-#             return "cuda" if torch.cuda.is_available() else "cpu"
-#         return device_str
-
-#     def _load_model(self):
-#         """
-#         Downloads (if necessary) and loads the XTTSv2 model.
-#         """
-#         model_name = "tts_models/multilingual/multi-dataset/xtts_v2"
-#         logger.info(f"Loading model: {model_name}...")
-        
-#         try:
-#             from .Coqui_TTS.TTS.api import TTS as ApiTTS_for_path
-#             models_file_path = ApiTTS_for_path.get_models_file_path()
-#         except ImportError:
-#             logger.warning("Could not determine .models.json path via TTS.api.")
-#             models_file_path = None
-            
-#         manager = ModelManager(models_file=models_file_path, progress_bar=True)
-        
-#         model_path, config_path, _ = manager.download_model(model_name)
-        
-#         # Load configuration
-#         config = XttsConfig()
-#         config.load_json(config_path)
-
-#         # Initialize model
-#         model = Xtts.init_from_config(config)
-#         model.load_checkpoint(config, checkpoint_dir=model_path, eval=True)
-#         model.to(self.device)
-        
-#         logger.info("XTTS model loaded successfully.")
-#         return config, model
-
-#     def send_tts_request(self, text: str, language: str = "en", **kwargs):
-#         """
-#         Generates audio from text in a streaming fashion.
-#         This is a generator function that yields audio chunks as bytes.
-
-#         Args:
-#             text (str): The text to synthesize.
-#             language (str, optional): The language of the text. Defaults to "en".
-#             **kwargs: Additional parameters for the inference stream, e.g., speech_speed, temperature.
-
-#         Yields:
-#             bytes: Raw audio data chunks.
-#         """
-#         # Default streaming parameters, can be overridden by kwargs
-#         stream_params = {
-#             "stream_chunk_size": self.config.model_args.get("stream_chunk_size", 20),
-#             "overlap_wav_len": self.config.model_args.get("overlap_wav_len", 1024),
-#             "temperature": self.config.temperature,
-#             "length_penalty": self.config.length_penalty,
-#             "repetition_penalty": self.config.repetition_penalty,
-#             "top_k": self.config.top_k,
-#             "top_p": self.config.top_p,
-#             "speech_speed": 1.0,
-#             "enable_text_splitting": True
-#         }
-#         # Update with any user-provided parameters
-#         stream_params.update(kwargs)
-
-#         logger.info(f"Starting streaming inference for text: '{text[:50]}...'")
-
-#         stream = self.model.inference_stream(
-#             text,
-#             language,
-#             self.gpt_cond_latents,
-#             self.speaker_embedding,
-#             **stream_params
-#         )
-
-#         for chunk in stream:
-#             chunk_bytes = chunk.cpu().numpy().tobytes()
-#             yield chunk_bytes
-
-# if __name__ == "__main__":
-#     # --- This is a demonstration of how to use the XTTS_Service ---
-
-#     # Configure logging
-#     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-#     # --- Configuration for Demonstration ---
-#     SPEAKER_WAV_PATH = "dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"
-#     TEXT_TO_SYNTHESIZE = "This is a demonstration of the refactored XTTS service. It loads the model once, and can then be used to generate speech from text multiple times."
-
-#     try:
-#         # 1. Initialize the service (this is the slow part)
-#         print("Initializing XTTS Service...")
-#         start_time = time.perf_counter()
-#         tts_service = XTTS_Service(speaker_wav_path=SPEAKER_WAV_PATH)
-#         end_time = time.perf_counter()
-#         print(f"Service initialized in {end_time - start_time:.2f} seconds.")
-
-#         # 2. Initialize a playback utility
-#         # The service's config holds audio parameters needed by the playback utility
-#         playback_config = {
-#             'rate': tts_service.config.audio.output_sample_rate,
-#             'format': 'paFloat32' # XTTS outputs 32-bit float audio
-#         }
-#         playback = PyAudioPlayback(config=playback_config, logger=logger)
-
-#         # 3. Call the send_tts_request generator and stream the output
-#         print(f"\nSynthesizing text: '{TEXT_TO_SYNTHESIZE}'")
-#         audio_generator = tts_service.send_tts_request(TEXT_TO_SYNTHESIZE, speech_speed=1.1)
-
-#         # 4. Play the audio as it's being generated
-#         playback.open_stream()
-#         print("Playing audio as it is generated...")
-#         total_chunks = 0
-#         synthesis_start_time = time.perf_counter()
-#         for i, audio_chunk in enumerate(audio_generator):
-#             if i == 0:
-#                 first_chunk_time = time.perf_counter()
-#                 print(f"Time to first chunk: {first_chunk_time - synthesis_start_time:.2f} seconds")
-#             playback.write_chunk(audio_chunk)
-#             total_chunks += 1
-        
-#         synthesis_end_time = time.perf_counter()
-#         print(f"Playback finished. Generated {total_chunks} chunks in {synthesis_end_time - synthesis_start_time:.2f} seconds.")
-#         playback.close_stream()
-        
-#         # You can call it again without reloading the model!
-#         print("\n--- Running a second request ---")
-#         playback.open_stream()
-#         for audio_chunk in tts_service.send_tts_request("This is a second, shorter sentence.", language="en"):
-#             playback.write_chunk(audio_chunk)
-#         playback.close_stream()
-#         print("Second request finished.")
-
-
-#     except FileNotFoundError as e:
-#         logger.error(f"Configuration error: {e}")
-#         print(f"ERROR: Could not find a required file. Please check the path: {e}")
-#     except Exception as e:
-#         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-#         print(f"An unexpected error occurred: {e}")
-
-
-###################################################
-
-
-# --- Path Correction for Local Coqui_TTS ---
-# This block must be at the very top of the file, before any other imports.
-import sys
-from pathlib import Path
-
-# Assuming tts_exp.py is in a directory like 'TTS_Wizard',
-# and 'Coqui_TTS' is a subdirectory within it.
-# We need to add the 'Coqui_TTS' directory itself to the Python path.
-# This allows the library's internal 'from TTS.utils...' imports to work correctly.
-try:
-    # This determines the path to the directory containing this script.
-    script_dir = Path(__file__).resolve().parent
-    # This constructs the path to the Coqui_TTS library directory.
-    # IMPORTANT: Adjust this if your tts_exp.py is not in the 'TTS_Wizard' parent directory of Coqui_TTS.
-    # For example, if tts_exp.py is at the project root, this might be: Path('TTS_Wizard/Coqui_TTS')
-    coqui_tts_path = script_dir / 'Coqui_TTS'
+# # Assuming tts_exp.py is in a directory like 'TTS_Wizard',
+# # and 'Coqui_TTS' is a subdirectory within it.
+# # We need to add the 'Coqui_TTS' directory itself to the Python path.
+# # This allows the library's internal 'from TTS.utils...' imports to work correctly.
+# try:
+#     # This determines the path to the directory containing this script.
+#     script_dir = Path(__file__).resolve().parent
+#     # This constructs the path to the Coqui_TTS library directory.
+#     # IMPORTANT: Adjust this if your tts_exp.py is not in the 'TTS_Wizard' parent directory of Coqui_TTS.
+#     # For example, if tts_exp.py is at the project root, this might be: Path('TTS_Wizard/Coqui_TTS')
+#     coqui_tts_path = script_dir / 'Coqui_TTS'
     
-    if not coqui_tts_path.exists():
-        raise FileNotFoundError(f"Coqui_TTS directory not found at expected path: {coqui_tts_path}")
+#     if not coqui_tts_path.exists():
+#         raise FileNotFoundError(f"Coqui_TTS directory not found at expected path: {coqui_tts_path}")
 
-    # Add the Coqui_TTS directory to the system path.
-    # We use insert(0, ...) to give it priority over other installed packages.
-    sys.path.insert(0, str(coqui_tts_path))
+#     # Add the Coqui_TTS directory to the system path.
+#     # We use insert(0, ...) to give it priority over other installed packages.
+#     sys.path.insert(0, str(coqui_tts_path))
     
-except NameError:
-    # If __file__ is not defined (e.g., in an interactive session), use a relative path.
-    # This is less robust but can work for simple cases.
-    print("Warning: __file__ not defined. Assuming 'Coqui_TTS' is in the current working directory.")
-    sys.path.insert(0, 'Coqui_TTS')
-# --- End of Path Correction ---
+# except NameError:
+#     # If __file__ is not defined (e.g., in an interactive session), use a relative path.
+#     # This is less robust but can work for simple cases.
+#     print("Warning: __file__ not defined. Assuming 'Coqui_TTS' is in the current working directory.")
+#     sys.path.insert(0, 'Coqui_TTS')
+# # --- End of Path Correction ---
 
 
 
 
 import torch
-# from pathlib import Path
+from pathlib import Path
 import time
 import logging
 import uvicorn
@@ -245,14 +52,14 @@ from pydantic import BaseModel
 # |   └── utils/
 # └── run.py
 
-# import sys
-# Get the directory of the current script (tts_exp.py)
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Get the parent directory (TTS_Wizard)
-tts_wizard_dir = os.path.dirname(script_dir)
-# Add the project root to the Python path to make top-level imports work
-project_root_dir = os.path.dirname(tts_wizard_dir) # Adjust if your structure is different
-sys.path.append(project_root_dir)
+# # import sys
+# # Get the directory of the current script (tts_exp.py)
+# script_dir = os.path.dirname(os.path.abspath(__file__))
+# # Get the parent directory (TTS_Wizard)
+# tts_wizard_dir = os.path.dirname(script_dir)
+# # Add the project root to the Python path to make top-level imports work
+# project_root_dir = os.path.dirname(tts_wizard_dir) # Adjust if your structure is different
+# sys.path.append(project_root_dir)
 
 # Now these should work as top-level imports
 from TTS_Wizard.Coqui_TTS.TTS.utils.manage import ModelManager
