@@ -1,4 +1,4 @@
-import random
+# import random
 # import threading
 
 # lock = threading.Lock() #may or may not be useful in avoiding messing with different livechats at wrong times

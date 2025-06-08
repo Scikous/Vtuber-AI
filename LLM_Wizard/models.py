@@ -146,7 +146,6 @@ class VtuberExllamav2(VtuberLLMBase):
         from exllamav2.generator import ExLlamaV2DynamicJobAsync
         prompt = apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer)
 
-        max_tokens = get_rand_token_len(max_tokens=max_tokens)
         self.current_async_job = ExLlamaV2DynamicJobAsync(
                         generator=self.generator,
                         encode_special_tokens=False,
@@ -224,11 +223,11 @@ class VtuberLLM(VtuberLLMBase):
 
         max_attempts = 7
         comment_tokenized = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
-        print("HAAAAA:\n",comment_tokenized, self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
+        # print("HAAAAA:\n",comment_tokenized, self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
         inputs = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
 
         generated_text = ""
-        print(len(comment_tokenized["input_ids"][0]))
+        # print(len(comment_tokenized["input_ids"][0]))
         for attempt in range(max_attempts):
             max_new_tokens = get_rand_token_len(input_len=len(comment_tokenized["input_ids"][0]))
             results = self.model.generate(input_ids=inputs["input_ids"].to("cuda"),

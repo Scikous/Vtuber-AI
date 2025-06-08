@@ -16,7 +16,7 @@ def calculate_audio_energy_rms(audio_chunk: np.ndarray) -> float:
     
     # Check for non-finite values which would cause issues
     if not np.all(np.isfinite(audio_chunk_float)) :
-        # print("Warning: Non-finite values detected in audio chunk for RMS calculation.")
+        print("Warning: Non-finite values detected in audio chunk for RMS calculation.")
         # One option is to replace non-finite with 0, or simply return 0 for the chunk
         # audio_chunk_float = np.nan_to_num(audio_chunk_float)
         return 0.0 # Or handle as appropriate

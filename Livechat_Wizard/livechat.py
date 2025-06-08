@@ -88,7 +88,7 @@ class LiveChatController:
         if self._all_messages:
             message = random.choice(self._all_messages)
             self._all_messages.remove(message)
-            # print("PICKED MESSAGE:", message, self.twitch_chat_msgs, self._all_messages)
+            print("PICKED MESSAGE:", message, self.twitch_chat_msgs, self._all_messages)
             return message, self._all_messages
         return None, None
 
