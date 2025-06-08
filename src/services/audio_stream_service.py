@@ -44,20 +44,22 @@ class AudioStreamService(BaseService):
             return
 
         try:
-            self._ensure_stream_is_open() 
-            if self.audio_playback_backend.is_paused():
-                self.logger.info("Playback backend is paused, attempting to resume for playing chunk.")
-                self.audio_playback_backend.resume_stream()
+            # self._ensure_stream_is_open() 
+            # if self.audio_playback_backend.is_paused():
+            #     self.logger.info("Playback backend is paused, attempting to resume for playing chunk.")
+            #     self.audio_playback_backend.resume_stream()
                 
-            if not self.audio_playback_backend.is_active():
-                self.logger.warning("Audio stream not active after attempting to open/resume. Cannot play.")
-                return
+            # if not self.audio_playback_backend.is_active():
+            #     self.logger.warning("Audio stream not active after attempting to open/resume. Cannot play.")
+            #     return
 
             self.is_audio_streaming_event.set()
-
+            self.logger.info(f"Started playing audio chunk.")
+            
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, self.audio_playback_backend.write_chunk, chunk)
             self.logger.debug(f"Played audio chunk.")
+            self.logger.info(f"Played audio chunk.")
             self.is_audio_streaming_event.clear()
         except Exception as e:
             self.logger.error(f"Error playing audio chunk: {e}")
@@ -96,15 +98,13 @@ class AudioStreamService(BaseService):
                     await asyncio.sleep(0.01) # Sleep briefly before checking again if the queue is empty
                     continue
 
-                if wav_bytes is None:  # Sentinel value to stop the worker
-                    self.logger.info("Received None sentinel. Stopping worker.")
-                    self._service_stop_event.set() # Signal worker to stop
-                    break
-                while wav_bytes:
-                    if await self.check_terminate_event(audio_queue=audio_queue): break
-                    audio_chunk = wav_bytes[:self._chunk_size]
-                    await self._play_chunk(audio_chunk)
-                    wav_bytes = wav_bytes[self._chunk_size:]
+                if self.check_terminate_event(audio_queue=audio_queue): continue
+                await self._play_chunk(wav_bytes)
+                # while wav_bytes:
+                #     if await self.check_terminate_event(audio_queue=audio_queue): break
+                #     audio_chunk = wav_bytes[:self._chunk_size]
+                #     await self._play_chunk(audio_chunk)
+                #     wav_bytes = wav_bytes[self._chunk_size:]
                 audio_queue.task_done()
 
             except asyncio.CancelledError:
@@ -125,7 +125,7 @@ class AudioStreamService(BaseService):
             self.logger.info("Audio playback backend stream closed by worker exit.")
 
 
-    async def check_terminate_event(self, audio_queue):
+    def check_terminate_event(self, audio_queue):
         # Handle termination of current dialogue
         if self.terminate_current_dialogue_event.is_set():
             self.logger.info("AudioStreamService: Terminate current dialogue event detected.")

@@ -348,7 +348,7 @@ class XTTS_Service:
         return config, model
 
 
-    async def send_tts_request(self, text: str, language: str, **kwargs):
+    def send_tts_request(self, text: str, language: str, **kwargs):
         stream_params = {
             "stream_chunk_size": self.config.model_args.get("stream_chunk_size", 20),
             "overlap_wav_len": self.config.model_args.get("overlap_wav_len", 1024),
@@ -366,6 +366,8 @@ class XTTS_Service:
             text, language, self.gpt_cond_latents, self.speaker_embedding, **stream_params
         )
         for chunk in stream:
+            logger.info(f"Yielded audio chunk")
+
             yield chunk.cpu().numpy().tobytes()
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ def prepare_tts_params_gpt_sovits(text_to_speak, text_lang="en", ref_audio_path=
         "streaming_mode": streaming_mode,
         "media_type": media_type,
     }
-def prepare_tts_params_xtts(text_to_speak, text_lang="en", speech_speed=1.0, streaming_mode=False):
+def prepare_tts_params_xtts(text_to_speak, text_lang="en", speech_speed=1.0, streaming_mode=True):
     """
     Prepares the dictionary of parameters for the Coqui-AI-TTS XTTS TTS service.
     All parameters are now passed directly to the function.

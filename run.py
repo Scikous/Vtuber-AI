@@ -139,9 +139,9 @@ def main():
         # Run the TTS service in the TTS_Wizard/GPT_SoVITS directory
         tts_cwd = os.path.join(PROJECT_ROOT, "TTS_Wizard", "GPT_SoVITS")
         # process_tts = subprocess.Popen(command_tts, cwd=tts_cwd, **common_popen_kwargs)
-        process_tts = subprocess.Popen(command_tts, cwd=tts_cwd, env=env_tts, **common_popen_kwargs)
+        # process_tts = subprocess.Popen(command_tts, cwd=tts_cwd, env=env_tts, **common_popen_kwargs)
 
-        print(f"Started TTS process with PID: {process_tts.pid}")
+        # print(f"Started TTS process with PID: {process_tts.pid}")
 
         # Wait for both processes to complete
         # If one finishes or crashes, the other wait() will still be called.

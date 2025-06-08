@@ -150,6 +150,8 @@ class PyAudioPlayback(AudioPlaybackBase):
             self.logger.info("PyAudio stream already stopped.")
         else:
             self.logger.warning("Cannot stop: PyAudio stream does not exist or is not open.")
+        self.stream.start_stream()#reopen stream for audio playback
+        
 
 
     def is_paused(self) -> bool:

@@ -1,7 +1,7 @@
 import asyncio
 from TTS_Wizard import tts_client
 from TTS_Wizard.tts_exp import XTTS_Service
-from TTS_Wizard.tts_utils import prepare_tts_params_gpt_sovits
+from TTS_Wizard.tts_utils import prepare_tts_params_gpt_sovits, prepare_tts_params_xtts
 
 from .base_service import BaseService
 
@@ -12,9 +12,9 @@ class TTSService(BaseService):
         self.llm_output_queue = self.queues.get("llm_output_queue") if self.queues else None
         self.logger = shared_resources.get("logger") if shared_resources else None
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) if shared_resources else asyncio.Event()
-        self.TTS_SERVICE = tts_client#XTTS_Service("TTS_Wizard/dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
-
-    async def synthesize_streaming(self, tts_params: dict):
+        self.TTS_SERVICE = XTTS_Service("TTS_Wizard/dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
+        self.prepare_tts_params = prepare_tts_params_xtts
+    def synthesize_streaming(self, tts_params: dict):
         """
         Synthesize speech from text using the TTS module
         """
@@ -25,16 +25,26 @@ class TTSService(BaseService):
         async with semaphore:
             if self.logger:
                 self.logger.debug(f"TTS Service: Starting processing for: {str(tts_params.get('text', ''))[:50]}...")
-            try:
-                async for audio_chunk in await self.synthesize_streaming(tts_params): # Removed await here as synthesize_streaming is an async generator
+            loop = asyncio.get_running_loop()
+            audio_queue = self.shared_resources['queues']['audio_output_queue']
+            
+            def tts_request_handler():
+                for audio_chunk in self.synthesize_streaming(tts_params):
                     if audio_chunk:
-                        audio_queue = self.shared_resources['queues']['audio_output_queue']
-                        await audio_queue.put(audio_chunk)
+                        loop.call_soon_threadsafe(audio_queue.put_nowait, audio_chunk)
                         if self.logger:
                             self.logger.debug(f"TTS Service: Put audio chunk of size {len(audio_chunk)} to audio_output_queue for text: {str(tts_params.get('text', ''))[:30]}...")
-                    else:
-                        if self.logger:
-                            self.logger.debug(f"TTS Service: Received empty audio chunk for text: {str(tts_params.get('text', ''))[:30]}...")
+            
+            try:
+                await loop.run_in_executor(None, tts_request_handler)
+                # async for audio_chunk in await self.synthesize_streaming(tts_params): # Removed await here as synthesize_streaming is an async generator
+                #     if audio_chunk:
+                #         await audio_queue.put(audio_chunk)
+                #         if self.logger:
+                #             self.logger.debug(f"TTS Service: Put audio chunk of size {len(audio_chunk)} to audio_output_queue for text: {str(tts_params.get('text', ''))[:30]}...")
+                #     else:
+                #         if self.logger:
+                #             self.logger.debug(f"TTS Service: Received empty audio chunk for text: {str(tts_params.get('text', ''))[:30]}...")
             except Exception as e:
                 if self.logger:
                     self.logger.error(f"Error during synthesize_streaming for {str(tts_params.get('text', ''))[:30]}: {e}", exc_info=True)
@@ -55,7 +65,7 @@ class TTSService(BaseService):
                 # Clean up completed tasks
                 active_tts_tasks = [task for task in active_tts_tasks if not task.done()]
 
-                if self.terminate_current_dialogue_event.is_set() and not self.llm_output_queue.empty() and not active_tts_tasks:
+                if self.terminate_current_dialogue_event.is_set() and (not self.llm_output_queue.empty() or active_tts_tasks):
                     while not self.llm_output_queue.empty():
                         try:
                             item = self.llm_output_queue.get_nowait()
@@ -92,14 +102,14 @@ class TTSService(BaseService):
                             self.logger.debug(f"TTS Service received message: {str(llm_message)[:100]}...")
                         
 
-                        tts_params = self.prepare_tts_params(llm_message,
-                                                        text_lang=self.shared_resources.get("character_lang", "en"),
-                                                        ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
-                                                        prompt_text=self.shared_resources.get("character_prompt_text", ""),
-                                                        prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
-                                                        logger=self.logger
-                                                        )
-                        
+                        # tts_params = self.prepare_tts_params_gpt_sovits(llm_message,
+                        #                                 text_lang=self.shared_resources.get("character_lang", "en"),
+                        #                                 ref_audio_path=self.shared_resources.get("character_ref_audio_path", "../dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav"),
+                        #                                 prompt_text=self.shared_resources.get("character_prompt_text", ""),
+                        #                                 prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
+                        #                                 logger=self.logger
+                        #                                 )
+                        tts_params = self.prepare_tts_params(llm_message)
                         # Create a new task to process this TTS item
                         task = asyncio.create_task(self._process_tts_item(tts_params, semaphore))
                         active_tts_tasks.append(task)
