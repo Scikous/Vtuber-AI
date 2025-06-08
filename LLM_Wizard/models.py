@@ -187,60 +187,60 @@ class VtuberExllamav2(VtuberLLMBase):
 
 
 
-#legacy model, high latency
-class VtuberLLM(VtuberLLMBase):
-    def __init__(self, model, tokenizer, character_name):
-        super().__init__(character_name)
-        self.model = model
-        self.tokenizer = tokenizer
+# #legacy model, high latency
+# class VtuberLLM(VtuberLLMBase):
+#     def __init__(self, model, tokenizer, character_name):
+#         super().__init__(character_name)
+#         self.model = model
+#         self.tokenizer = tokenizer
 
-    @classmethod
-    def load_model(cls, base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name="", character_name='assistant'):
-        from peft import PeftModel, PeftConfig
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+#     @classmethod
+#     def load_model(cls, base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name="", character_name='assistant'):
+#         from peft import PeftModel, PeftConfig
+#         from transformers import AutoModelForCausalLM, AutoTokenizer
         
-        model = AutoModelForCausalLM.from_pretrained(base_model_name,
-                                                        device_map="auto",
-                                                        trust_remote_code=False,
-                                                        revision="main")
+#         model = AutoModelForCausalLM.from_pretrained(base_model_name,
+#                                                         device_map="auto",
+#                                                         trust_remote_code=False,
+#                                                         revision="main")
 
-        if custom_model_name:
-            print(custom_model_name)
-            config = PeftConfig.from_pretrained(custom_model_name)
-            model = PeftModel.from_pretrained(
-                model, custom_model_name, offload_folder="LLM/offload")
+#         if custom_model_name:
+#             print(custom_model_name)
+#             config = PeftConfig.from_pretrained(custom_model_name)
+#             model = PeftModel.from_pretrained(
+#                 model, custom_model_name, offload_folder="LLM/offload")
 
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
-        return cls(model, tokenizer, character_name)
+#         model.eval()
+#         tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
+#         return cls(model, tokenizer, character_name)
 
-    async def dialogue_generator(self, prompt):
-        """
-        Generates character's response to a given input (Message)
-        """
-        def is_incomplete_sentence(text):
-            return text.strip()[-1] not in {'.', '!', '?'}
+#     async def dialogue_generator(self, prompt):
+#         """
+#         Generates character's response to a given input (Message)
+#         """
+#         def is_incomplete_sentence(text):
+#             return text.strip()[-1] not in {'.', '!', '?'}
 
-        max_attempts = 7
-        comment_tokenized = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
-        # print("HAAAAA:\n",comment_tokenized, self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
-        inputs = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+#         max_attempts = 7
+#         comment_tokenized = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+#         # print("HAAAAA:\n",comment_tokenized, self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
+#         inputs = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
 
-        generated_text = ""
-        # print(len(comment_tokenized["input_ids"][0]))
-        for attempt in range(max_attempts):
-            max_new_tokens = get_rand_token_len(input_len=len(comment_tokenized["input_ids"][0]))
-            results = self.model.generate(input_ids=inputs["input_ids"].to("cuda"),
-                                          max_new_tokens=max_new_tokens,
-                                          top_p=0.8, top_k=50, temperature=1.1,
-                                          repetition_penalty=1.2, do_sample=True, num_return_sequences=10)
-            output = self.tokenizer.batch_decode(results, skip_special_tokens=True)[0]
-            # print(f"{'#' * 30}\n{output}\n{'#' * 30}")
-            output_clean = character_reply_cleaner(output, self.character_name).lower()
-            # print(f"{'#' * 30}\n{output_clean}\n{'#' * 30}")
-            generated_text = output_clean
-            if not is_incomplete_sentence(generated_text) or attempt == max_attempts:
-                break
+#         generated_text = ""
+#         # print(len(comment_tokenized["input_ids"][0]))
+#         for attempt in range(max_attempts):
+#             max_new_tokens = get_rand_token_len(input_len=len(comment_tokenized["input_ids"][0]))
+#             results = self.model.generate(input_ids=inputs["input_ids"].to("cuda"),
+#                                           max_new_tokens=max_new_tokens,
+#                                           top_p=0.8, top_k=50, temperature=1.1,
+#                                           repetition_penalty=1.2, do_sample=True, num_return_sequences=10)
+#             output = self.tokenizer.batch_decode(results, skip_special_tokens=True)[0]
+#             # print(f"{'#' * 30}\n{output}\n{'#' * 30}")
+#             output_clean = character_reply_cleaner(output, self.character_name).lower()
+#             # print(f"{'#' * 30}\n{output_clean}\n{'#' * 30}")
+#             generated_text = output_clean
+#             if not is_incomplete_sentence(generated_text) or attempt == max_attempts:
+#                 break
 
-        # print("Text generation finished")
-        return generated_text
+#         # print("Text generation finished")
+#         return generated_text
