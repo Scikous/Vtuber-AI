@@ -8,14 +8,17 @@ import multiprocessing
 import random
 
 class LiveChatController:
-    def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False):
+    def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False, logger=None):
         self.youtube = None
-        self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
         self.twitch_bot = None
         self.KICK_CLIENT = None
         self.HIGH_CHAT_VOLUME = get_env_var("HIGH_CHAT_VOLUME") #high volume chats will create an enormous list of messages very quickly
 
         self._all_messages = []
+
+        self.twitch_bot = None
+        self.youtube = None
+        self.kick = None
 
         if fetch_youtube:
             self.setup_youtube()
@@ -27,6 +30,9 @@ class LiveChatController:
 
         if fetch_kick:
             self.setup_kick()
+
+        self.logger = logger if logger else logging.getLogger(__name__)
+        self.logger.info("LiveChatController initialized.")
 
 
     @classmethod
@@ -44,12 +50,13 @@ class LiveChatController:
     #get token and prepare for fetching youtube livechat messages
     def setup_youtube(self):
         self.youtube = YTLive(self._all_messages)
+        self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
 
     #get token and start twitch bot on a separate thread for livechat messages
     @staticmethod
     def _twitch_process(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs):
-        twitch_bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs)
-        twitch_bot.run()
+        self.twitch_bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs)
+        self.twitch_bot.run()
 
     def setup_twitch(self):
         TW_Auth = TwitchAuth()
@@ -66,7 +73,7 @@ class LiveChatController:
     #WIP
     def setup_kick(self):
         kick_channel = get_env_var("KI_CHANNEL")
-        self.KICK_CLIENT = KickClient(username=kick_channel, kick_chat_msgs=self._all_messages)
+        self.kick = KickClient(username=kick_channel, kick_chat_msgs=self._all_messages)
         # KICK_CLIENT.listen() #uncomment for retrieving messages as they come in*
     
     #fetch a random message from 
@@ -78,9 +85,9 @@ class LiveChatController:
             self.next_page_token = await self.youtube.get_live_chat_messages(next_page_token=self.next_page_token)
         
         #fetch raw kick messages and process them automatically -- adds automatically to kick_messages
-        if self.KICK_CLIENT:
-            raw_messages = await self.KICK_CLIENT.fetch_raw_messages(num_to_fetch=10)
-            await self.KICK_CLIENT.process_messages(raw_messages)
+        if self.kick:
+            raw_messages = await self.kick.fetch_raw_messages(num_to_fetch=10)
+            await self.kick.process_messages(raw_messages)
 
         #take messages in order
         self._all_messages.extend(self.twitch_chat_msgs)
@@ -88,7 +95,7 @@ class LiveChatController:
         if self._all_messages:
             message = random.choice(self._all_messages)
             self._all_messages.remove(message)
-            print("PICKED MESSAGE:", message, self.twitch_chat_msgs, self._all_messages)
+                self.logger.info(f"PICKED MESSAGE: {message}, Remaining Messages: {self._all_messages}")
             return message, self._all_messages
         return None, None
 
@@ -107,25 +114,26 @@ class LiveChatController:
                 # or if the youtube object exists and is properly initialized
                 connections_active = True
             except Exception:
-                pass
+                self.logger.warning(f"YouTube LiveChat NOT connected")
+
         
         # Check Twitch connection
-        if hasattr(self, 'twitch_chat_msgs'):
+        if self.twitch_bot:
             try:
                 # Twitch connection is active if the process is running
                 # This is a simplified check - in practice you might want to
                 # implement a more sophisticated health check
                 connections_active = True
             except Exception:
-                pass
+                self.logger.warning(f"Twitch LiveChat NOT connected")                
         
         # Check Kick connection
-        if self.KICK_CLIENT:
+        if self.kick:
             try:
                 # Kick connection check
                 connections_active = True
             except Exception:
-                pass
+                self.logger.warning(f"Kick LiveChat NOT connected")                
         
         return connections_active
     
@@ -136,25 +144,25 @@ class LiveChatController:
             if self.youtube:
                 try:
                     self.setup_youtube()
-                    print("YouTube LiveChat reconnected")
+                    self.logger.info(f"YouTube LiveChat reconnected")
                 except Exception as e:
-                    print(f"Failed to reconnect YouTube LiveChat: {e}")
+                    self.logger.warning(f"Failed to reconnect YouTube LiveChat: {e}")
             
             # Reconnect Twitch if it was enabled
-            if hasattr(self, 'twitch_chat_msgs'):
+            if self.twitch_bot:
                 try:
-                    self.setup_twitch()
-                    print("Twitch LiveChat reconnected")
+                    self.twitch_bot.run()
+                    self.logger.info(f"Twitch LiveChat reconnected")
                 except Exception as e:
-                    print(f"Failed to reconnect Twitch LiveChat: {e}")
-            
+                    self.logger.warning(f"Failed to reconnect Twitch LiveChat: {e}")
+
             # Reconnect Kick if it was enabled
             if self.KICK_CLIENT:
                 try:
                     self.setup_kick()
-                    print("Kick LiveChat reconnected")
+                    self.logger.info(f"Kick LiveChat reconnected")
                 except Exception as e:
-                    print(f"Failed to reconnect Kick LiveChat: {e}")
+                    self.logger.warning(f"Failed to reconnect Kick LiveChat: {e}")
                     
         except Exception as e:
             print(f"Error during LiveChat reconnection: {e}")
@@ -167,35 +175,35 @@ class LiveChatController:
                 try:
                     # YouTube doesn't need explicit disconnection, just clear the reference
                     self.youtube = None
-                    print("YouTube LiveChat disconnected")
+                    self.logger.info(f"YouTube LiveChat disconnected")
                 except Exception as e:
-                    print(f"Error disconnecting YouTube LiveChat: {e}")
+                    self.logger.warning(f"Error disconnecting YouTube LiveChat: {e}")
             
             # Disconnect Twitch
-            if hasattr(self, 'twitch_chat_msgs'):
+            if self.twitch_bot:
                 try:
                     # Clear the shared list
                     if hasattr(self, 'twitch_chat_msgs'):
                         self.twitch_chat_msgs[:] = []
-                    print("Twitch LiveChat disconnected")
+                    self.twitch_bot.close()
+                    self.logger.info(f"Twitch LiveChat disconnected")
                 except Exception as e:
-                    print(f"Error disconnecting Twitch LiveChat: {e}")
+                    self.logger.warning(f"Error disconnecting Twitch LiveChat: {e}")
             
             # Disconnect Kick
             if self.KICK_CLIENT:
                 try:
                     # Kick client cleanup
                     self.KICK_CLIENT = None
-                    print("Kick LiveChat disconnected")
+                    self.logger.info(f"Kick LiveChat disconnected")
                 except Exception as e:
-                    print(f"Error disconnecting Kick LiveChat: {e}")
+                    self.logger.warning(f"Error disconnecting Kick LiveChat: {e}")
             
             # Clear all messages
             self._all_messages.clear()
             
         except Exception as e:
-            print(f"Error during LiveChat disconnection: {e}")
-
+            self.logger.warning(f"Error during LiveChat disconnection: {e}")
 
 # Example usage:
 if __name__ == "__main__":
