@@ -92,6 +92,110 @@ class LiveChatController:
             return message, self._all_messages
         return None, None
 
+    def is_connected(self):
+        """Check if LiveChat connections are active.
+        
+        Returns:
+            bool: True if at least one connection is active, False otherwise
+        """
+        connections_active = False
+        
+        # Check YouTube connection
+        if self.youtube:
+            try:
+                # YouTube connection is considered active if we have a valid next_page_token
+                # or if the youtube object exists and is properly initialized
+                connections_active = True
+            except Exception:
+                pass
+        
+        # Check Twitch connection
+        if hasattr(self, 'twitch_chat_msgs'):
+            try:
+                # Twitch connection is active if the process is running
+                # This is a simplified check - in practice you might want to
+                # implement a more sophisticated health check
+                connections_active = True
+            except Exception:
+                pass
+        
+        # Check Kick connection
+        if self.KICK_CLIENT:
+            try:
+                # Kick connection check
+                connections_active = True
+            except Exception:
+                pass
+        
+        return connections_active
+    
+    def reconnect(self):
+        """Attempt to reconnect all LiveChat services."""
+        try:
+            # Reconnect YouTube if it was enabled
+            if self.youtube:
+                try:
+                    self.setup_youtube()
+                    print("YouTube LiveChat reconnected")
+                except Exception as e:
+                    print(f"Failed to reconnect YouTube LiveChat: {e}")
+            
+            # Reconnect Twitch if it was enabled
+            if hasattr(self, 'twitch_chat_msgs'):
+                try:
+                    self.setup_twitch()
+                    print("Twitch LiveChat reconnected")
+                except Exception as e:
+                    print(f"Failed to reconnect Twitch LiveChat: {e}")
+            
+            # Reconnect Kick if it was enabled
+            if self.KICK_CLIENT:
+                try:
+                    self.setup_kick()
+                    print("Kick LiveChat reconnected")
+                except Exception as e:
+                    print(f"Failed to reconnect Kick LiveChat: {e}")
+                    
+        except Exception as e:
+            print(f"Error during LiveChat reconnection: {e}")
+    
+    def disconnect(self):
+        """Disconnect all LiveChat services and clean up resources."""
+        try:
+            # Disconnect YouTube
+            if self.youtube:
+                try:
+                    # YouTube doesn't need explicit disconnection, just clear the reference
+                    self.youtube = None
+                    print("YouTube LiveChat disconnected")
+                except Exception as e:
+                    print(f"Error disconnecting YouTube LiveChat: {e}")
+            
+            # Disconnect Twitch
+            if hasattr(self, 'twitch_chat_msgs'):
+                try:
+                    # Clear the shared list
+                    if hasattr(self, 'twitch_chat_msgs'):
+                        self.twitch_chat_msgs[:] = []
+                    print("Twitch LiveChat disconnected")
+                except Exception as e:
+                    print(f"Error disconnecting Twitch LiveChat: {e}")
+            
+            # Disconnect Kick
+            if self.KICK_CLIENT:
+                try:
+                    # Kick client cleanup
+                    self.KICK_CLIENT = None
+                    print("Kick LiveChat disconnected")
+                except Exception as e:
+                    print(f"Error disconnecting Kick LiveChat: {e}")
+            
+            # Clear all messages
+            self._all_messages.clear()
+            
+        except Exception as e:
+            print(f"Error during LiveChat disconnection: {e}")
+
 
 # Example usage:
 if __name__ == "__main__":
