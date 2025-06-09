@@ -6,6 +6,7 @@ from kick import KickClient
 import time
 import multiprocessing
 import random
+import logging
 
 class LiveChatController:
     def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False, logger=None):
@@ -53,8 +54,8 @@ class LiveChatController:
         self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
 
     #get token and start twitch bot on a separate thread for livechat messages
-    @staticmethod
-    def _twitch_process(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs):
+    # @staticmethod
+    def _twitch_process(self, CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs):
         self.twitch_bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs)
         self.twitch_bot.run()
 
@@ -95,7 +96,7 @@ class LiveChatController:
         if self._all_messages:
             message = random.choice(self._all_messages)
             self._all_messages.remove(message)
-                self.logger.info(f"PICKED MESSAGE: {message}, Remaining Messages: {self._all_messages}")
+            self.logger.info(f"PICKED MESSAGE: {message}, Remaining Messages: {self._all_messages}")
             return message, self._all_messages
         return None, None
 
