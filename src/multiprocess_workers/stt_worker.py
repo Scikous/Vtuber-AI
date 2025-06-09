@@ -40,30 +40,12 @@ def stt_process_worker(
     try:
         # Import STT functionality
         from STT_Wizard.STT import speech_to_text
+        from STT_Wizard.utils.stt_utils import create_stt_callback
         
         speaker_name = shared_config.get("speaker_name", "User")
         
-        def stt_callback(speech):
-            """Callback function for STT results."""
-            try:
-                # Filter out the common false positive
-                if speech and speech.strip().lower() != "thank you.":
-                    message = f"{speaker_name}: {speech.strip()}"
-                    
-                    # Put message in queue (non-blocking)
-                    try:
-                        speech_queue.put_nowait(message)
-                        logger.debug(f"STT captured: {speech.strip()}")
-                    except:
-                        # Queue is full, try to make space by removing oldest item
-                        try:
-                            speech_queue.get_nowait()  # Remove oldest
-                            speech_queue.put_nowait(message)  # Add new
-                            logger.debug(f"STT captured (queue was full): {speech.strip()}")
-                        except:
-                            logger.warning(f"STT queue full, dropped message: {speech.strip()}")
-            except Exception as e:
-                logger.error(f"Error in STT callback: {e}")
+        # Create modular STT callback
+        stt_callback = create_stt_callback(speech_queue, speaker_name, logger)
         
 
         logger.info("STT worker process ready, starting speech recognition...")
