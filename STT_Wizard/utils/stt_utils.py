@@ -1,6 +1,8 @@
 
+from .config import load_config
 import numpy as np
 import math
+import logging
 
 def calculate_audio_energy_rms(audio_chunk: np.ndarray) -> float:
     """
@@ -57,6 +59,44 @@ def count_words(text: str) -> int:
     if not text or not text.strip():
         return 0
     return len(text.split())
+
+def create_stt_callback(speech_queue, speaker_name="User", logger=None):
+    """Create a standardized STT callback function for multiprocessing workers.
+    
+    Args:
+        speech_queue: Queue to put recognized speech into
+        speaker_name: Name of the speaker (default: "User")
+        logger: Logger instance for debugging
+        
+    Returns:
+        Callback function that can be used with speech_to_text
+    """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+    
+    def stt_callback(speech):
+        """Callback function for STT results."""
+        try:
+            # Filter out the common false positive
+            if speech and speech.strip().lower() != "thank you.":
+                message = f"{speaker_name}: {speech.strip()}"
+                
+                # Put message in queue (non-blocking)
+                try:
+                    speech_queue.put_nowait(message)
+                    logger.debug(f"STT captured: {speech.strip()}")
+                except:
+                    # Queue is full, try to make space by removing oldest item
+                    try:
+                        speech_queue.get_nowait()  # Remove oldest
+                        speech_queue.put_nowait(message)  # Add new
+                        logger.debug(f"STT captured (queue was full): {speech.strip()}")
+                    except:
+                        logger.warning(f"STT queue full, dropped message: {speech.strip()}")
+        except Exception as e:
+            logger.error(f"Error in STT callback: {e}")
+    
+    return stt_callback
 
 # Example usage (can be removed or kept for testing):
 if __name__ == '__main__':
