@@ -67,23 +67,30 @@ def main():
     """
     print("Starting Vtuber-AI application and TTS service...")
 
-    # Prepare the command for the Vtuber-AI main orchestrator
+    # Prepare the command for the Vtuber-AI multiprocess orchestrator
     python_executable_ai = get_python_executable(VENV_NAME_AI)
-    main_orchestrator_script = os.path.join(PROJECT_ROOT, "src", "main_orchestrator.py")
+    multiprocess_orchestrator_script = os.path.join(PROJECT_ROOT, "src", "multiprocess_orchestrator.py")
 
-    if not os.path.exists(main_orchestrator_script):
-        print(f"Error: Main orchestrator script not found at {main_orchestrator_script}")
-        sys.exit(1)
+    if not os.path.exists(multiprocess_orchestrator_script):
+        print(f"Error: Multiprocess orchestrator script not found at {multiprocess_orchestrator_script}")
+        # Fallback to old orchestrator if multiprocess version doesn't exist
+        main_orchestrator_script = os.path.join(PROJECT_ROOT, "src", "main_orchestrator.py")
+        if os.path.exists(main_orchestrator_script):
+            print(f"Falling back to async orchestrator: {main_orchestrator_script}")
+            multiprocess_orchestrator_script = main_orchestrator_script
+        else:
+            print(f"Error: No orchestrator script found")
+            sys.exit(1)
 
     if python_executable_ai:
         print(f"Using Python from virtual environment: {python_executable_ai}")
-        command_ai = [python_executable_ai, main_orchestrator_script]
+        command_ai = [python_executable_ai, multiprocess_orchestrator_script]
     else:
         print(f"Warning: Virtual environment '{VENV_NAME_AI}' Python not found. "
               f"Attempting to use system 'python'.")
         print("Please ensure the virtual environment is activated and contains all dependencies, "
               "or that dependencies are installed globally.")
-        command_ai = ["python", main_orchestrator_script]
+        command_ai = ["python", multiprocess_orchestrator_script]
 
     # Prepare the command for the TTS service
     python_executable_tts = get_python_executable(VENV_NAME_TTS)

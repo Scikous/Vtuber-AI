@@ -65,23 +65,7 @@ def stt_process_worker(
             except Exception as e:
                 logger.error(f"Error in STT callback: {e}")
         
-        # Create a simple event wrapper for compatibility
-        class EventWrapper:
-            def __init__(self, mp_event):
-                self.mp_event = mp_event
-            
-            def is_set(self):
-                return self.mp_event.is_set()
-            
-            def set(self):
-                self.mp_event.set()
-            
-            def clear(self):
-                self.mp_event.clear()
-        
-        terminate_wrapper = EventWrapper(terminate_current_dialogue_event)
-        streaming_wrapper = EventWrapper(is_audio_streaming_event)
-        
+
         logger.info("STT worker process ready, starting speech recognition...")
         
         # Main STT loop
