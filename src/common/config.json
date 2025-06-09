@@ -4,16 +4,23 @@
     "tokenizer_model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
     "llm_model_revision": "8.0bpw",
     "short_term_memory_maxlen": 12,
+    "max_tokens": 512, 
     "speaker_name": "LMFAO",
     "character_info_json": "LLM_Wizard/characters/character.json",
 
     "tts_concurrency": 1,
+
 
     "audio_backend_settings": {
         "format": "paFloat32",
         "channels": 1,
         "rate": 24000,
         "chunk_size": 512
+    },
+
+    "livechat_settings": {
+        "fetch_interval": 60
+
     }
 
 }
