@@ -97,7 +97,8 @@ class DialogueService(BaseService):
                         if contains_sentence_terminator(chunk_text):
                             text_to_send_to_tts = tts_buffer.strip()
                             if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
-                                print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
+                                from utils.logger import conditional_print
+        conditional_print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
                                 asyncio.create_task(self.llm_output_queue.put(text_to_send_to_tts))
                                 if self.logger:
                                     self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
@@ -110,7 +111,7 @@ class DialogueService(BaseService):
                 # (e.g., the LLM finished generating mid-sentence)
                 if tts_buffer.strip():
                     remaining_text_for_tts = tts_buffer.strip()
-                    print("Sending remaining to TTS queue (end of generation): ", remaining_text_for_tts) # Keep for debugging
+                    conditional_print("Sending remaining to TTS queue (end of generation): ", remaining_text_for_tts) # Keep for debugging
                     asyncio.create_task(self.llm_output_queue.put(remaining_text_for_tts))
                     if self.logger:
                         self.logger.debug(f"Put remaining TTS params to llm_output_queue: {remaining_text_for_tts[:30]}...")

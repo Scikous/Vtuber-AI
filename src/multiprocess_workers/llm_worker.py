@@ -178,17 +178,8 @@ async def process_llm_message(
                     if contains_sentence_terminator(chunk_text):
                         text_to_send_to_tts = tts_buffer.strip()
                         if text_to_send_to_tts:
-                            try:
-                                llm_output_queue.put_nowait(text_to_send_to_tts)
-                                logger.debug(f"Sent to TTS: {text_to_send_to_tts[:30]}...")
-                            except:
-                                # Queue full, try to make space
-                                try:
-                                    llm_output_queue.get_nowait()
-                                    llm_output_queue.put_nowait(text_to_send_to_tts)
-                                except:
-                                    logger.warning(f"LLM output queue full, dropped: {text_to_send_to_tts[:30]}...")
-                            
+                            llm_output_queue.put_nowait(text_to_send_to_tts)
+                            logger.debug(f"Sent to TTS: {text_to_send_to_tts[:30]}...")
                             tts_buffer = ""
         else:
             # Regular iterator (fallback for sync generators)
@@ -209,17 +200,8 @@ async def process_llm_message(
                     if contains_sentence_terminator(chunk_text):
                         text_to_send_to_tts = tts_buffer.strip()
                         if text_to_send_to_tts:
-                            try:
-                                llm_output_queue.put_nowait(text_to_send_to_tts)
-                                logger.debug(f"Sent to TTS: {text_to_send_to_tts[:30]}...")
-                            except:
-                                # Queue full, try to make space
-                                try:
-                                    llm_output_queue.get_nowait()
-                                    llm_output_queue.put_nowait(text_to_send_to_tts)
-                                except:
-                                    logger.warning(f"LLM output queue full, dropped: {text_to_send_to_tts[:30]}...")
-                            
+                            llm_output_queue.put_nowait(text_to_send_to_tts)
+                            logger.debug(f"Sent to TTS: {text_to_send_to_tts[:30]}...")
                             tts_buffer = ""
         
         # Send any remaining text
@@ -400,70 +382,3 @@ def llm_process_worker(
         )
     finally:
         loop.close()
-
-def create_optimized_llm_worker(
-    speech_queue: Queue,
-    live_chat_queue: Queue,
-    llm_output_queue: Queue,
-    terminate_event: Event,
-    terminate_current_dialogue_event: Event,
-    shared_config: dict
-):
-    """
-    Optimized LLM worker with better memory management and batching.
-    """
-    logger = app_logger.get_logger("LLM-Worker-Optimized")
-    logger.info("Optimized LLM worker process starting...")
-    
-    try:
-        import threading
-        from queue import Queue as ThreadQueue, Empty
-        
-        # Create internal queues for better message handling
-        internal_message_queue = ThreadQueue(maxsize=10)
-        
-        def message_collector():
-            """Collect messages from both input queues in a separate thread."""
-            while not terminate_event.is_set():
-                try:
-                    # Priority: STT messages first
-                    try:
-                        message = speech_queue.get_nowait()
-                        internal_message_queue.put(("stt", message, None))
-                    except:
-                        pass
-                    
-                    # Then live chat messages
-                    try:
-                        message_data = live_chat_queue.get_nowait()
-                        if isinstance(message_data, tuple):
-                            message, context = message_data
-                        else:
-                            message, context = message_data, None
-                        internal_message_queue.put(("livechat", message, context))
-                    except:
-                        pass
-                    
-                    time.sleep(0.001)  # Very small sleep
-                except Exception as e:
-                    logger.error(f"Error in message collector: {e}")
-        
-        # Start message collector thread
-        collector_thread = threading.Thread(target=message_collector, daemon=True)
-        collector_thread.start()
-        
-        # Run the main LLM processing with the optimized message handling
-        llm_process_worker(
-            internal_message_queue, None, llm_output_queue,
-            terminate_event, terminate_current_dialogue_event, shared_config
-        )
-    
-    except Exception as e:
-        logger.error(f"Error in optimized LLM worker: {e}", exc_info=True)
-        # Fallback to standard implementation
-        llm_process_worker(
-            speech_queue, live_chat_queue, llm_output_queue,
-            terminate_event, terminate_current_dialogue_event, shared_config
-        )
-    finally:
-        logger.info("Optimized LLM worker process shutting down...")
