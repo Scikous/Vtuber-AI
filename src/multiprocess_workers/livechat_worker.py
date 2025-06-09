@@ -115,21 +115,27 @@ def livechat_process_worker(
                     time.sleep(1)  # Longer sleep on error
         
         def connection_monitor():
-            """Monitor LiveChat connections and attempt reconnection if needed."""
+            """Monitor LiveChat connection health."""
             if not livechat_controller:
                 return
             
             while not terminate_event.is_set():
                 try:
-                    # Check connection status using the new methods
-                    if not livechat_controller.is_connected():
-                        logger.warning("LiveChat connection lost, attempting reconnection...")
-                        livechat_controller.reconnect()
+                    # Check connection health
+                    if hasattr(livechat_controller, 'is_connected'):
+                        if not livechat_controller.is_connected():
+                            logger.warning("LiveChat connection lost, attempting to reconnect...")
+                            try:
+                                livechat_controller.reconnect()
+                                logger.info("LiveChat reconnected successfully")
+                            except Exception as e:
+                                logger.error(f"Failed to reconnect to LiveChat: {e}")
                     
                     time.sleep(30)  # Check every 30 seconds
+                
                 except Exception as e:
                     logger.error(f"Error in connection monitor: {e}")
-                    time.sleep(60)  # Wait longer on error
+                    time.sleep(60)  # Longer sleep on error
         
         # Start worker threads
         fetcher_thread = threading.Thread(target=message_fetcher, daemon=True, name="LiveChatFetcher")
