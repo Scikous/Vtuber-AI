@@ -83,8 +83,8 @@ def tts_process_worker(
                         break
                     
                     if audio_chunk:
-                        audio_output_queue.put_nowait(chunk)
-                        logger.debug(f"TTS sent audio chunk of size {len(chunk)}")
+                        audio_output_queue.put_nowait(audio_chunk)
+                        logger.debug(f"TTS sent audio chunk of size {len(audio_chunk)}")
                 
                 logger.debug(f"TTS completed processing: {text_input[:30]}...")
                 return 0

@@ -38,7 +38,7 @@ def livechat_process_worker(
     
     try:
         # Import LiveChat functionality
-        from livechatAPI.livechat_controller import LiveChatController
+        from Livechat_Wizard.livechat import LiveChatController
         
         config = shared_config.get("config", {})
         
@@ -63,7 +63,7 @@ def livechat_process_worker(
             logger.info("LiveChat worker will run in disabled mode")
         
         # Message processing settings
-        fetch_interval = livechat_config.get("fetch_interval", 1.0)  # Default 1 second
+        fetch_interval = livechat_config.get("fetch_interval", 60.0)  # Default 1 second
         # max_messages_per_fetch = livechat_config.get("max_messages_per_fetch", 5)
         
         def fetch_and_process_messages():

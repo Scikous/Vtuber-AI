@@ -1,350 +1,314 @@
 #!/usr/bin/env python3
 """
 Audio Worker Process for Vtuber-AI
-Handles audio playback in a dedicated process for optimal performance.
+Handles audio playback in a dedicated process using the PyAudioPlayback system.
 """
-import multiprocessing
-import threading
-import time
-import queue
-from typing import Optional
-import sys
 import os
+import sys
+import logging
+import time
+from multiprocessing import Queue, Event, Value
+from queue import Empty
 
 # Add project root to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+# This path handling is fragile. Consider using an installable package structure for more robust path management.
 try:
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    # Assuming your custom playback system is in a structure like 'audio/pyaudio_playback.py'
+    # Adjust the import path as necessary for your project structure.
     from TTS_Wizard.utils.pyaudio_playback import PyAudioPlayback
-    PYAUDIO_AVAILABLE = True
-except ImportError:
-    PYAUDIO_AVAILABLE = False
-    print("PyAudio playback not available. Audio playback will be disabled.")
+except ImportError as e:
+    # If the import fails, the worker cannot function. Log this critical error.
+    # A placeholder function will be defined to prevent crashing the main app on import.
+    print(f"FATAL: Could not import PyAudioPlayback. Audio will not work. Error: {e}")
+    PyAudioPlayback = None
 
-from .multiprocess_utils import setup_worker_logging
-from multiprocessing import Queue, Event, Value
-from ctypes import c_bool
-from queue import Queue as ThreadQueue, Empty
 from utils import logger as app_logger
+
+def _clear_queue(q: Queue):
+    """Helper function to empty a multiprocessing queue."""
+    while not q.empty():
+        try:
+            q.get_nowait()
+        except Empty:
+            break
 
 def audio_process_worker(
     audio_output_queue: Queue,
     terminate_event: Event,
-    is_audio_streaming: Event,
+    terminate_current_dialogue_event: Event,
+    audio_playing: Value,
+    is_audio_streaming_event: Event,
     shared_config: dict
 ):
     """
-    Audio playback worker process using custom PyAudioPlayback class.
-    
-    Args:
-        audio_output_queue: Queue containing audio data to play
-        terminate_event: Event to signal worker termination
-        is_audio_streaming: Event to track streaming status
-        shared_config: Shared configuration dictionary
-    """
-    logger = setup_worker_logging("AudioWorker")
-    
-    if not PYAUDIO_AVAILABLE:
-        logger.warning("PyAudio not available, using simple audio worker")
-        return simple_audio_worker(audio_output_queue, terminate_event, is_audio_streaming, shared_config)
-    
-    try:
-        # Get audio configuration from shared config
-        audio_config = shared_config.get("audio_backend_settings", {})
-        
-        # Initialize PyAudioPlayback with configuration
-        audio_playback = PyAudioPlayback(
-            format=audio_config.get("format", "int16"),
-            channels=audio_config.get("channels", 1),
-            rate=audio_config.get("rate", 22050),
-            chunk_size=audio_config.get("chunk_size", 1024)
-        )
-        
-        # Initialize and open the audio stream
-        audio_playback.initialize()
-        audio_playback.open_stream()
-        
-        # Audio buffer for smooth playback
-        audio_buffer = ThreadQueue(maxsize=50)
-        
-        def audio_consumer():
-            """Thread function to consume audio from buffer and play it."""
-            try:
-                while not terminate_event.is_set():
-                    try:
-                        audio_data = audio_buffer.get(timeout=0.1)
-                        if audio_data is None:  # Sentinel value
-                            break
-                        
-                        # Play audio chunk using PyAudioPlayback
-                        audio_playback.write_chunk(audio_data)
-                        audio_buffer.task_done()
-                        
-                    except Empty:
-                        continue
-                    except Exception as e:
-                        logger.error(f"Error in audio consumer: {e}")
-                        break
-            except Exception as e:
-                logger.error(f"Audio consumer thread error: {e}")
-        
-        # Start audio consumer thread
-        consumer_thread = threading.Thread(target=audio_consumer, daemon=True)
-        consumer_thread.start()
-        
-        logger.info("Audio worker started with PyAudioPlayback")
-        
-        # Main loop - producer
-        while not terminate_event.is_set():
-            try:
-                # Get audio data from queue
-                audio_data = audio_output_queue.get(timeout=0.1)
-                
-                if audio_data is None:  # Sentinel value for shutdown
-                    break
-                
-                # Set streaming status
-                is_audio_streaming.set()
-                
-                # Add to buffer (non-blocking)
-                try:
-                    audio_buffer.put_nowait(audio_data)
-                except:
-                    # Buffer full, skip this chunk
-                    logger.warning("Audio buffer full, skipping chunk")
-                
-            except Empty:
-                # No audio data available
-                is_audio_streaming.clear()
-                continue
-            except Exception as e:
-                logger.error(f"Error in audio worker main loop: {e}")
-                break
-        
-        # Cleanup
-        logger.info("Audio worker shutting down...")
-        
-        # Signal consumer thread to stop
-        try:
-            audio_buffer.put_nowait(None)  # Sentinel
-        except:
-            pass
-        
-        # Wait for consumer thread
-        consumer_thread.join(timeout=2.0)
-        
-        # Close audio stream and cleanup
-        audio_playback.close_stream()
-        
-        is_audio_streaming.clear()
-        logger.info("Audio worker terminated")
-        
-    except Exception as e:
-        logger.error(f"Audio worker error: {e}")
-        is_audio_streaming.clear()
+    Audio worker process function that uses the PyAudioPlayback class.
 
-def simple_audio_worker(
-    audio_output_queue: Queue,
-    terminate_event: Event,
-    is_audio_streaming: Event,
-    shared_config: dict
-):
+    Args:
+        audio_output_queue: Queue for incoming audio chunks from TTS.
+        terminate_event: Event to signal process termination.
+        terminate_current_dialogue_event: Event to stop the current dialogue playback.
+        audio_playing: Shared boolean indicating if audio is currently playing.
+        is_audio_streaming_event: Event indicating audio is actively being streamed.
+        shared_config: Configuration dictionary for the audio system.
     """
-    Simple fallback audio worker when PyAudio is not available.
-    """
-    logger = setup_worker_logging("SimpleAudioWorker")
-    logger.info("Simple audio worker started (PyAudio not available)")
+    # Setup logging for this process
+    logger = app_logger.get_logger("Audio-Worker")
     
-    while not terminate_event.is_set():
-        try:
-            # Just consume audio data without playing
-            audio_data = audio_output_queue.get(timeout=0.1)
-            if audio_data is None:
-                break
+    if PyAudioPlayback is None:
+        logger.error("PyAudioPlayback class not available. Audio worker cannot start.")
+        terminate_event.wait() # Wait indefinitely to prevent process churn
+        return
+
+    playback_system = None
+    try:
+        # Initialize the custom playback system
+        audio_backend_config = shared_config.get('config', {}).get('audio_backend_settings', {})
+
+        playback_system = PyAudioPlayback(config=audio_backend_config, logger=logger)
+        logger.info("Audio worker process starting with PyAudioPlayback system...")
+
+        # Main loop for the worker process
+        while not terminate_event.is_set():
+            # 1. Check for dialogue interruption event (highest priority)
+            if terminate_current_dialogue_event.is_set():
+                logger.info("Dialogue interruption signal received. Clearing audio.")
+                
+                # Stop playback and clear hardware buffers
+                if playback_system.is_active():
+                    playback_system.stop_and_clear_internal_buffers()
+                
+                # Clear any pending audio chunks from the queue
+                _clear_queue(audio_output_queue)
+                
+                # Update shared state to indicate silence
+                with audio_playing.get_lock():
+                    audio_playing.value = False
+                is_audio_streaming_event.clear()
+                
+                # Acknowledge the interruption by clearing the event
+                terminate_current_dialogue_event.clear()
+                logger.info("Audio cleared and ready for next dialogue.")
+                continue
+
+            # 2. Try to get the next audio chunk from the queue
+            try:
+                # Block for a short time, allowing the loop to check termination events
+                audio_chunk = audio_output_queue.get_nowait()#timeout=0.05) ##maybe maybe not
+
+                if audio_chunk:
+                    # If we receive audio, ensure the stream is open
+                    if not playback_system.is_active():
+                        playback_system.open_stream()
+                        logger.info("Audio stream opened for new playback.")
+
+                    # Update state to indicate we are playing
+                    with audio_playing.get_lock():
+                        audio_playing.value = True
+                    is_audio_streaming_event.set()
+
+                    # Write the chunk to the audio device
+                    playback_system.write_chunk(audio_chunk)
             
-            # Simulate audio playback timing
-            is_audio_streaming.set()
-            time.sleep(0.1)  # Simulate playback time
+            except Empty:
+                # This is normal; it means no audio is currently available.
+                # If the stream was active, it has now finished.
+                if audio_playing.value:
+                    logger.info("Audio stream finished.")
+                    with audio_playing.get_lock():
+                        audio_playing.value = False
+                    is_audio_streaming_event.clear()
+                
+                # The playback_system stream can remain open, ready for the next chunk.
+                continue
             
-        except Empty:
-            is_audio_streaming.clear()
-            continue
-        except Exception as e:
-            logger.error(f"Error in simple audio worker: {e}")
-            break
-    
-    is_audio_streaming.clear()
-    logger.info("Simple audio worker terminated")
+            except Exception as e:
+                logger.error(f"Error during audio playback loop: {e}", exc_info=True)
+                # In case of an error, reset state and close the stream
+                with audio_playing.get_lock():
+                    audio_playing.value = False
+                is_audio_streaming_event.clear()
+                if playback_system.is_active():
+                    playback_system.close_stream()
+                time.sleep(0.5) # Avoid fast error loops
+
+    except Exception as e:
+        logger.error(f"Unhandled exception in audio worker process: {e}", exc_info=True)
+    finally:
+        # 3. Cleanup: Ensure all resources are released on exit
+        logger.info("Audio worker process shutting down...")
+        if playback_system:
+            try:
+                logger.info("Cleaning up playback system.")
+                playback_system.cleanup()
+            except Exception as e:
+                logger.error(f"Error during playback system cleanup: {e}")
+        
+        # Final state reset
+        with audio_playing.get_lock():
+            audio_playing.value = False
+        is_audio_streaming_event.clear()
+        
+        logger.info("Audio worker process has shut down.")
+        
 def create_optimized_audio_worker(
     audio_output_queue: Queue,
     terminate_event: Event,
-    is_audio_streaming: Event,
-    shared_config: dict,
-    buffer_size: int = 100,
-    preload_chunks: int = 5
+    terminate_current_dialogue_event: Event,
+    audio_playing: Value,
+    is_audio_streaming_event: Event,
+    shared_config: dict
 ):
     """
-    Create an optimized audio worker with advanced buffering and predictive loading.
-    
-    Args:
-        audio_output_queue: Queue containing audio data to play
-        terminate_event: Event to signal worker termination
-        is_audio_streaming: Event to track streaming status
-        shared_config: Shared configuration dictionary
-        buffer_size: Maximum number of chunks in buffer
-        preload_chunks: Number of chunks to preload before starting playback
+    Optimized audio worker with advanced buffering and low-latency playback.
     """
-    logger = setup_worker_logging("OptimizedAudioWorker")
-    
-    if not PYAUDIO_AVAILABLE:
-        logger.warning("PyAudio not available, using simple audio worker")
-        return simple_audio_worker(audio_output_queue, terminate_event, is_audio_streaming, shared_config)
+    logger = app_logger.get_logger("Audio-Worker-Optimized")
+    logger.info("Optimized audio worker starting...")
     
     try:
-        # Get audio configuration from shared config
-        audio_config = shared_config.get("audio_backend_settings", {})
+        import pyaudio
+        import numpy as np
+        from collections import deque
+        import threading
         
-        # Initialize PyAudioPlayback with optimized settings
-        audio_playback = PyAudioPlayback(
-            format=audio_config.get("format", "int16"),
-            channels=audio_config.get("channels", 1),
-            rate=audio_config.get("rate", 22050),
-            chunk_size=min(audio_config.get("chunk_size", 1024), 512)  # Smaller chunk for lower latency
-        )
+        # Optimized audio configuration
+        CHUNK = 512  # Smaller chunks for lower latency
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 1
+        RATE = 22050
         
-        # Initialize and open the audio stream
-        audio_playback.initialize()
-        audio_playback.open_stream()
+        # Advanced buffering
+        audio_buffer = deque()
+        buffer_lock = threading.RLock()  # Reentrant lock
+        target_buffer_size = 5  # Target number of chunks in buffer
         
-        # Advanced buffering system
-        audio_buffer = ThreadQueue(maxsize=buffer_size)
-        playback_stats = {
-            'chunks_played': 0,
-            'buffer_underruns': 0,
-            'last_playback_time': time.time()
-        }
+        # Initialize PyAudio with optimizations
+        p = pyaudio.PyAudio()
         
         def optimized_audio_callback():
-            """Optimized audio playback with predictive buffering."""
+            """Optimized audio callback with predictive buffering."""
+            stream = None
             try:
-                # Preload buffer
-                preload_count = 0
-                while preload_count < preload_chunks and not terminate_event.is_set():
-                    try:
-                        audio_data = audio_output_queue.get(timeout=0.5)
-                        if audio_data is None:
-                            break
-                        audio_buffer.put_nowait(audio_data)
-                        preload_count += 1
-                    except (Empty, queue.Full):
-                        break
+                stream = p.open(
+                    format=FORMAT,
+                    channels=CHANNELS,
+                    rate=RATE,
+                    output=True,
+                    frames_per_buffer=CHUNK,
+                    stream_callback=None  # Use blocking mode for better control
+                )
                 
-                logger.info(f"Preloaded {preload_count} audio chunks")
+                logger.info("Optimized audio stream opened")
                 
                 while not terminate_event.is_set():
                     try:
-                        # Get audio data from buffer
-                        audio_data = audio_buffer.get(timeout=0.05)
-                        if audio_data is None:
-                            break
+                        if terminate_current_dialogue_event.is_set():
+                            with buffer_lock:
+                                audio_buffer.clear()
+                            with audio_playing.get_lock():
+                                audio_playing.value = False
+                            is_audio_streaming_event.clear()
+                            continue
                         
-                        # Play audio with timing optimization
-                        start_time = time.time()
-                        audio_playback.write_chunk(audio_data)
-                        playback_time = time.time() - start_time
-                        
-                        # Update statistics
-                        playback_stats['chunks_played'] += 1
-                        playback_stats['last_playback_time'] = time.time()
-                        
-                        # Adaptive timing based on playback performance
-                        if playback_time > 0.05:  # If playback is slow
-                            time.sleep(0.001)  # Small delay to prevent overload
-                        
-                        # Set streaming status
-                        is_audio_streaming.set()
-                        
-                    except Empty:
-                        # Buffer underrun
-                        playback_stats['buffer_underruns'] += 1
-                        is_audio_streaming.clear()
-                        time.sleep(0.01)
+                        # Smart buffer management
+                        with buffer_lock:
+                            buffer_size = len(audio_buffer)
+                            
+                            if buffer_size > 0:
+                                audio_data = audio_buffer.popleft()
+                                
+                                # Update state
+                                with audio_playing.get_lock():
+                                    audio_playing.value = True
+                                is_audio_streaming_event.set()
+                                
+                                # Play audio with error handling
+                                try:
+                                    if isinstance(audio_data, bytes):
+                                        stream.write(audio_data)
+                                    else:
+                                        # Convert to proper format
+                                        audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                                        stream.write(audio_array.tobytes())
+                                except Exception as e:
+                                    logger.error(f"Audio playback error: {e}")
+                            
+                            else:
+                                # No audio in buffer
+                                with audio_playing.get_lock():
+                                    audio_playing.value = False
+                                is_audio_streaming_event.clear()
+                                time.sleep(0.005)  # Very short sleep
+                    
                     except Exception as e:
                         logger.error(f"Error in optimized audio callback: {e}")
-                        break
-                        
-            except Exception as e:
-                logger.error(f"Optimized audio callback error: {e}")
+                        time.sleep(0.01)
+            
+            finally:
+                if stream:
+                    try:
+                        stream.stop_stream()
+                        stream.close()
+                    except:
+                        pass
         
-        def buffer_manager():
-            """Advanced buffer management with predictive loading."""
+        def optimized_buffer_manager():
+            """Optimized buffer manager with predictive loading."""
             while not terminate_event.is_set():
                 try:
-                    # Check buffer level and load more data if needed
-                    current_buffer_size = audio_buffer.qsize()
+                    # Check buffer level and load accordingly
+                    with buffer_lock:
+                        current_buffer_size = len(audio_buffer)
                     
-                    # Predictive loading based on buffer level
-                    if current_buffer_size < (buffer_size * 0.3):  # Buffer is getting low
+                    # Load more audio if buffer is low
+                    if current_buffer_size < target_buffer_size:
                         try:
-                            audio_chunk = audio_output_queue.get(timeout=0.1)
-                            if audio_chunk is not None:
-                                try:
-                                    audio_buffer.put_nowait(audio_chunk)
-                                except queue.Full:
-                                    # Buffer full, this shouldn't happen with our logic
-                                    logger.warning("Buffer full during predictive loading")
-                        except Empty:
+                            audio_chunk = audio_output_queue.get_nowait()
+                            if audio_chunk:
+                                with buffer_lock:
+                                    audio_buffer.append(audio_chunk)
+                                    # Prevent buffer overflow
+                                    while len(audio_buffer) > target_buffer_size * 3:
+                                        audio_buffer.popleft()
+                        except:
                             pass
-                    else:
-                        # Buffer is healthy, slower polling
-                        time.sleep(0.01)
-                        
+                    
+                    time.sleep(0.001)  # Minimal sleep for efficiency
+                
                 except Exception as e:
                     logger.error(f"Error in optimized buffer manager: {e}")
-                    time.sleep(0.1)
+                    time.sleep(0.01)
         
         # Start optimized threads
         audio_thread = threading.Thread(target=optimized_audio_callback, daemon=True)
-        buffer_thread = threading.Thread(target=buffer_manager, daemon=True)
+        buffer_thread = threading.Thread(target=optimized_buffer_manager, daemon=True)
         
         audio_thread.start()
         buffer_thread.start()
         
-        logger.info(f"Optimized audio worker started (buffer_size={buffer_size}, preload={preload_chunks})")
+        logger.info("Optimized audio worker ready")
         
-        # Monitor performance
-        last_stats_time = time.time()
+        # Main thread monitoring
         while not terminate_event.is_set():
-            time.sleep(1.0)
-            
-            # Log performance statistics every 30 seconds
-            if time.time() - last_stats_time > 30:
-                logger.info(
-                    f"Audio stats: {playback_stats['chunks_played']} chunks played, "
-                    f"{playback_stats['buffer_underruns']} underruns, "
-                    f"buffer size: {audio_buffer.qsize()}"
-                )
-                last_stats_time = time.time()
+            time.sleep(0.1)
         
         # Cleanup
-        logger.info("Optimized audio worker shutting down...")
-        
-        # Signal threads to stop
-        try:
-            audio_buffer.put_nowait(None)
-        except:
-            pass
-        
-        # Wait for threads
-        audio_thread.join(timeout=2.0)
-        buffer_thread.join(timeout=2.0)
-        
-        # Close audio stream and cleanup
-        audio_playback.close_stream()
-        
-        is_audio_streaming.clear()
-        logger.info("Optimized audio worker terminated")
+        audio_thread.join(timeout=1)
+        buffer_thread.join(timeout=1)
         
     except Exception as e:
-        logger.error(f"Optimized audio worker error: {e}")
-        is_audio_streaming.clear()
+        logger.error(f"Error in optimized audio worker: {e}", exc_info=True)
+        # Fallback to standard implementation
+        audio_process_worker(
+            audio_output_queue, terminate_event, terminate_current_dialogue_event,
+            audio_playing, is_audio_streaming_event, shared_config
+        )
+    finally:
+        try:
+            if 'p' in locals():
+                p.terminate()
+        except:
+            pass
+        logger.info("Optimized audio worker shutting down...")
