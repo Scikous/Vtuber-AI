@@ -367,7 +367,7 @@ async def speech_to_text(callback,
                                            device_index) # Pass device_index
             
             if text:
-                callback(text) ##maybe awaitable callback -- might not be bring any benefit                return # Return after one successful utterance, as per original design
+                await callback(text) ##maybe awaitable callback -- might not be bring any benefit                return # Return after one successful utterance, as per original design
             
             # If no text (silence, timeout, error), loop within recognize_speech_sync effectively handles retries
             # or the service calling this will loop.

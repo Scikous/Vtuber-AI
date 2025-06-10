@@ -1,6 +1,6 @@
 from models import VtuberExllamav2
 from huggingface_hub import snapshot_download
-from model_utils import load_character, prompt_wrapper
+from model_utils import load_character, prompt_wrapper, contains_sentence_terminator
 from time import perf_counter
 import asyncio
 
@@ -35,7 +35,7 @@ async def exllamav2_test():
     print(type(response))
     async for result in response:
         output = result.get("text", "")
-        if len(output) != 0:
+        if contains_sentence_terminator(output):
             end = perf_counter()
             print(end-start, output)
         #     await Character.cancel_dialogue_generation()

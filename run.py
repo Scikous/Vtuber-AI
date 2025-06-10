@@ -78,7 +78,7 @@ def main():
 
     # Prepare the command for the Vtuber-AI multiprocess orchestrator
     python_executable_ai = get_python_executable(VENV_NAME_AI)
-    multiprocess_orchestrator_script = os.path.join(PROJECT_ROOT, "src", "multiprocess_orchestrator.py")
+    multiprocess_orchestrator_script = os.path.join(PROJECT_ROOT, "src", "multiprocess_orchestrato.py")
 
     if not os.path.exists(multiprocess_orchestrator_script):
         print(f"Error: Multiprocess orchestrator script not found at {multiprocess_orchestrator_script}")

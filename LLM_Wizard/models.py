@@ -122,9 +122,7 @@ class VtuberExllamav2(VtuberLLMBase):
                         decode_special_tokens=False,
                         completion_only=True,
                         input_ids=prompt,
-                        # input_ids=self.tokenizer.encode("foools"),
                         max_new_tokens=max_tokens,
-                        #     stop_conditions = [self.tokenizer.eos_token_id],
                         gen_settings=self.gen_settings,
                         add_bos = False, #if using apply_chat_template set to false -- only plain string should have True)
                         stop_conditions= [self.tokenizer.eos_token_id], #for stopping generation when a specific token is generated

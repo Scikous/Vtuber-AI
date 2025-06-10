@@ -98,7 +98,7 @@ class DialogueService(BaseService):
                             text_to_send_to_tts = tts_buffer.strip()
                             if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
                                 from utils.logger import conditional_print
-                                 conditional_print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
+                                conditional_print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
                                 asyncio.create_task(self.llm_output_queue.put(text_to_send_to_tts))
                                 if self.logger:
                                     self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
