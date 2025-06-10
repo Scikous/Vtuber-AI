@@ -179,43 +179,101 @@ class XTTS_Service:
 
 if __name__ == "__main__":
 
-    # --- FastAPI App Setup ---
-    app = FastAPI()
+    TTS = XTTS_Service(speaker_wav_path=SPEAKER_WAV_PATH)
+    
+    import time
+    start = time.perf_counter()
+    print("Started tts request")
+    job = TTS.send_tts_request(text="Hello World lmao, so great and fantastic it is. Wowzer, womp womp", language="en")
+    li = []
+    for res in job:
+        li.append(res)
+        end = time.perf_counter()
+        print(end-start)
 
-    # Load the model on startup. This is a heavy operation and should only happen once.
-    try:
-        logger.info("Initializing XTTS Service...")
-        tts_service = XTTS_Service(speaker_wav_path=SPEAKER_WAV_PATH)
-        logger.info("XTTS Service initialized successfully.")
-    except Exception as e:
-        logger.error(f"Failed to initialize XTTS_Service: {e}", exc_info=True)
-        tts_service = None # Ensure tts_service is defined
 
-    @app.post("/tts")
-    async def generate_speech(request: TTSRequest):
-        """
-        API endpoint to generate speech. It streams the audio back to the client.
-        """
-        if not tts_service:
-            return {"error": "TTS service is not available."}, 503
 
-        def stream_generator():
-            # This generator calls the main TTS generator and yields its chunks
-            yield from tts_service.send_tts_request(
-                text=request.text,
-                language=request.language,
-                speech_speed=request.speech_speed,
-                temperature=request.temperature,
-                repetition_penalty=request.repetition_penalty
-            )
 
-        # Return a streaming response, which FastAPI handles efficiently
-        return StreamingResponse(stream_generator(), media_type="application/octet-stream")
 
-    @app.get("/health")
-    async def health_check():
-        """Health check endpoint to verify the service is running."""
-        return {"status": "ok" if tts_service else "error", "service": "XTTS_v2"}
-    # This block now starts the web server
-    logger.info(f"Starting TTS server on http://{SERVER_HOST}:{SERVER_PORT}")
-    uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT)
+    # import torch
+    # from TTS_Wizard.Coqui_TTS.TTS.api import TTS
+
+    # # Get device
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # # List available 🐸TTS models
+    # # print(TTS().list_models())
+
+    # # Initialize TTS
+    # tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+
+    # # List speakers
+    # # print(tts.speakers)
+
+    # # Run TTS
+    # # ❗ XTTS supports both, but many models allow only one of the `speaker` and
+    # # `speaker_wav` arguments
+    # start = time.perf_counter()
+    # # TTS with list of amplitude values as output, clone the voice from `speaker_wav`
+    # wav = tts.tts(
+    # text="world!",
+    # speaker_wav=SPEAKER_WAV_PATH,
+    # language="en"
+    # )
+    # end = time.perf_counter()
+
+    print(end-start)
+
+
+    # # TTS to a file, use a preset speaker
+    # tts.tts_to_file(
+    # text="Hello world!",
+    # speaker="Craig Gutsy",
+    # language="en",
+    # file_path="output.wav"
+    # )
+
+
+
+
+        
+    # # --- FastAPI App Setup ---
+    # app = FastAPI()
+
+    # # Load the model on startup. This is a heavy operation and should only happen once.
+    # try:
+    #     logger.info("Initializing XTTS Service...")
+    #     tts_service = XTTS_Service(speaker_wav_path=SPEAKER_WAV_PATH)
+    #     logger.info("XTTS Service initialized successfully.")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize XTTS_Service: {e}", exc_info=True)
+    #     tts_service = None # Ensure tts_service is defined
+
+    # @app.post("/tts")
+    # async def generate_speech(request: TTSRequest):
+    #     """
+    #     API endpoint to generate speech. It streams the audio back to the client.
+    #     """
+    #     if not tts_service:
+    #         return {"error": "TTS service is not available."}, 503
+
+    #     def stream_generator():
+    #         # This generator calls the main TTS generator and yields its chunks
+    #         yield from tts_service.send_tts_request(
+    #             text=request.text,
+    #             language=request.language,
+    #             speech_speed=request.speech_speed,
+    #             temperature=request.temperature,
+    #             repetition_penalty=request.repetition_penalty
+    #         )
+
+    #     # Return a streaming response, which FastAPI handles efficiently
+    #     return StreamingResponse(stream_generator(), media_type="application/octet-stream")
+
+    # @app.get("/health")
+    # async def health_check():
+    #     """Health check endpoint to verify the service is running."""
+    #     return {"status": "ok" if tts_service else "error", "service": "XTTS_v2"}
+    # # This block now starts the web server
+    # logger.info(f"Starting TTS server on http://{SERVER_HOST}:{SERVER_PORT}")
+    # uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT)
