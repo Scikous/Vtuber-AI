@@ -27,7 +27,7 @@ def apply_chat_template(instructions, prompt, tokenizer, conversation_history=No
     
     # Add the current prompt as the latest user message
     messages.append({"role": "user", "content": prompt})
-    print("FINAL MESSAGES", messages)
+    # print("FINAL MESSAGES", messages)
     tokenized_chat = tokenizer.apply_chat_template(
         messages, 
         tokenize=True, 
