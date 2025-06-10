@@ -22,7 +22,8 @@ try:
 except ImportError as e:
     # If the import fails, the worker cannot function. Log this critical error.
     # A placeholder function will be defined to prevent crashing the main app on import.
-    print(f"FATAL: Could not import PyAudioPlayback. Audio will not work. Error: {e}")
+    from utils.logger import conditional_print
+    conditional_print(f"FATAL: Could not import PyAudioPlayback. Audio will not work. Error: {e}")
     PyAudioPlayback = None
 
 from utils import logger as app_logger

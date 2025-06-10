@@ -10,7 +10,6 @@ import time
 import threading
 from multiprocessing import Queue, Event
 from queue import Queue as ThreadQueue, Empty
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add project root to path for imports
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -87,80 +86,52 @@ def tts_process_worker(
                         logger.debug(f"TTS sent audio chunk of size {len(audio_chunk)}")
                 
                 logger.debug(f"TTS completed processing: {text_input[:30]}...")
-                return 0
+                return True
                 
             except Exception as e:
                 logger.error(f"Error processing TTS item '{text_input[:30]}...': {e}")
-                return 1
+                return False
+
+        logger.info("TTS worker ready, starting text processing...")
         
-        # Use ThreadPoolExecutor for concurrent TTS processing
-        with ThreadPoolExecutor(max_workers=tts_concurrency, thread_name_prefix="TTS") as executor:
-            logger.info("TTS worker ready, starting text processing...")
-            
-            active_futures = set()
-            
-            # Main processing loop
-            while not terminate_event.is_set():
-                try:
-                    # Clean up completed futures
-                    completed_futures = [f for f in active_futures if f.done()]
-                    for future in completed_futures:
-                        active_futures.remove(future)
+        # Main processing loop - simplified for sequential processing
+        while not terminate_event.is_set():
+            try:
+                # Check for termination of current dialogue
+                if terminate_current_dialogue_event.is_set():
+                    # Clear the LLM output queue
+                    while True:
                         try:
-                            result = future.result()
-                            logger.debug(f"TTS task completed with {result} chunks")
-                        except Exception as e:
-                            logger.error(f"TTS task failed: {e}")
+                            llm_output_queue.get_nowait()
+                            logger.debug("Cleared LLM output from queue due to termination")
+                        except:
+                            break
                     
-                    # Check for termination of current dialogue
-                    if terminate_current_dialogue_event.is_set():
-                        # Cancel all active futures
-                        for future in active_futures:
-                            future.cancel()
-                        active_futures.clear()
-                        
-                        # Clear the LLM output queue
-                        while True:
-                            try:
-                                llm_output_queue.get_nowait()
-                                logger.debug("Cleared LLM output from queue due to termination")
-                            except:
-                                break
-                        
-                        # Reset the event after clearing
-                        # terminate_current_dialogue_event.clear()
-                        continue
-                    
-                    # Get new text from LLM
-                    try:
-                        text_input = llm_output_queue.get_nowait()
-                        
-                        if text_input and text_input.strip():
-                            # Submit TTS task to thread pool
-                            if len(active_futures) < tts_concurrency:
-                                future = executor.submit(process_tts_item, text_input.strip())
-                                active_futures.add(future)
-                                logger.debug(f"Submitted TTS task: {text_input[:30]}...")
-                            else:
-                                # Wait for a slot to become available
-                                logger.debug("TTS worker at max concurrency, waiting...")
-                                time.sleep(0.01)
-                    
-                    except:
-                        # No text available
-                        time.sleep(0.01)  # Small sleep to prevent busy waiting
+                    # Reset the event after clearing
+                    # terminate_current_dialogue_event.clear()
+                    continue
                 
-                except Exception as e:
-                    logger.error(f"Error in TTS main loop: {e}", exc_info=True)
-                    time.sleep(0.1)
-            
-            # Wait for remaining tasks to complete
-            logger.info("Waiting for remaining TTS tasks to complete...")
-            for future in active_futures:
+                # Get new text from LLM
                 try:
-                    future.result(timeout=5)
-                except Exception as e:
-                    logger.error(f"Error waiting for TTS task: {e}")
+                    text_input = llm_output_queue.get_nowait()
+                    
+                    if text_input and text_input.strip():
+                        # Process TTS request directly (sequential processing)
+                        success = process_tts_item(text_input.strip())
+                        if success:
+                            logger.debug(f"Successfully processed TTS for: {text_input[:30]}...")
+                        else:
+                            logger.warning(f"Failed to process TTS for: {text_input[:30]}...")
+                
+                except:
+                    # No text available
+                    time.sleep(0.01)  # Small sleep to prevent busy waiting
+            
+            except Exception as e:
+                logger.error(f"Error in TTS main loop: {e}", exc_info=True)
+                time.sleep(0.1)
+        
+        logger.info("TTS worker process completed.")
     
     except ImportError as e:
         logger.error(f"Failed to import TTS_Wizard: {e}")

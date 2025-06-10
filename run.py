@@ -2,6 +2,15 @@ import os
 import subprocess
 import sys
 import signal # For specific signals if needed, and for CTRL_C_EVENT on Windows
+import time
+
+# Import conditional print function
+try:
+    from src.utils.logger import conditional_print
+except ImportError:
+    # Fallback if logger is not available
+    def conditional_print(*args, **kwargs):
+        print(*args, **kwargs)
 
 # Define the virtual environment names. This could be read from a config or .env file.
 VENV_NAME_AI = 'venvRun'
@@ -86,9 +95,9 @@ def main():
         print(f"Using Python from virtual environment: {python_executable_ai}")
         command_ai = [python_executable_ai, multiprocess_orchestrator_script]
     else:
-        print(f"Warning: Virtual environment '{VENV_NAME_AI}' Python not found. "
+        conditional_print(f"Warning: Virtual environment '{VENV_NAME_AI}' Python not found. "
               f"Attempting to use system 'python'.")
-        print("Please ensure the virtual environment is activated and contains all dependencies, "
+        conditional_print("Please ensure the virtual environment is activated and contains all dependencies, "
               "or that dependencies are installed globally.")
         command_ai = ["python", multiprocess_orchestrator_script]
 
@@ -110,9 +119,9 @@ def main():
         print(f"Using Python from virtual environment: {python_executable_tts}")
         command_tts = [python_executable_tts, tts_script, "-a", "127.0.0.1", "-p", "9880", "-c", tts_config]
     else:
-        print(f"Warning: Virtual environment '{VENV_NAME_TTS}' Python not found. "
+        conditional_print(f"Warning: Virtual environment '{VENV_NAME_TTS}' Python not found. "
               f"Attempting to use system 'python'.")
-        print("Please ensure the virtual environment is activated and contains all dependencies, "
+        conditional_print("Please ensure the virtual environment is activated and contains all dependencies, "
               "or that dependencies are installed globally.")
         command_tts = ["python", tts_script, "-a", "127.0.0.1", "-p", "9880", "-c", tts_config]
 

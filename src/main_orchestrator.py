@@ -34,7 +34,8 @@ try:
     from LLM_Wizard.model_utils import load_character
     # LLM model will be imported dynamically
 except ImportError as e:
-    print(f"Critical Import Error: Could not import LLM_Wizard.model_utils: {e}. Ensure PYTHONPATH is set correctly or modules are accessible.")
+    from utils.logger import conditional_print
+    conditional_print(f"Critical Import Error: Could not import LLM_Wizard.model_utils: {e}. Ensure PYTHONPATH is set correctly or modules are accessible.")
     load_character = None # Graceful degradation or error handling needed
 import time
 class MainOrchestrator:
