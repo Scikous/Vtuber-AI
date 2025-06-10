@@ -8,6 +8,7 @@ import sys
 import logging
 import time
 import threading
+import asyncio
 from multiprocessing import Queue, Event
 
 # Add project root to path for imports
@@ -47,9 +48,6 @@ def livechat_process_worker(
         
         # Get LiveChat configuration
         livechat_config = config.get("livechat", {})
-        # fetch_twitch = livechat_config.get("fetch_twitch", False)
-        # fetch_bilibili = livechat_config.get("fetch_bilibili", False)
-        # fetch_youtube = livechat_config.get("fetch_youtube", False)
         
         # Initialize the controller based on configuration
         livechat_controller = None
@@ -64,16 +62,15 @@ def livechat_process_worker(
         
         # Message processing settings
         fetch_interval = livechat_config.get("fetch_interval", 60.0)  # Default 1 second
-        # max_messages_per_fetch = livechat_config.get("max_messages_per_fetch", 5)
         
-        def fetch_and_process_messages():
-            """Fetch and process live chat messages."""
+        async def fetch_and_process_messages():
+            """Fetch and process live chat messages (async)."""
             if not livechat_controller:
                 return
             
             try:
-                # Fetch new messages
-                message, context_messages = livechat_controller.fetch_chat_message()
+                # Await the async method
+                message, context_messages = await livechat_controller.fetch_chat_message()
                 
                 if message and message.strip():
                     # Send to LLM queue
@@ -85,8 +82,8 @@ def livechat_process_worker(
             except Exception as e:
                 logger.error(f"Error fetching live chat messages: {e}")
         
-        def message_fetcher():
-            """Continuous message fetching in separate thread."""
+        async def async_message_fetcher():
+            """Continuous message fetching in async loop."""
             last_fetch_time = 0
             
             while not terminate_event.is_set():
@@ -100,7 +97,7 @@ def livechat_process_worker(
                     )
                     
                     if should_fetch:
-                        fetch_and_process_messages()
+                        await fetch_and_process_messages()
                         last_fetch_time = current_time
                         
                         # Clear immediate fetch event if it was set
@@ -108,14 +105,27 @@ def livechat_process_worker(
                             immediate_livechat_fetch_event.clear()
                     
                     # Sleep for a short time to prevent busy waiting
-                    time.sleep(0.1)
+                    await asyncio.sleep(0.1)
                 
                 except Exception as e:
                     logger.error(f"Error in message fetcher: {e}")
-                    time.sleep(1)  # Longer sleep on error
+                    await asyncio.sleep(1)  # Longer sleep on error
         
-        def connection_monitor():
-            """Monitor LiveChat connection health."""
+        def message_fetcher():
+            """Wrapper to run async message fetcher in thread."""
+            # Create new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                loop.run_until_complete(async_message_fetcher())
+            except Exception as e:
+                logger.error(f"Error in async message fetcher: {e}")
+            finally:
+                loop.close()
+        
+        async def async_connection_monitor():
+            """Monitor LiveChat connection health (async)."""
             if not livechat_controller:
                 return
             
@@ -123,19 +133,42 @@ def livechat_process_worker(
                 try:
                     # Check connection health
                     if hasattr(livechat_controller, 'is_connected'):
-                        if not livechat_controller.is_connected():
+                        # Handle both sync and async is_connected methods
+                        if asyncio.iscoroutinefunction(livechat_controller.is_connected):
+                            connected = await livechat_controller.is_connected()
+                        else:
+                            connected = livechat_controller.is_connected()
+                        
+                        if not connected:
                             logger.warning("LiveChat connection lost, attempting to reconnect...")
                             try:
-                                livechat_controller.reconnect()
+                                if hasattr(livechat_controller, 'reconnect'):
+                                    if asyncio.iscoroutinefunction(livechat_controller.reconnect):
+                                        await livechat_controller.reconnect()
+                                    else:
+                                        livechat_controller.reconnect()
                                 logger.info("LiveChat reconnected successfully")
                             except Exception as e:
                                 logger.error(f"Failed to reconnect to LiveChat: {e}")
                     
-                    time.sleep(30)  # Check every 30 seconds
+                    await asyncio.sleep(30)  # Check every 30 seconds
                 
                 except Exception as e:
                     logger.error(f"Error in connection monitor: {e}")
-                    time.sleep(60)  # Longer sleep on error
+                    await asyncio.sleep(60)  # Longer sleep on error
+        
+        def connection_monitor():
+            """Wrapper to run async connection monitor in thread."""
+            # Create new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                loop.run_until_complete(async_connection_monitor())
+            except Exception as e:
+                logger.error(f"Error in async connection monitor: {e}")
+            finally:
+                loop.close()
         
         # Start worker threads
         fetcher_thread = threading.Thread(target=message_fetcher, daemon=True, name="LiveChatFetcher")
@@ -169,7 +202,22 @@ def livechat_process_worker(
         if 'livechat_controller' in locals() and livechat_controller:
             try:
                 if hasattr(livechat_controller, 'disconnect'):
-                    livechat_controller.disconnect()
+                    # Handle both sync and async disconnect methods
+                    if asyncio.iscoroutinefunction(livechat_controller.disconnect):
+                        # If we're in a thread with no event loop, create one
+                        try:
+                            loop = asyncio.get_event_loop()
+                        except RuntimeError:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                        
+                        if loop.is_running():
+                            # Schedule the coroutine to run
+                            asyncio.create_task(livechat_controller.disconnect())
+                        else:
+                            loop.run_until_complete(livechat_controller.disconnect())
+                    else:
+                        livechat_controller.disconnect()
                 logger.info("LiveChat controller disconnected")
             except Exception as e:
                 logger.error(f"Error disconnecting LiveChat controller: {e}")
