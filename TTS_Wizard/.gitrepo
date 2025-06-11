@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/Scikous/TTS-Wizard.git
+	branch = main
+	commit = 20ba14cc2de2a6de947343fec3dfd91f8471625d
+	parent = f823e1263876cb79c72042093cc36365ec0c0e67
+	method = merge
+	cmdver = 0.4.9
