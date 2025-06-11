@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/Scikous/Livechat-Wizard.git
+	branch = main
+	commit = b0ccd7472e711df02a29c0a7f5fa460d2f8f2e54
+	parent = 23ef966c570fd11f23c75bd16a82949b9120034e
+	method = merge
+	cmdver = 0.4.9
