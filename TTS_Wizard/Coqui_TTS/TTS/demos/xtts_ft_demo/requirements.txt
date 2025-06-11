@@ -1,2 +1,0 @@
-faster_whisper
-gradio
