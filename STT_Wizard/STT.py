@@ -367,8 +367,7 @@ async def speech_to_text(callback,
                                            device_index) # Pass device_index
             
             if text:
-                await callback(text)
-                return # Return after one successful utterance, as per original design
+                await callback(text) ##maybe awaitable callback -- might not be bring any benefit                return # Return after one successful utterance, as per original design
             
             # If no text (silence, timeout, error), loop within recognize_speech_sync effectively handles retries
             # or the service calling this will loop.
@@ -395,100 +394,100 @@ async def speech_to_text(callback,
 
 
 
-###################
+# ###################
 
-# --- Main block for testing ---
-if __name__ == "__main__":
-    async def _stt_test_callback(speech_text):
-        print(f"CALLBACK RECEIVED: '{speech_text}'")
+# # --- Main block for testing ---
+# if __name__ == "__main__":
+#     async def _stt_test_callback(speech_text):
+#         print(f"CALLBACK RECEIVED: '{speech_text}'")
 
-    # --- MODIFICATION: Create dummy events for testing ---
-    test_is_audio_streaming_event = asyncio.Event() # Renamed from test_user_speaking_pause_event for clarity
-    test_terminate_current_dialogue_event = asyncio.Event()
+#     # --- MODIFICATION: Create dummy events for testing ---
+#     test_is_audio_streaming_event = asyncio.Event() # Renamed from test_user_speaking_pause_event for clarity
+#     test_terminate_current_dialogue_event = asyncio.Event()
 
-    async def main_test_loop():
-        print("Listing available input devices...")
-        available_devices = list_available_input_devices()
+#     async def main_test_loop():
+#         print("Listing available input devices...")
+#         available_devices = list_available_input_devices()
         
-        selected_device_index = None
-        if available_devices:
-            try:
-                default_input_device_idx = sd.default.device[0] # sd.default.device can be (input_idx, output_idx)
-                print(f"Default input device index: {default_input_device_idx}")
-                non_default_devices = [dev['id'] for dev in available_devices if dev['id'] != default_input_device_idx]
-                if non_default_devices:
-                    selected_device_index = non_default_devices[0]
-                    print(f"Attempting to use non-default device for testing: ID {selected_device_index} - {sd.query_devices(selected_device_index)['name']}")
-                elif available_devices: 
-                    selected_device_index = available_devices[0]['id']
-                    print(f"Attempting to use first available device for testing: ID {selected_device_index} - {sd.query_devices(selected_device_index)['name']}")
-            except Exception as e:
-                print(f"Could not determine specific devices, using system default. Error: {e}")
-                if available_devices: # Fallback to first if specific selection failed
-                    selected_device_index = available_devices[0]['id']
-                    print(f"Fallback: Attempting to use first available device: ID {selected_device_index} - {sd.query_devices(selected_device_index)['name']}")
-                else:
-                    print("No input devices found by list_available_input_devices. Using system default.")
-        else:
-            print("No input devices found. Using system default.")
+#         selected_device_index = None
+#         if available_devices:
+#             try:
+#                 default_input_device_idx = sd.default.device[0] # sd.default.device can be (input_idx, output_idx)
+#                 print(f"Default input device index: {default_input_device_idx}")
+#                 non_default_devices = [dev['id'] for dev in available_devices if dev['id'] != default_input_device_idx]
+#                 if non_default_devices:
+#                     selected_device_index = non_default_devices[0]
+#                     print(f"Attempting to use non-default device for testing: ID {selected_device_index} - {sd.query_devices(selected_device_index)['name']}")
+#                 elif available_devices: 
+#                     selected_device_index = available_devices[0]['id']
+#                     print(f"Attempting to use first available device for testing: ID {selected_device_index} - {sd.query_devices(selected_device_index)['name']}")
+#             except Exception as e:
+#                 print(f"Could not determine specific devices, using system default. Error: {e}")
+#                 if available_devices: # Fallback to first if specific selection failed
+#                     selected_device_index = available_devices[0]['id']
+#                     print(f"Fallback: Attempting to use first available device: ID {selected_device_index} - {sd.query_devices(selected_device_index)['name']}")
+#                 else:
+#                     print("No input devices found by list_available_input_devices. Using system default.")
+#         else:
+#             print("No input devices found. Using system default.")
 
-        print("Starting STT test. Speak into the microphone.")
-        print("The program will listen for one utterance, transcribe it, then call speech_to_text again.")
+#         print("Starting STT test. Speak into the microphone.")
+#         print("The program will listen for one utterance, transcribe it, then call speech_to_text again.")
         
-        loop_count = 0
-        try:
-            while True:
-                loop_count += 1
-                print(f"\n--- STT Listen Cycle {loop_count} ---")
-                if not whisper_model:
-                    print("Whisper model not available. Exiting test.")
-                    break
+#         loop_count = 0
+#         try:
+#             while True:
+#                 loop_count += 1
+#                 print(f"\n--- STT Listen Cycle {loop_count} ---")
+#                 if not whisper_model:
+#                     print("Whisper model not available. Exiting test.")
+#                     break
                 
-                # Reset events for each cycle in test for clarity, though STT should manage them
-                # test_terminate_current_dialogue_event.clear() # Clearing is handled later in the loop for testing
-                test_is_audio_streaming_event.set() # Simulate audio is streaming for the test
+#                 # Reset events for each cycle in test for clarity, though STT should manage them
+#                 # test_terminate_current_dialogue_event.clear() # Clearing is handled later in the loop for testing
+#                 test_is_audio_streaming_event.set() # Simulate audio is streaming for the test
 
-                await speech_to_text(_stt_test_callback, 
-                                     test_terminate_current_dialogue_event,
-                                     test_is_audio_streaming_event,
-                                     device_index=1) # Pass selected device
+#                 await speech_to_text(_stt_test_callback, 
+#                                      test_terminate_current_dialogue_event,
+#                                      test_is_audio_streaming_event,
+#                                      device_index=1) # Pass selected device
                 
-                print(f"Is Audio Streaming Event Status (simulated): {test_is_audio_streaming_event.is_set()}")
-                print(f"Terminate Event Status: {test_terminate_current_dialogue_event.is_set()}")
-                print("-----------------------------------------------------")
+#                 print(f"Is Audio Streaming Event Status (simulated): {test_is_audio_streaming_event.is_set()}")
+#                 print(f"Terminate Event Status: {test_terminate_current_dialogue_event.is_set()}")
+#                 print("-----------------------------------------------------")
                 
-                if test_terminate_current_dialogue_event.is_set():
-                    print("Terminate event was set. Test loop will clear it and continue.")
-                    test_terminate_current_dialogue_event.clear() # For testing, clear to allow next cycle
+#                 if test_terminate_current_dialogue_event.is_set():
+#                     print("Terminate event was set. Test loop will clear it and continue.")
+#                     test_terminate_current_dialogue_event.clear() # For testing, clear to allow next cycle
 
-                # If pause event was set and not cleared by STT logic (e.g. due to timeout before VAD)
-                # it might persist. STT internal logic should handle clearing it.
-                # For testing, we might clear it here if we want each cycle fresh.
-                # if test_is_audio_streaming_event.is_set(): # Example of how one might manage this event in a test
-                #     print("Is Audio Streaming event is still set. Clearing for next test cycle if needed.")
-                #     test_is_audio_streaming_event.clear()
+#                 # If pause event was set and not cleared by STT logic (e.g. due to timeout before VAD)
+#                 # it might persist. STT internal logic should handle clearing it.
+#                 # For testing, we might clear it here if we want each cycle fresh.
+#                 # if test_is_audio_streaming_event.is_set(): # Example of how one might manage this event in a test
+#                 #     print("Is Audio Streaming event is still set. Clearing for next test cycle if needed.")
+#                 #     test_is_audio_streaming_event.clear()
 
-                if loop_count >= 3: # Limit test cycles
-                    print("Reached max test loops.")
-                    break
+#                 if loop_count >= 3: # Limit test cycles
+#                     print("Reached max test loops.")
+#                     break
 
-                print("Listening for next utterance (Ctrl+C to stop)...")
-                await asyncio.sleep(0.1) # Small delay before next listen cycle
-        except KeyboardInterrupt:
-            print("\nSTT test stopped by user.")
-        except Exception as e:
-            print(f"An error occurred in the main test loop: {e}")
-            traceback.print_exc()
-        finally:
-            print("Exiting STT test program.")
+#                 print("Listening for next utterance (Ctrl+C to stop)...")
+#                 await asyncio.sleep(0.1) # Small delay before next listen cycle
+#         except KeyboardInterrupt:
+#             print("\nSTT test stopped by user.")
+#         except Exception as e:
+#             print(f"An error occurred in the main test loop: {e}")
+#             traceback.print_exc()
+#         finally:
+#             print("Exiting STT test program.")
 
-    if WhisperModel and whisper_model: # Check if model loaded before running test
-        try:
-            asyncio.run(main_test_loop())
-        except RuntimeError as e:
-            if "Already running" in str(e): # Handle if an asyncio loop is already running (e.g. in Jupyter)
-                print("Asyncio loop already running. Consider running main_test_loop() directly if in a suitable environment.")
-            else:
-                raise
-    else:
-        print("Whisper model not loaded. Cannot run STT test.")
+#     if WhisperModel and whisper_model: # Check if model loaded before running test
+#         try:
+#             asyncio.run(main_test_loop())
+#         except RuntimeError as e:
+#             if "Already running" in str(e): # Handle if an asyncio loop is already running (e.g. in Jupyter)
+#                 print("Asyncio loop already running. Consider running main_test_loop() directly if in a suitable environment.")
+#             else:
+#                 raise
+#     else:
+#         print("Whisper model not loaded. Cannot run STT test.")

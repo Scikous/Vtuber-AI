@@ -129,6 +129,13 @@ class Bot(commands.Bot):
     @commands.command(name='hello')
     async def hello(self, ctx):
         await ctx.send(f'Hello {ctx.author.name}!')
+
+    # @commands.command(name='disconnect')
+    # async def disconnect_cmd(self, ctx):
+    #     # Optional: Add permission check here
+    #     if ctx.author.name == 'your_username':  # Only allow specific users
+    #         await ctx.send("Disconnecting bot...")
+    #         await self.close()
     
 #For testing purposes
 if __name__ == "__main__":

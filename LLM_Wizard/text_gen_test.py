@@ -1,6 +1,6 @@
-from models import VtuberExllamav2, VtuberLLM
+from models import VtuberExllamav2
 from huggingface_hub import snapshot_download
-from model_utils import load_character, prompt_wrapper
+from model_utils import load_character, prompt_wrapper, contains_sentence_terminator
 from time import perf_counter
 import asyncio
 
@@ -35,27 +35,28 @@ async def exllamav2_test():
     print(type(response))
     async for result in response:
         output = result.get("text", "")
-        # if len(output) != 0:
+        if contains_sentence_terminator(output):
+            end = perf_counter()
+            print(end-start, output)
         #     await Character.cancel_dialogue_generation()
 
-        print(output,  end = "")    
+        # print(output,  end = "")    
             # break
 
-    end = perf_counter()
     # print(f"Prompts: {msg}\n\nRESPONSE:\n{response}\n\nTime Taken (Seconds): {end-start}")
     print(f"\n\nTime Taken (Seconds): {end-start}")
 
 
 asyncio.run(exllamav2_test())
 
-#test using the standard huggingface loader
-def huggingface_test():
+# #test using the standard huggingface loader
+# def huggingface_test():
     
-    Character = VtuberLLM.load_model(character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
-    # print(Character.tokenizer.eos_token, Character.tokenizer.bos_token)
-    # return
-    msg = """You MUST have the following in your output EXACTLY as written: "hello", 'wow't'"""
-    start = perf_counter()
-    response = asyncio.run(Character.dialogue_generator(prompt=msg))#, max_tokens=400))
-    end = perf_counter()
-    print(f"Prompts: {msg}\nResponses:\n{response}\n\nTime Taken (Seconds): {end-start}")
+#     Character = VtuberLLM.load_model(character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
+#     # print(Character.tokenizer.eos_token, Character.tokenizer.bos_token)
+#     # return
+#     msg = """You MUST have the following in your output EXACTLY as written: "hello", 'wow't'"""
+#     start = perf_counter()
+#     response = asyncio.run(Character.dialogue_generator(prompt=msg))#, max_tokens=400))
+#     end = perf_counter()
+#     print(f"Prompts: {msg}\nResponses:\n{response}\n\nTime Taken (Seconds): {end-start}")

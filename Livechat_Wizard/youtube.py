@@ -6,6 +6,7 @@ import os.path
 import pickle
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+import asyncio
 
 class YTLive:
     def __init__(self, yt_messages: list):
@@ -73,11 +74,14 @@ class YTLive:
 
     async def get_live_chat_messages(self, next_page_token=None):
         """Fetch live chat messages from the current livestream."""
+        loop = asyncio.get_running_loop()
+
         response = self.youtube.liveChatMessages().list(
             liveChatId=self.live_chat_id,
             part='snippet,authorDetails',
             pageToken=next_page_token
-        ).execute()
+        )
+        response = await loop.run_in_executor(None, response.execute)
         messages = response.get('items', [])
         if messages:
             yt_new_messages = [
@@ -96,7 +100,7 @@ class YTLive:
 if __name__ == "__main__":
     yt_messages = []
     yt_live_controller = YTLive(yt_messages)
-    yt_live_controller.get_live_chat_messages()
+    asyncio.run(yt_live_controller.get_live_chat_messages())
     print(len(yt_messages), yt_messages)
 
 
