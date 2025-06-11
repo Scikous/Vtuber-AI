@@ -48,3 +48,6 @@ pydub==0.25.1
 
 # resampy is used to resample from the tts to the target device sample rate 
 resampy==0.4.3
+
+# deepspeed is for CoquiTTS
+deepspeed==0.17.1

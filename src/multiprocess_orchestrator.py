@@ -180,7 +180,7 @@ class MultiprocessOrchestrator:
         self.logger.info("Starting all worker processes...")
         
         # Start processes in optimal order
-        self.start_audio_process()  # Start audio first as it's the final consumer
+        # self.start_audio_process()  # Start audio first as it's the final consumer
         self.start_tts_process()    # Start TTS before LLM
         self.start_llm_process()    # Start LLM before input processes
         self.start_stt_process()    # Start STT

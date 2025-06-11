@@ -9,7 +9,7 @@
     "character_info_json": "LLM_Wizard/characters/character.json",
 
     "tts_concurrency": 1,
-    "logging_enabled": false,
+    "logging_enabled": true,
 
 
     "audio_backend_settings": {
