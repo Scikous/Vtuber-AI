@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/Scikous/STT-Wizard.git
+	branch = main
+	commit = f2bb346f8e16c54bb79a47c44ec48d80ecad0fe9
+	parent = 2d4b489b4f22f0e885f7a7c983fee92dd753905b
+	method = merge
+	cmdver = 0.4.9
