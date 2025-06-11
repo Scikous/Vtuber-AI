@@ -2,7 +2,7 @@ import asyncio
 from TTS_Wizard import tts_client
 from TTS_Wizard.tts_exp import XTTS_Service
 from TTS_Wizard.tts_utils import prepare_tts_params_gpt_sovits, prepare_tts_params_xtts
-
+from TTS_Wizard.realtimetts import RealTimeTTS
 from .base_service import BaseService
 
 class TTSService(BaseService):
@@ -12,7 +12,7 @@ class TTSService(BaseService):
         self.llm_output_queue = self.queues.get("llm_output_queue") if self.queues else None
         self.logger = shared_resources.get("logger") if shared_resources else None
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) if shared_resources else asyncio.Event()
-        self.TTS_SERVICE = XTTS_Service("TTS_Wizard/dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
+        self.TTS_SERVICE = RealTimeTTS()#XTTS_Service("TTS_Wizard/dataset/inference_testing/vocal_john10.wav.reformatted.wav_10.wav")
         self.prepare_tts_params = prepare_tts_params_xtts
     def synthesize_streaming(self, tts_params: dict):
         """
@@ -109,10 +109,11 @@ class TTSService(BaseService):
                         #                                 prompt_lang=self.shared_resources.get("character_prompt_lang", "en"),
                         #                                 logger=self.logger
                         #                                 )
-                        tts_params = self.prepare_tts_params(llm_message)
+                        # tts_params = self.prepare_tts_params(llm_message)
                         # Create a new task to process this TTS item
-                        task = asyncio.create_task(self._process_tts_item(tts_params, semaphore))
-                        active_tts_tasks.append(task)
+                        # task = asyncio.create_task(self._process_tts_item(tts_params, semaphore))
+                        # active_tts_tasks.append(task)
+                        self.TTS_SERVICE.tts(llm_message)
                     else:
                         # Max tasks scheduled, wait for some to complete
                         await asyncio.sleep(0.1)
