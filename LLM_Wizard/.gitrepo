@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/Scikous/LLM-Wizard.git
+	branch = main
+	commit = 3c4d6bddb2344fb25eb4598f081639054f0f831b
+	parent = 87497528eeac21bf4aca98964e8c01a33c02f69f
+	method = merge
+	cmdver = 0.4.9
