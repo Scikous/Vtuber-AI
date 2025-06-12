@@ -28,22 +28,45 @@ revision ="8.0bpw"
 async def exllamav2_test():
     Character = VtuberExllamav2.load_model(main_model=main_model, tokenizer_model=tokenizer_model, revision=revision, character_name=character_name, instructions=instructions)#(generator, gen_settings, tokenizer, character_name)
 
-    start = perf_counter()
     prompt = prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
-    dummy_memory =[
-  "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
-  "The intricate symphony of urban life continued its relentless crescendo, with the incessant blare of car horns, the distant wail of sirens, and the muffled murmur of countless conversations weaving a complex tapestry of sound that underscored the profound isolation often experienced amidst the bustling anonymity of a sprawling metropolis.",
-  "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
-  "Despite the overwhelming complexities and numerous unforeseen obstacles encountered during the arduous, multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
-#   "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
-] #["Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!"]
-    response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, max_tokens=512)
+#     dummy_memory =[
+#   "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
+#   "The intricate symphony of urban life continued its relentless crescendo, with the incessant blare of car horns, the distant wail of sirens, and the muffled murmur of countless conversations weaving a complex tapestry of sound that underscored the profound isolation often experienced amidst the bustling anonymity of a sprawling metropolis.",
+#   "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
+#   "Despite the overwhelming complexities and numerous unforeseen obstacles encountered during the arduous, multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
+# #   "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
+# ] #["Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!"]
+    
+    ##basically warmup
+    response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, max_tokens=512)
     print(type(response))
+    async for result in response:
+        output = result.get("text", "")
+
+
+    #true speed test
+    start = perf_counter()
+    prompt = prompt_wrapper("Lemao?", "You need brain surgery")
+    dummy_memory =[
+  "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
+  "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
+  "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
+  "Despite the overwhelming complexities",
+  "and numerous unforeseen obstacles encountered during the arduous",
+  "multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
+  "The venerable oak tree",
+  "standing as an immutable sentinel through countless seasons",
+  "its gnarled branches reaching skyward like ancient",
+  "petrified arms",
+   "silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy",
+   "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
+] #["Ahahahahah", "wowoz
+
+    response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, max_tokens=512)
     async for result in response:
         output = result.get("text", "")
         end = perf_counter()
         print(end-start, output)
-
         # if contains_sentence_terminator(output):
         #     end = perf_counter()
         #     print(end-start, output)
