@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from model_utils import apply_chat_template, get_rand_token_len, character_reply_cleaner
+from model_utils import apply_chat_template, get_rand_token_len, character_reply_cleaner, get_image
 import torch
 import gc
 import asyncio
@@ -45,15 +45,18 @@ class VtuberExllamav2(VtuberLLMBase):
     Holds and handles all of the ExllamaV2 based tools
     """
 
-    def __init__(self, generator, gen_settings, tokenizer, character_name, instructions):
+    def __init__(self, generator, gen_settings, exll2tokenizer, tokenizer, model, vision_model, character_name, instructions):
         super().__init__(character_name, instructions)
         self.generator = generator
         self.gen_settings = gen_settings
+        self.exll2tokenizer = exll2tokenizer
         self.tokenizer = tokenizer
+        self.model = model
+        self.vision_model = vision_model
         self.current_async_job = None # Moved to VtuberLLMBase
 
     @classmethod
-    def load_model(cls, main_model="turboderp/Qwen2.5-VL-7B-Instruct-exl2", tokenizer_model="Qwen/Qwen2.5-VL-7B-Instruct", revision="8.0bpw", character_name='assistant', instructions=""):
+    def load_model(cls, main_model="turboderp/Qwen2.5-VL-7B-Instruct-exl2", tokenizer_model="Qwen/Qwen2.5-VL-7B-Instruct", revision="8.0bpw", is_vision_model=True, character_name='assistant', instructions=""):
         """
         Loads an ExLlamaV2 compatible model
 
@@ -71,7 +74,7 @@ class VtuberExllamav2(VtuberLLMBase):
             
             tokenizer (ExLlamaV2Tokenizer): the initialized tokenizer -- given to the "model" in models.py
         """
-        from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Cache, ExLlamaV2Tokenizer
+        from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Cache, ExLlamaV2Tokenizer, ExLlamaV2VisionTower
         from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2DynamicGeneratorAsync, ExLlamaV2Sampler
         from transformers import AutoTokenizer
         from huggingface_hub import snapshot_download
@@ -87,14 +90,22 @@ class VtuberExllamav2(VtuberLLMBase):
             hf_model = snapshot_download(repo_id=main_model, revision=revision)
             config = ExLlamaV2Config(hf_model)
 
+        if is_vision_model:
+            #load vision_model
+            vision_model = ExLlamaV2VisionTower(config)
+            vision_model.load(progress = True)
+        else: vision_model = None
+
+        #load model
         model = ExLlamaV2(config)
         cache = ExLlamaV2Cache(model, max_seq_len = 65536, lazy = True)
         model.load_autosplit(cache, progress = True)
-
+        exll2tokenizer = ExLlamaV2Tokenizer(config)
+        #initialize generator
         generator_async = ExLlamaV2DynamicGeneratorAsync(
             model = model,
             cache = cache,
-            tokenizer = ExLlamaV2Tokenizer(config),
+            tokenizer = exll2tokenizer,
         )
         #default text generation settings, can be overridden
         gen_settings = ExLlamaV2Sampler.Settings(
@@ -105,23 +116,44 @@ class VtuberExllamav2(VtuberLLMBase):
             token_repetition_penalty = 1.05
         )
 
-        return cls(generator_async, gen_settings, tokenizer, character_name, instructions)
+        return cls(generator_async, gen_settings, exll2tokenizer, tokenizer, model, vision_model, character_name, instructions)
 
-    async def dialogue_generator(self, prompt, conversation_history=None, max_tokens=200):
+    async def dialogue_generator(self, prompt, conversation_history=None, images=None, max_tokens=200):
         """
         Generates character's response to a given input (Message)
 
         For text length variety's sake, randomly selects token length to appear more natural
         """
         from exllamav2.generator import ExLlamaV2DynamicJobAsync
-        prompt = apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer)
 
+        if self.vision_model and images:
+            image_embeddings = [
+                self.vision_model.get_image_embeddings(
+                    model = self.model,
+                    tokenizer = self.exll2tokenizer,
+                    image = get_image(**img_args)
+                )
+                for img_args in images
+            ]
+            placeholders = "\n".join([ie.text_alias for ie in image_embeddings]) + "\n"
+        else: image_embeddings = None; placeholders = ""
+
+        prompt = placeholders+prompt
+        prompt = apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer, tokenize=False)
+
+        print(prompt)
+        input_ids = self.exll2tokenizer.encode(
+            prompt,
+            add_bos= True,
+            encode_special_tokens=True,
+            embeddings = image_embeddings
+            )
         self.current_async_job = ExLlamaV2DynamicJobAsync(
                         generator=self.generator,
                         encode_special_tokens=False,
                         decode_special_tokens=False,
                         completion_only=True,
-                        input_ids=prompt,
+                        input_ids=input_ids,
                         max_new_tokens=max_tokens,
                         gen_settings=self.gen_settings,
                         add_bos = False, #if using apply_chat_template set to false -- only plain string should have True)
@@ -132,7 +164,7 @@ class VtuberExllamav2(VtuberLLMBase):
                         #filters = None #list[list[ExLlamaV2Filter]] | list[ExLlamaV2Filter] forcing/guiding text generation
                         #identifier = None #object for tracking/associating metadata
                         #banned_strings = None #list[str] for banning specific words/phrases
-                        #embeddings = None #list[ExLlamaV2MMEmbedding] can input images thathave been embedded into vectors
+                        embeddings = image_embeddings #list[ExLlamaV2MMEmbedding] can input images thathave been embedded into vectors
 
                     )
         return self.current_async_job    

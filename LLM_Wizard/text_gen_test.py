@@ -28,6 +28,13 @@ revision ="8.0bpw"
 async def exllamav2_test():
     Character = VtuberExllamav2.load_model(main_model=main_model, tokenizer_model=tokenizer_model, revision=revision, character_name=character_name, instructions=instructions)#(generator, gen_settings, tokenizer, character_name)
 
+    images = [
+    # {"file": "media/test_image_1.jpg"},
+    # {"file": "media/test_image_2.jpg"},
+    {"url": "https://media.istockphoto.com/id/1212540739/photo/mom-cat-with-kitten.jpg?s=612x612&w=0&k=20&c=RwoWm5-6iY0np7FuKWn8FTSieWxIoO917FF47LfcBKE="},
+    # {"url": "https://i.dailymail.co.uk/1s/2023/07/10/21/73050285-12283411-Which_way_should_I_go_One_lady_from_the_US_shared_this_incredibl-a-4_1689019614007.jpg"},
+    # {"url": "https://images.fineartamerica.com/images-medium-large-5/metal-household-objects-trevor-clifford-photography.jpg"}
+]
     prompt = prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
 #     dummy_memory =[
 #   "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
@@ -38,7 +45,7 @@ async def exllamav2_test():
 # ] #["Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!"]
     
     ##basically warmup
-    response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, max_tokens=512)
+    response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, images=images, max_tokens=512)
     print(type(response))
     async for result in response:
         output = result.get("text", "")
@@ -62,7 +69,9 @@ async def exllamav2_test():
    "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
 ] #["Ahahahahah", "wowoz
 
-    response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, max_tokens=512)
+    # while True:
+    prompt = "Describe the image."
+    response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, images=images, max_tokens=512)
     async for result in response:
         output = result.get("text", "")
         end = perf_counter()
@@ -77,7 +86,6 @@ async def exllamav2_test():
 
     # print(f"Prompts: {msg}\n\nRESPONSE:\n{response}\n\nTime Taken (Seconds): {end-start}")
     print(f"\n\nTime Taken (Seconds): {end-start}")
-
 
 asyncio.run(exllamav2_test())
 

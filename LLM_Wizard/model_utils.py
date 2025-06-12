@@ -1,8 +1,11 @@
 import json
 import numpy as np
 import re
+from PIL import Image
+import requests
 
-def apply_chat_template(instructions, prompt, tokenizer, conversation_history=None):
+
+def apply_chat_template(instructions, prompt, tokenizer, conversation_history=None, tokenize=True):
     """
     Applies a chat template to the prompt with optional conversation history.
     
@@ -28,10 +31,13 @@ def apply_chat_template(instructions, prompt, tokenizer, conversation_history=No
     # Add the current prompt as the latest user message
     messages.append({"role": "user", "content": prompt})
     # print("FINAL MESSAGES", messages)
+    if tokenize : add_bos_token = True
+    else: add_bos_token = False
     tokenized_chat = tokenizer.apply_chat_template(
         messages, 
-        tokenize=True, 
-        add_generation_prompt=True, 
+        tokenize=tokenize, 
+        add_generation_prompt=True,
+        add_bos_token=add_bos_token, 
         return_tensors="pt"
     )
     return tokenized_chat
@@ -163,3 +169,14 @@ def extract_name_message(input_string):
     else:
         # If no match, return the original string or handle as appropriate
         return input_string
+
+
+
+def get_image(file = None, url = None):
+    assert (file or url) and not (file and url)
+    if file:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(script_dir, file)
+        return Image.open(file_path)
+    elif url:
+        return Image.open(requests.get(url, stream = True).raw)
