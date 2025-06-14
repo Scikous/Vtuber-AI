@@ -25,3 +25,16 @@ def prepare_tts_params_xtts(text_to_speak, text_lang="en", speech_speed=1.0, str
         "speech_speed": speech_speed,
         "streaming_mode": streaming_mode,
     }
+
+#refactor for RealtimeTTS
+def prepare_tts_params_rtts(text_to_speak, text_lang="en", speech_speed=1.0, streaming_mode=True):
+    """
+    Prepares the dictionary of parameters for the Coqui-AI-TTS XTTS TTS service.
+    All parameters are now passed directly to the function.
+    """    
+    return {
+        "text": text_to_speak,
+        "language": text_lang,
+        "speech_speed": speech_speed,
+        "streaming_mode": streaming_mode,
+    }

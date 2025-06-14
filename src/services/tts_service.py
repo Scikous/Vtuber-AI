@@ -36,7 +36,7 @@ class TTSService(BaseService):
         # --- Configuration-Driven TTS Initialization ---
         self.tts_settings = self.config.get("tts_settings", {}) if self.config else {}
         self.tts_concurrency = self.tts_settings.get("tts_concurrency", 2)
-        tts_service_name = self.tts_settings.get("tts_service", "RealTimeTTS")
+        tts_service_name = self.tts_settings.get("tts_service_name", "RealTimeTTS")
         service_config = TTS_SERVICE_REGISTRY.get(tts_service_name)
         if not service_config:
             raise ValueError(f"Unknown TTS service name: {tts_service_name}")
@@ -95,7 +95,7 @@ class TTSService(BaseService):
             # If its `tts` method is blocking, run_in_executor is safer.
             # Assuming `tts` is the correct method based on the original commented-out code.
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self.TTS_SERVICE.tts, **tts_params)
+            await loop.run_in_executor(None, lambda: self.TTS_SERVICE.tts(**tts_params))
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Error during real-time synthesis for {str(tts_params.get('text', ''))[:30]}: {e}", exc_info=True)
@@ -108,7 +108,6 @@ class TTSService(BaseService):
             self.logger.info(f"{self.__class__.__name__} worker running for {self.TTS_SERVICE.__class__.__name__}.")
         
         # Semaphore is used to control concurrency for queue-based services
-        semaphore = asyncio.Semaphore(self.tts_concurrency)
         active_tts_tasks = []
 
         try:
@@ -149,6 +148,7 @@ class TTSService(BaseService):
                     # For queue-based services, wait for a free processing slot.
                     # This is the correct way to handle concurrency and maintain order.
                     # The loop will pause here if all slots are busy.
+                    semaphore = asyncio.Semaphore(self.tts_concurrency)
                     await semaphore.acquire()
                     
                     # Once a slot is acquired, create the task.
