@@ -1,4 +1,4 @@
-from models import VtuberExllamav2
+from models import VtuberExllamav2, LLMModelConfig
 from huggingface_hub import snapshot_download
 from model_utils import load_character, prompt_wrapper, contains_sentence_terminator
 from time import perf_counter
@@ -26,66 +26,76 @@ revision ="8.0bpw"
 
 #test using the exllamav2
 async def exllamav2_test():
-    Character = VtuberExllamav2.load_model(main_model=main_model, tokenizer_model=tokenizer_model, revision=revision, character_name=character_name, instructions=instructions)#(generator, gen_settings, tokenizer, character_name)
+    model_config = LLMModelConfig (
+        main_model=main_model,
+        tokenizer_model=tokenizer_model,
+        revision=revision,
+        character_name=character_name,
+        instructions=instructions
 
-    images = [
-    # {"file": "media/test_image_1.jpg"},
-    # {"file": "media/test_image_2.jpg"},
-    {"url": "https://media.istockphoto.com/id/1212540739/photo/mom-cat-with-kitten.jpg?s=612x612&w=0&k=20&c=RwoWm5-6iY0np7FuKWn8FTSieWxIoO917FF47LfcBKE="},
-    # {"url": "https://i.dailymail.co.uk/1s/2023/07/10/21/73050285-12283411-Which_way_should_I_go_One_lady_from_the_US_shared_this_incredibl-a-4_1689019614007.jpg"},
-    # {"url": "https://images.fineartamerica.com/images-medium-large-5/metal-household-objects-trevor-clifford-photography.jpg"}
-]
-    prompt = prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
-#     dummy_memory =[
-#   "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
-#   "The intricate symphony of urban life continued its relentless crescendo, with the incessant blare of car horns, the distant wail of sirens, and the muffled murmur of countless conversations weaving a complex tapestry of sound that underscored the profound isolation often experienced amidst the bustling anonymity of a sprawling metropolis.",
-#   "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
-#   "Despite the overwhelming complexities and numerous unforeseen obstacles encountered during the arduous, multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
-# #   "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
-# ] #["Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!"]
-    
-    ##basically warmup
-    response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, images=images, max_tokens=512)
-    print(type(response))
-    async for result in response:
-        output = result.get("text", "")
+    )
+    # Character = VtuberExllamav2.load_model(config=model_config)#(generator, gen_settings, tokenizer, character_name)
+
+    async with VtuberExllamav2.load_model(config=model_config) as Character:
+            
+        images = [
+        # {"file": "media/test_image_1.jpg"},
+        # {"file": "media/test_image_2.jpg"},
+        {"url": "https://media.istockphoto.com/id/1212540739/photo/mom-cat-with-kitten.jpg?s=612x612&w=0&k=20&c=RwoWm5-6iY0np7FuKWn8FTSieWxIoO917FF47LfcBKE="},
+        # {"url": "https://i.dailymail.co.uk/1s/2023/07/10/21/73050285-12283411-Which_way_should_I_go_One_lady_from_the_US_shared_this_incredibl-a-4_1689019614007.jpg"},
+        # {"url": "https://images.fineartamerica.com/images-medium-large-5/metal-household-objects-trevor-clifford-photography.jpg"}
+    ]
+        prompt = prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
+    #     dummy_memory =[
+    #   "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
+    #   "The intricate symphony of urban life continued its relentless crescendo, with the incessant blare of car horns, the distant wail of sirens, and the muffled murmur of countless conversations weaving a complex tapestry of sound that underscored the profound isolation often experienced amidst the bustling anonymity of a sprawling metropolis.",
+    #   "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
+    #   "Despite the overwhelming complexities and numerous unforeseen obstacles encountered during the arduous, multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
+    # #   "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
+    # ] #["Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!"]
+        
+        ##basically warmup
+        response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, images=images, max_tokens=512)
+        print(type(response))
+        async for result in response:
+            output = result.get("text", "")
 
 
-    #true speed test
-    start = perf_counter()
-    prompt = prompt_wrapper("Lemao?", "You need brain surgery")
-    dummy_memory =[
-  "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
-  "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
-  "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
-  "Despite the overwhelming complexities",
-  "and numerous unforeseen obstacles encountered during the arduous",
-  "multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
-  "The venerable oak tree",
-  "standing as an immutable sentinel through countless seasons",
-  "its gnarled branches reaching skyward like ancient",
-  "petrified arms",
-   "silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy",
-   "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
-] #["Ahahahahah", "wowoz
+        #true speed test
+        start = perf_counter()
+        prompt = prompt_wrapper("Lemao?", "You need brain surgery")
+        dummy_memory =[
+    "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
+    "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
+    "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
+    "Despite the overwhelming complexities",
+    "and numerous unforeseen obstacles encountered during the arduous",
+    "multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
+    "The venerable oak tree",
+    "standing as an immutable sentinel through countless seasons",
+    "its gnarled branches reaching skyward like ancient",
+    "petrified arms",
+    "silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy",
+    "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
+    ] #["Ahahahahah", "wowoz
 
-    # while True:
-    prompt = "Describe the image."
-    response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, images=images, max_tokens=512)
-    async for result in response:
-        output = result.get("text", "")
-        end = perf_counter()
-        print(end-start, output)
-        # if contains_sentence_terminator(output):
-        #     end = perf_counter()
-        #     print(end-start, output)
-        #     await Character.cancel_dialogue_generation()
+        # while True:
+        prompt = "Describe the image."
+        response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, images=images, max_tokens=512)
+        async for result in response:
+            output = result.get("text", "")
+            end = perf_counter()
+            print(end-start, output)
+            # if contains_sentence_terminator(output):
+            #     end = perf_counter()
+            #     print(end-start, output)
+            #     await Character.cancel_dialogue_generation()
 
-        # print(output,  end = "")    
-            # break
+            # print(output,  end = "")    
+                # break
 
-    # print(f"Prompts: {msg}\n\nRESPONSE:\n{response}\n\nTime Taken (Seconds): {end-start}")
-    print(f"\n\nTime Taken (Seconds): {end-start}")
+        # print(f"Prompts: {msg}\n\nRESPONSE:\n{response}\n\nTime Taken (Seconds): {end-start}")
+        print(f"\n\nTime Taken (Seconds): {end-start}")
 
 asyncio.run(exllamav2_test())
 

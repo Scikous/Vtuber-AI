@@ -1,218 +1,228 @@
-from abc import ABC, abstractmethod
-from model_utils import apply_chat_template, get_rand_token_len, character_reply_cleaner, get_image
-import torch
-import gc
 import asyncio
+import gc
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import torch
+from model_utils import apply_chat_template, get_image
+
+# Configure a logger for this module
+log = logging.getLogger(__name__)
+
+
+# --- Configuration & Resource Objects ---
+
+@dataclass
+class LLMModelConfig:
+    """Configuration for loading an Exllamav2 model."""
+    main_model: str = "turboderp/Qwen2.5-VL-7B-Instruct-exl2"
+    tokenizer_model: str = "Qwen/Qwen2.5-VL-7B-Instruct"
+    revision: str = "8.0bpw"
+    is_vision_model: bool = True
+    max_seq_len: int = 65536
+    character_name: str = 'assistant'
+    instructions: str = ""
+
+@dataclass
+class Exllamav2Resources:
+    """A container for all loaded Exllamav2 resources."""
+    model: Any
+    cache: Any
+    exll2tokenizer: Any
+    generator: Any
+    gen_settings: Any
+    tokenizer: Any  # Transformers tokenizer
+    vision_model: Optional[Any] = None
+
+
+# --- Base Class ---
+
 
 class VtuberLLMBase(ABC):
     """Abstract base class for Vtuber LLM models."""
-    def __init__(self, character_name, instructions):
+    def __init__(self, character_name: str, instructions: str):
         self.character_name = character_name
         self.instructions = instructions
-
-    @abstractmethod
-    def load_model(cls, *args, **kwargs):
-        pass
-
-    @abstractmethod
-    async def dialogue_generator(self, prompt, **kwargs):
-        pass
-
-    @abstractmethod
-    def cancel_dialogue_generation(self):
-        """
-        Requests the cancellation of the currently ongoing dialogue generation,
-        if one exists and is cancellable.
-        """
-        pass
-
-    @abstractmethod
-    def cleanup(self):
-        pass
-
-    # Context manager methods -- used with "with" statement
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
-        # Optionally, return False to propagate exceptions, True to suppress them
-        return False
-
-#current, lowest latency
-class VtuberExllamav2(VtuberLLMBase):
-    """
-    Holds and handles all of the ExllamaV2 based tools
-    """
-
-    def __init__(self, generator, gen_settings, exll2tokenizer, tokenizer, model, vision_model, character_name, instructions):
-        super().__init__(character_name, instructions)
-        self.generator = generator
-        self.gen_settings = gen_settings
-        self.exll2tokenizer = exll2tokenizer
-        self.tokenizer = tokenizer
-        self.model = model
-        self.vision_model = vision_model
-        self.current_async_job = None # Moved to VtuberLLMBase
+        self.current_async_job = None
 
     @classmethod
-    def load_model(cls, main_model="turboderp/Qwen2.5-VL-7B-Instruct-exl2", tokenizer_model="Qwen/Qwen2.5-VL-7B-Instruct", revision="8.0bpw", is_vision_model=True, character_name='assistant', instructions=""):
+    @abstractmethod
+    def load_model(cls, *args, **kwargs):
+        """Loads all necessary model resources and returns an instance of the class."""
+        pass
+
+    @abstractmethod
+    async def dialogue_generator(self, prompt: str, **kwargs):
+        """Generates a response to a prompt."""
+        pass
+
+    @abstractmethod
+    async def cancel_dialogue_generation(self):
+        """Requests cancellation of the ongoing dialogue generation."""
+        pass
+
+    @abstractmethod
+    async def cleanup(self):
+        """Cleans up all resources held by the model."""
+        pass
+
+    # Async context manager for robust, async-aware cleanup
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.cleanup()
+        return False # Propagate exceptions
+
+
+
+
+#######
+class VtuberExllamav2(VtuberLLMBase):
+    """
+    Implementation of VtuberLLMBase using the ExllamaV2 library.
+    """
+    def __init__(self, config: LLMModelConfig, resources: Exllamav2Resources):
+        super().__init__(config.character_name, config.instructions)
+        self.config = config
+        self.resources = resources
+
+    @classmethod
+    def load_model(cls, config: LLMModelConfig):
         """
-        Loads an ExLlamaV2 compatible model
-
-        main_model: str -- the actual model to use for generation
-        tokenizer_model: str -- the tokenizer model to use for applying appropriate chat template
-        revision: str -- the revision of the model to use
-        character_name: str -- the name of the character the model is speaking as
-        instructions: str -- the instructions for the model to follow
-
-        Returns:
-        
-            generator (ExLlamaV2DynamicGenerator): to be used for text generation
-
-            gen_settings (ExLlamaV2Sampler.Settings): default text generation settings -- reasonably unique responses
-            
-            tokenizer (ExLlamaV2Tokenizer): the initialized tokenizer -- given to the "model" in models.py
+        Loads an ExLlamaV2 model based on the provided configuration.
         """
-        from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Cache, ExLlamaV2Tokenizer, ExLlamaV2VisionTower
-        from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2DynamicGeneratorAsync, ExLlamaV2Sampler
-        from transformers import AutoTokenizer
+        from exllamav2 import (ExLlamaV2, ExLlamaV2Cache, ExLlamaV2Config,
+                               ExLlamaV2Tokenizer, ExLlamaV2VisionTower)
+        from exllamav2.generator import (ExLlamaV2DynamicGeneratorAsync, ExLlamaV2Sampler)
         from huggingface_hub import snapshot_download
-        
-        
-        #transformers tokenizer, not exllamav2's tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_model) # for applying chat template
+        from transformers import AutoTokenizer
 
-        #load exllamav2 model
+        # 1. Load Transformers Tokenizer (for chat template)
+        hf_tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_model)
+
+        # 2. Load Exllamav2 Model Config
         try:
-            config = ExLlamaV2Config(main_model)
+            exl2_config = ExLlamaV2Config(config.main_model)
         except:
-            hf_model = snapshot_download(repo_id=main_model, revision=revision)
-            config = ExLlamaV2Config(hf_model)
+            log.info(f"Local model not found. Downloading from Hugging Face Hub: {config.main_model}")
+            hf_model_path = snapshot_download(repo_id=config.main_model, revision=config.revision)
+            exl2_config = ExLlamaV2Config(hf_model_path)
+        
+        # 3. Load Vision Model (if applicable)
+        vision_model = None
+        if config.is_vision_model:
+            log.info("Loading vision tower...")
+            vision_model = ExLlamaV2VisionTower(exl2_config)
+            vision_model.load(progress=True)
 
-        if is_vision_model:
-            #load vision_model
-            vision_model = ExLlamaV2VisionTower(config)
-            vision_model.load(progress = True)
-        else: vision_model = None
-
-        #load model
-        model = ExLlamaV2(config)
-        cache = ExLlamaV2Cache(model, max_seq_len = 65536, lazy = True)
-        model.load_autosplit(cache, progress = True)
-        exll2tokenizer = ExLlamaV2Tokenizer(config)
-        #initialize generator
-        generator_async = ExLlamaV2DynamicGeneratorAsync(
-            model = model,
-            cache = cache,
-            tokenizer = exll2tokenizer,
-        )
-        #default text generation settings, can be overridden
+        # 4. Load Core Model & Tokenizer
+        log.info("Loading main model...")
+        model = ExLlamaV2(exl2_config)
+        cache = ExLlamaV2Cache(model, max_seq_len=config.max_seq_len, lazy=True)
+        model.load_autosplit(cache, progress=True)
+        exll2_tokenizer = ExLlamaV2Tokenizer(exl2_config)
+        
+        # 5. Initialize Generator and Sampler Settings
+        generator = ExLlamaV2DynamicGeneratorAsync(model=model, cache=cache, tokenizer=exll2_tokenizer)
         gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = 1.8, 
-            top_p = 0.95,
-            min_p=0.08,
-            top_k=50,
-            token_repetition_penalty = 1.05
+            temperature=1.8, top_p=0.95, min_p=0.08, top_k=50, token_repetition_penalty=1.05
         )
 
-        return cls(generator_async, gen_settings, exll2tokenizer, tokenizer, model, vision_model, character_name, instructions)
+        # 6. Group resources and instantiate the class
+        loaded_resources = Exllamav2Resources(
+            model=model, cache=cache, exll2tokenizer=exll2_tokenizer, 
+            generator=generator, gen_settings=gen_settings, 
+            tokenizer=hf_tokenizer, vision_model=vision_model
+        )
+        return cls(config, loaded_resources)
 
-    async def dialogue_generator(self, prompt, conversation_history=None, images=None, max_tokens=200):
+    async def _prepare_prompt_and_embeddings(self, prompt: str, conversation_history: Optional[List[str]], images: Optional[List[Dict]]):
+        """Handles image embedding and chat template application."""
+        image_embeddings = None
+        placeholders = ""
+
+        if self.resources.vision_model and images:
+            # Concurrently fetch and embed all images
+            image_tasks = [get_image(**img_args) for img_args in images]
+            loaded_images = await asyncio.gather(*image_tasks)
+            
+            image_embeddings = [
+                self.resources.vision_model.get_image_embeddings(
+                    model=self.resources.model,
+                    tokenizer=self.resources.exll2tokenizer,
+                    image=img
+                )
+                for img in loaded_images
+            ]
+            placeholders = "\n".join([ie.text_alias for ie in image_embeddings]) + "\n"
+
+        full_prompt = placeholders + prompt
+        formatted_prompt = apply_chat_template(
+            instructions=self.instructions,
+            prompt=full_prompt,
+            conversation_history=conversation_history,
+            tokenizer=self.resources.tokenizer,
+            tokenize=False
+        )
+        
+        input_ids = self.resources.exll2tokenizer.encode(
+            formatted_prompt, add_bos=True, encode_special_tokens=True, embeddings=image_embeddings
+        )
+        
+        return input_ids, image_embeddings
+
+    async def dialogue_generator(self, prompt: str, conversation_history: Optional[List[str]] = None, images: Optional[List[Dict]] = None, max_tokens: int = 200):
         """
-        Generates character's response to a given input (Message)
-
-        For text length variety's sake, randomly selects token length to appear more natural
+        Generates character's response asynchronously.
         """
         from exllamav2.generator import ExLlamaV2DynamicJobAsync
 
-        if self.vision_model and images:
-            image_embeddings = [
-                self.vision_model.get_image_embeddings(
-                    model = self.model,
-                    tokenizer = self.exll2tokenizer,
-                    image = get_image(**img_args)
-                )
-                for img_args in images
-            ]
-            placeholders = "\n".join([ie.text_alias for ie in image_embeddings]) + "\n"
-        else: image_embeddings = None; placeholders = ""
-
-        prompt = placeholders+prompt
-        prompt = apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer, tokenize=False)
-
-        print(prompt)
-        input_ids = self.exll2tokenizer.encode(
-            prompt,
-            add_bos= True,
-            encode_special_tokens=True,
-            embeddings = image_embeddings
-            )
+        input_ids, image_embeddings = await self._prepare_prompt_and_embeddings(
+            prompt, conversation_history, images
+        )
+        
         self.current_async_job = ExLlamaV2DynamicJobAsync(
-                        generator=self.generator,
-                        encode_special_tokens=False,
-                        decode_special_tokens=False,
-                        completion_only=True,
-                        input_ids=input_ids,
-                        max_new_tokens=max_tokens,
-                        gen_settings=self.gen_settings,
-                        add_bos = False, #if using apply_chat_template set to false -- only plain string should have True)
-                        stop_conditions= [self.tokenizer.eos_token_id], #for stopping generation when a specific token is generated
-                        #token_healing = False #True if output is weird, False if output is un-weird
-                        #return_logits = False #for analyzing model's probability distribution before sapling -- generally don't touch
-                        #return_probs = False #for understanding the model's confidence in its choices -- generally don't touch
-                        #filters = None #list[list[ExLlamaV2Filter]] | list[ExLlamaV2Filter] forcing/guiding text generation
-                        #identifier = None #object for tracking/associating metadata
-                        #banned_strings = None #list[str] for banning specific words/phrases
-                        embeddings = image_embeddings #list[ExLlamaV2MMEmbedding] can input images thathave been embedded into vectors
-
-                    )
-        return self.current_async_job    
+            generator=self.resources.generator,
+            input_ids=input_ids,
+            max_new_tokens=max_tokens,
+            gen_settings=self.resources.gen_settings,
+            completion_only=True,
+            add_bos=False,
+            stop_conditions=[self.resources.tokenizer.eos_token_id],
+            embeddings=image_embeddings
+        )
+        return self.current_async_job
 
     async def cancel_dialogue_generation(self):
-        """
-        Cancels the currently ongoing ExLlamaV2DynamicJobAsync.
-        """
-        if self.current_async_job:
-            if hasattr(self.current_async_job, 'cancel') and callable(self.current_async_job.cancel):
-                print("VtuberExllamav2: Cancelling current dialogue generation job.")
-                try:
-                    await self.current_async_job.cancel()
-                except Exception as e:
-                    print(f"VtuberExllamav2: Error trying to cancel async_job: {e}")
-            else:
-                print("VtuberExllamav2: current_async_job does not have a callable 'cancel' method.")
+        """Cancels the currently ongoing ExLlamaV2DynamicJobAsync."""
+        if self.current_async_job and hasattr(self.current_async_job, 'cancel'):
+            log.info("Cancelling current dialogue generation job.")
+            try:
+                await self.current_async_job.cancel()
+            except Exception as e:
+                log.error(f"Error trying to cancel async_job: {e}")
         else:
-            print("VtuberExllamav2: No current dialogue generation job to cancel.")
+            log.warning("No cancellable dialogue generation job to cancel.")
 
-    def cleanup(self):
-        # Manual cleanup
+    async def cleanup(self):
+        """Asynchronously cleans up model resources."""
         if self.current_async_job:
-            print("Attempting to cancel ongoing async_job during cleanup...")
-            self.cancel_dialogue_generation() # Calls the new cancel method
+            log.info("Attempting to cancel ongoing async_job during cleanup...")
+            await self.cancel_dialogue_generation()
             self.current_async_job = None
-        if hasattr(self, 'generator') and self.generator:
-            del self.generator
-            self.generator = None
-        if hasattr(self, 'gen_settings') and self.gen_settings:
-            del self.gen_settings
-            self.gen_settings = None
-        if hasattr(self, 'tokenizer') and self.tokenizer:
-            del self.tokenizer
-            self.tokenizer = None
+
+        # Release resources
+        self.resources = None
+        
+        # Clear CUDA cache and run garbage collection
         if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # If using CUDA
+            torch.cuda.empty_cache()
         gc.collect()
-        print("Cleaned up and garbage collected ExllamaV2 Model resources!")
+        log.info("Cleaned up ExllamaV2 model resources.")
 
-    # Context manager methods -- used with "with" statement
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
-        # Optionally, return False to propagate exceptions, True to suppress them
-        return False
 
 
 

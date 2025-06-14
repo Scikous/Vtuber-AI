@@ -1,8 +1,19 @@
 import json
 import numpy as np
 import re
+
+
+import asyncio
+import io
+import logging
+import os
+from typing import List, Optional
+
+import aiohttp
 from PIL import Image
-import requests
+from transformers import PreTrainedTokenizer
+
+log = logging.getLogger(__name__)
 
 
 def apply_chat_template(instructions, prompt, tokenizer, conversation_history=None, tokenize=True):
@@ -171,12 +182,95 @@ def extract_name_message(input_string):
         return input_string
 
 
+#synchronous get_image
+# def get_image(file = None, url = None):
+#     assert (file or url) and not (file and url)
+#     if file:
+#         script_dir = os.path.dirname(os.path.abspath(__file__))
+#         file_path = os.path.join(script_dir, file)
+#         return Image.open(file_path)
+#     elif url:
+#         return Image.open(requests.get(url, stream = True).raw)
 
-def get_image(file = None, url = None):
-    assert (file or url) and not (file and url)
+
+async def get_image(file: Optional[str] = None, url: Optional[str] = None) -> Image.Image:
+    """
+    Asynchronously loads an image from a local file path or a URL.
+
+    Args:
+        file: The local file name (relative to this script's directory).
+        url: The URL of the image to download.
+
+    Returns:
+        A PIL Image object.
+
+    Raises:
+        ValueError: If both 'file' and 'url' are provided, or if neither is.
+        FileNotFoundError: If the local file does not exist.
+        Exception: For network-related errors during download.
+    """
+    if not (file or url) or (file and url):
+        raise ValueError("Provide either a 'file' or a 'url', but not both.")
+
     if file:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(script_dir, file)
-        return Image.open(file_path)
+        def _load_from_disk():
+            # This blocking I/O function will be run in a separate thread
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            file_path = os.path.join(script_dir, file)
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Image file not found at: {file_path}")
+            return Image.open(file_path)
+        
+        try:
+            # Offload the blocking file I/O to a thread pool
+            return await asyncio.to_thread(_load_from_disk)
+        except Exception as e:
+            log.error(f"Failed to load image from file '{file}': {e}")
+            raise
+
     elif url:
-        return Image.open(requests.get(url, stream = True).raw)
+        try:
+            # Use an async HTTP client to avoid blocking the event loop
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    response.raise_for_status()  # Raise an exception for bad status codes
+                    image_data = await response.read()
+                    return Image.open(io.BytesIO(image_data))
+        except aiohttp.ClientError as e:
+            log.error(f"Failed to download image from URL '{url}': {e}")
+            raise
+
+def apply_chat_template(
+    instructions: str,
+    prompt: str,
+    tokenizer: PreTrainedTokenizer,
+    conversation_history: Optional[List[str]] = None,
+    tokenize: bool = True
+):
+    """
+    Applies a chat template to the prompt with optional conversation history.
+    
+    Args:
+        instructions: System instructions string.
+        prompt: Current user message string.
+        tokenizer: The Hugging Face tokenizer to use.
+        conversation_history: List of previous messages, alternating between user and assistant.
+                              e.g., [user_msg1, assistant_msg1, user_msg2, ...]
+        tokenize: If True, returns tokenized tensors. If False, returns the formatted string.
+    """
+    messages = [{"role": "system", "content": instructions}]
+    
+    if conversation_history:
+        for i, msg in enumerate(conversation_history):
+            role = "user" if i % 2 == 0 else "assistant"
+            messages.append({"role": role, "content": msg})
+    
+    messages.append({"role": "user", "content": prompt})
+    
+    # apply_chat_template handles BOS token logic internally when tokenize=True
+    return tokenizer.apply_chat_template(
+        messages, 
+        tokenize=tokenize, 
+        add_generation_prompt=True,
+        return_tensors="pt" if tokenize else None
+    )
