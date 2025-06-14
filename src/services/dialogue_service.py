@@ -1,39 +1,104 @@
-"""
-Dialogue Service Module for Vtuber-AI
+"""Dialogue Service Module for Vtuber-AI
 Handles the generation of responses using the LLM.
+Now manages its own LLM model loading and character configuration.
 """
 import asyncio
-from LLM_Wizard.model_utils import contains_sentence_terminator, extract_name_message, prompt_wrapper
+import os
+from collections import deque
+from LLM_Wizard.model_utils import contains_sentence_terminator, extract_name_message, prompt_wrapper, load_character
+from LLM_Wizard.models import LLMModelConfig, VtuberExllamav2
+from utils.file_operations import write_messages_csv
+from utils.env_utils import get_env_var
 from .base_service import BaseService
-# Import necessary LLM utilities, prompt templates, etc.
 
 class DialogueService(BaseService):
     def __init__(self, shared_resources):
         super().__init__(shared_resources)
-        self.llm_model = shared_resources.get("character_model")
-        self.naive_short_term_memory = shared_resources.get("naive_short_term_memory")
-        self.character_name = shared_resources.get("character_name")
-        self.user_name = shared_resources.get("user_name")
-        self.speaker_name = shared_resources.get("speaker_name")
-        self.conversation_log_file = shared_resources.get("conversation_log_file")
-        self.write_to_log_fn = shared_resources.get("write_to_log_fn")
-
+        
         # Queues for communication
         self.speech_queue = self.queues.get("speech_queue") # Input from STT
         self.live_chat_queue = self.queues.get("live_chat_queue") # Input from LiveChat
         self.llm_output_queue = self.queues.get("llm_output_queue") # Output to TTS/other consumers
 
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event())
+        
+        # Service-managed resources
+        self.llm_model = None
+        self.character_name = None
+        self.user_name = None
+        self.instructions = None
+        
+        # Initialize memory and logging
+        self.llm_settings = self.config.get("llm_settings", {}) if self.config else {}
+        self.naive_short_term_memory = deque(maxlen=self.llm_settings.get("short_term_memory_maxlen", 6))
+        self._setup_conversation_logging()
+        
+        if self.logger:
+            self.logger.info("DialogueService initialized. LLM model will be loaded on service start.")
+    
+    def _setup_conversation_logging(self):
+        """Setup conversation logging based on configuration."""
+        self.conversation_log_file = get_env_var("CONVERSATION_LOG_FILE")
+        if self.conversation_log_file and not os.path.isabs(self.conversation_log_file):
+            project_root = self.shared_resources.get("project_root")
+            self.conversation_log_file = os.path.join(project_root, self.conversation_log_file)
+        
+        self.write_to_log_fn = write_messages_csv if self.conversation_log_file else None
+        
+        if self.conversation_log_file and self.logger:
+            self.logger.info(f"Conversation logging enabled to: {self.conversation_log_file}")
+        elif self.logger:
+            self.logger.info("Conversation logging is disabled.")
+    
+    async def _load_character_and_llm(self):
+        """Load character information and LLM model."""
+        if self.logger:
+            self.logger.info("Loading character and LLM model...")
+        
+        # Load character information
+        character_info_json_path = self.llm_settings.get("character_info_json", "LLM_Wizard/characters/character.json")
+        if not os.path.isabs(character_info_json_path):
+            project_root = self.shared_resources.get("project_root")
+            character_info_json_path = os.path.join(project_root, character_info_json_path)
+        
+        if not os.path.exists(character_info_json_path):
+            if self.logger:
+                self.logger.error(f"Character info JSON not found at: {character_info_json_path}")
+            raise FileNotFoundError(f"Character info JSON not found at: {character_info_json_path}")
+
+        self.instructions, self.user_name, self.character_name = load_character(character_info_json_path)
+        
+        # Create LLM model configuration
+        model_config = LLMModelConfig(
+            main_model=self.llm_settings.get("llm_model_path", "turboderp/Qwen2.5-VL-7B-Instruct-exl2"),
+            tokenizer_model=self.llm_settings.get("tokenizer_model_path", "Qwen/Qwen2.5-VL-7B-Instruct"),
+            revision=self.llm_settings.get("llm_model_revision", "8.0bpw"),
+            character_name=self.character_name,
+            instructions=self.instructions
+        )
+        
+        # Load the LLM model
+        try:
+            self.llm_model = VtuberExllamav2.load_model(config=model_config)
+            if self.logger:
+                self.logger.info(f"Successfully loaded LLM model for character '{self.character_name}'")
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Failed to load LLM model: {e}")
+            raise
 
 
     async def run_worker(self):
         """Main logic for the Dialogue service worker."""
         if self.logger:
             self.logger.info(f"{self.__class__.__name__} worker running.")
-
-        if not self.llm_model:
+        
+        # Load LLM model and character information
+        try:
+            await self._load_character_and_llm()
+        except Exception as e:
             if self.logger:
-                self.logger.error("LLM model not available in DialogueService. Stopping worker.")
+                self.logger.error(f"Failed to load LLM model in DialogueService: {e}")
             return
 
         if not self.speech_queue or not self.live_chat_queue or not self.llm_output_queue:
@@ -121,7 +186,7 @@ class DialogueService(BaseService):
                 if self.logger:
                     self.logger.info(f"LLM generated response (first 100 chars): {output[:100]}...")
 
-                self.naive_short_term_memory.append(message) 
+                self.naive_short_term_memory.append(message)
                 # self.naive_short_term_memory.append(f"{self.character_name}: {output}")
                 
                 if self.write_to_log_fn and self.conversation_log_file:
@@ -142,5 +207,20 @@ class DialogueService(BaseService):
             if self.logger:
                 self.logger.error(f"Error in {self.__class__.__name__} worker: {e}", exc_info=True)
         finally:
+            await self._cleanup_llm_model()
             if self.logger:
                 self.logger.info(f"{self.__class__.__name__} worker stopped.")
+    
+    async def _cleanup_llm_model(self):
+        """Clean up LLM model resources."""
+        if self.llm_model:
+            if self.logger:
+                self.logger.info("Cleaning up LLM model resources...")
+            try:
+                await self.llm_model.cleanup()
+                self.llm_model = None
+                if self.logger:
+                    self.logger.info("LLM model cleanup completed.")
+            except Exception as e:
+                if self.logger:
+                    self.logger.error(f"Error during LLM model cleanup: {e}", exc_info=True)

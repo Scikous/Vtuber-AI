@@ -8,12 +8,20 @@ from STT_Wizard.STT import speech_to_text # Import for STT functionality
 class STTService(BaseService):
     def __init__(self, shared_resources):
         super().__init__(shared_resources)
+        
+        # Get speech queue from base class (already available through self.queues)
         self.speech_queue = self.queues.get("speech_queue") # Output queue for STT results
-        self.speaker_name = self.shared_resources.get("speaker_name", "User") # Get speaker name from shared resources
+        
+        # Get speaker name from config instead of shared_resources
+        self.stt_settings = self.config.get("stt_settings", {}) if self.config else {}
+        self.speaker_name = self.stt_settings.get("speaker_name", "User") if self.stt_settings else "User"
 
         # Shared state events (to be managed/set externally)
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) # Stops current dialogue playback
         self.is_audio_streaming_event = shared_resources.get("is_audio_streaming_event", asyncio.Event()) # Stops current dialogue playback
+        
+        if self.logger:
+            self.logger.info(f"STTService initialized with speaker name: {self.speaker_name}")
 
     async def run_worker(self):
         """Main logic for the STT service worker."""

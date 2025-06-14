@@ -1,14 +1,40 @@
 {
-    "llm_class_name": "VtuberExllamav2",
-    "llm_model_path": "turboderp/Qwen2.5-VL-7B-Instruct-exl2",
-    "tokenizer_model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
-    "llm_model_revision": "8.0bpw",
-    "short_term_memory_maxlen": 12,
-    "max_tokens": 512, 
-    "speaker_name": "LMFAO",
-    "character_info_json": "LLM_Wizard/characters/character.json",
+    "llm_settings":
+    {
+        "llm_class_name": "VtuberExllamav2",
+        "llm_model_path": "turboderp/Qwen2.5-VL-7B-Instruct-exl2",
+        "tokenizer_model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+        "llm_model_revision": "8.0bpw",
+        "short_term_memory_maxlen": 12,
+        "max_tokens": 512, 
+        "character_info_json": "LLM_Wizard/characters/character.json"
+    },
 
-    "tts_concurrency": 1,
+    "stt_settings":
+    {
+        "speaker_name": "LMFAO",
+        "MODEL_SIZE": "large-v1",
+        "LANGUAGE": "en",
+        "BEAM_SIZE": 5,
+
+        "SAMPLE_RATE": 16000,
+        "CHANNELS": 1,
+        "AUDIO_DTYPE": "float32",
+        "FRAME_DURATION_MS": 30,
+        "VAD_AGGRESSIVENESS": 3,
+        
+        "INITIAL_SPEECH_TIMEOUT_S": 5.0,
+        "MAX_PHRASE_DURATION_S": 15.0,
+        "SILENCE_AFTER_SPEECH_S": 0.35,
+        "ENERGY_THRESHOLD_DBFS": -31.0
+        
+    },
+    
+    "tts_settings":{
+        "tts_concurrency": 1,
+        "tts_service_name": "RealTimeTTS"
+    },
+
     "logging_enabled": true,
 
 

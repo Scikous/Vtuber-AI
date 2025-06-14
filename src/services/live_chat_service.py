@@ -10,17 +10,21 @@ from Livechat_Wizard.livechat import LiveChatController
 class LiveChatService(BaseService):
     def __init__(self, shared_resources):
         super().__init__(shared_resources)
-        # Queues for communication
         # Input from the live chat platform (e.g., YouTube API)
         self.live_chat_controller = LiveChatController.create()
-        # Output to the Dialogue service (which consumes from live_chat_queue)
+        
+        # Get live chat queue from base class (already available through self.queues)
         self.live_chat_input_queue = self.queues.get("live_chat_queue")
         
         # Event flag for immediate fetch trigger
-        self.immediate_livechat_fetch_event = shared_resources.get("immediate_livechat_fetch_event", asyncio.Event()) # Pauses playback when user speaks
+        self.immediate_livechat_fetch_event = shared_resources.get("immediate_livechat_fetch_event", asyncio.Event()) if shared_resources else asyncio.Event()
         
-        # Configurable fetch interval (default 60 seconds)
-        self.fetch_interval = 60
+        # Get fetch interval from config (default 60 seconds)
+        self.livechat_settings = self.config.get("livechat_settings", {}) if self.config else {}
+        self.fetch_interval = self.livechat_settings.get("live_chat_fetch_interval", 60) if self.livechat_settings else 60
+        
+        if self.logger:
+            self.logger.info(f"LiveChatService initialized with fetch interval: {self.fetch_interval}s")
 
     def trigger_immediate_fetch(self):
         """Trigger an immediate fetch by setting the event flag."""
@@ -57,7 +61,7 @@ class LiveChatService(BaseService):
                             self.logger.info(f"Message received: {message}, Messages for Context: {context_messages}")
                         # Put the message onto the asyncio queue for DialogueService
                         if not self.live_chat_input_queue.full():
-                            await self.live_chat_input_queue.put((message, context_messages))
+                            await self.live_chat_input_queue.put_nowait((message, context_messages))
                             if self.logger:
                                 self.logger.debug(f"LiveChatService worker put to live_chat_input_queue: {message}")
                         else:

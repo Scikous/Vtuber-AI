@@ -8,21 +8,27 @@ class AudioStreamService(BaseService):
     def __init__(self, shared_resources=None, audio_playback_backend: Optional[AudioPlaybackBase] = None):
         super().__init__(shared_resources)
         
+        # Get audio output queue from base class
+        self.audio_output_queue = self.queues.get("audio_output_queue") if self.queues else None
+        
         if audio_playback_backend:
             self.audio_playback_backend = audio_playback_backend
         else:
             # Default to PyAudioPlayback if no backend is provided
-            # Configuration for the default backend can be passed via shared_resources or a dedicated config
-            backend_config = self.shared_resources.get('config', {}).get('audio_backend_settings', {})
+            # Configuration for the default backend can be passed via config
+            backend_config = self.config.get('audio_backend_settings', {}) if self.config else {}
             self.audio_playback_backend = PyAudioPlayback(config=backend_config, logger=self.logger)
         
         self._chunk_size = backend_config.get('chunk_size', 512) if backend_config else 512
-        self.logger.info(f"AudioStreamService initialized with backend: {type(self.audio_playback_backend).__name__}")
+        if self.logger:
+            self.logger.info(f"AudioStreamService initialized with backend: {type(self.audio_playback_backend).__name__}")
+        
         self._playback_paused_event = asyncio.Event() # Internal event to signal worker to pause processing
         self._service_stop_event = asyncio.Event() # Event to signal the worker to stop completely
+        
         # Shared state events (to be managed/set externally)
-        self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) # Stops current dialogue playback
-        self.is_audio_streaming_event = shared_resources.get("is_audio_streaming_event", asyncio.Event()) # Pauses playback when user speaks
+        self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event()) if shared_resources else asyncio.Event()
+        self.is_audio_streaming_event = shared_resources.get("is_audio_streaming_event", asyncio.Event()) if shared_resources else asyncio.Event()
 
     def _ensure_stream_is_open(self):
         """Ensures the audio stream is open, attempting to open it if not."""
@@ -72,7 +78,10 @@ class AudioStreamService(BaseService):
             self.logger.error(f"AudioStreamService could not start stream: {e}. Worker will not run.")
             return
 
-        audio_queue = self.shared_resources['queues']['audio_output_queue']
+        audio_queue = self.audio_output_queue
+        if not audio_queue:
+            self.logger.error("AudioStreamService: audio_output_queue not available. Worker cannot run.")
+            return
         self.logger.info("AudioStreamService will feed directly from queue to playback.")
 
         self._service_stop_event.clear() # Ensure stop event is clear at start
