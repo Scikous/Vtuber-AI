@@ -15,6 +15,7 @@ instructions_string = f"""{instructions}"""
 dummy_data = ["Good day, state your name.", "What is your favorite drink?", "Do you edge?"]
 
 #LLM model to use
+# main_model = "LLM_Wizard/qwen2.5-vl-finetune-merged"#"turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
 main_model = "turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
 tokenizer_model = "Qwen/Qwen2.5-VL-7B-Instruct"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
 revision ="8.0bpw"
