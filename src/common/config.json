@@ -31,7 +31,7 @@
     },
     
     "tts_settings":{
-        "tts_concurrency": 1,
+        "tts_concurrency": 2,
         "tts_service_name": "RealTimeTTS"
     },
 

@@ -32,6 +32,9 @@ class TTSService(BaseService):
         self.terminate_current_dialogue_event = self.shared_resources.get(
             "terminate_current_dialogue_event", asyncio.Event()
         )
+        self.is_audio_streaming_event = self.shared_resources.get(
+            "is_audio_streaming_event", asyncio.Event()
+        )
         
         # --- Configuration-Driven TTS Initialization ---
         self.tts_settings = self.config.get("tts_settings", {}) if self.config else {}
@@ -43,7 +46,7 @@ class TTSService(BaseService):
             
         # Instantiate the selected TTS service
         # NOTE: You might need to pass specific arguments to the service's __init__ method
-        self.TTS_SERVICE = service_config["class"]() 
+        self.TTS_SERVICE = service_config["class"](is_audio_streaming_event=self.is_audio_streaming_event,terminate_current_dialogue_event=self.terminate_current_dialogue_event) 
         self.prepare_tts_params = service_config["params_fn"]
         
         
@@ -82,30 +85,55 @@ class TTSService(BaseService):
                 if self.llm_output_queue:
                     self.llm_output_queue.task_done()
 
+    # async def _process_item_realtime(self, tts_params: dict):
+    #     """
+    #     Processes a TTS request using RealTimeTTS, which handles its own
+    #     audio playback and does not use the audio_output_queue.
+    #     """
+    #     if self.logger:
+    #         self.logger.debug(f"TTS (RealTime): Delegating playback for: {str(tts_params.get('text', ''))[:50]}...")
+        
+    #     try:
+    #         # RealTimeTTS handles its own threading and playback. We can call it directly.
+    #         # If its `tts` method is blocking, run_in_executor is safer.
+    #         # Assuming `tts` is the correct method based on the original commented-out code.
+    #         loop = asyncio.get_running_loop()
+    #         await loop.run_in_executor(None, lambda: self.TTS_SERVICE.tts_request_async(**tts_params))
+    #     except Exception as e:
+    #         if self.logger:
+    #             self.logger.error(f"Error during real-time synthesis for {str(tts_params.get('text', ''))[:30]}: {e}", exc_info=True)
+    #     finally:
+    #         if self.llm_output_queue:
+    #             self.llm_output_queue.task_done()
+
+
     async def _process_item_realtime(self, tts_params: dict):
         """
-        Processes a TTS request using RealTimeTTS, which handles its own
-        audio playback and does not use the audio_output_queue.
+        Processes a TTS request using RealTimeTTS by feeding text to its stream.
         """
         if self.logger:
-            self.logger.debug(f"TTS (RealTime): Delegating playback for: {str(tts_params.get('text', ''))[:50]}...")
+            self.logger.debug(f"TTS (RealTime): Feeding text to stream: {str(tts_params.get('text', ''))[:50]}...")
         
         try:
-            # RealTimeTTS handles its own threading and playback. We can call it directly.
-            # If its `tts` method is blocking, run_in_executor is safer.
-            # Assuming `tts` is the correct method based on the original commented-out code.
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: self.TTS_SERVICE.tts(**tts_params))
+            # The tts_request_async method is non-blocking. We can call it directly.
+            # It will handle feeding the text and starting playback if necessary.
+            self.TTS_SERVICE.tts_request_async(**tts_params)
+
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Error during real-time synthesis for {str(tts_params.get('text', ''))[:30]}: {e}", exc_info=True)
         finally:
+            # Crucially, mark the item from the input queue as done.
             if self.llm_output_queue:
                 self.llm_output_queue.task_done()
 
+        
     async def run_worker(self):
         if self.logger:
             self.logger.info(f"{self.__class__.__name__} worker running for {self.TTS_SERVICE.__class__.__name__}.")
+        # Initialize semaphore for queue-based services -- RealTimeTTS does not utilize semaphore
+        if not isinstance(self.TTS_SERVICE, RealTimeTTS):
+            semaphore = asyncio.Semaphore(self.tts_concurrency)
         
         # Semaphore is used to control concurrency for queue-based services
         active_tts_tasks = []
@@ -113,9 +141,8 @@ class TTSService(BaseService):
         try:
             while True:
                 active_tts_tasks = [task for task in active_tts_tasks if not task.done()]
-                # Wait for the next message from the LLM. This blocks until a message is available.
-                llm_message = await self.llm_output_queue.get()
                 
+                #terminate current dialogue when needed -- speech detected or terminate button smashed
                 if self.terminate_current_dialogue_event.is_set():
                     # Termination logic remains the same
                     if not self.llm_output_queue.empty() or active_tts_tasks:
@@ -135,6 +162,7 @@ class TTSService(BaseService):
                     await asyncio.sleep(0.1)
                     continue
 
+                llm_message = await self.llm_output_queue.get()
                 if self.logger:
                     self.logger.debug(f"TTS Service received message: {str(llm_message)[:100]}...")
                 
@@ -148,7 +176,6 @@ class TTSService(BaseService):
                     # For queue-based services, wait for a free processing slot.
                     # This is the correct way to handle concurrency and maintain order.
                     # The loop will pause here if all slots are busy.
-                    semaphore = asyncio.Semaphore(self.tts_concurrency)
                     await semaphore.acquire()
                     
                     # Once a slot is acquired, create the task.
@@ -157,6 +184,8 @@ class TTSService(BaseService):
                 
                 if task:
                     active_tts_tasks.append(task)
+                #if audio is NOT already playing DO NOT get new audio -- LLM will hog all the resources increacing latency dramatically
+                # await self.is_audio_streaming_event.wait()
 
         except asyncio.CancelledError:
             if self.logger:

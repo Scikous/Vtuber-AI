@@ -8,7 +8,7 @@ from multiprocessing import Queue as MPQueue
 # Asynchronous queues for intra-process communication (e.g., between async workers)
 speech_queue = asyncio.Queue(maxsize=1)
 live_chat_queue = asyncio.Queue(maxsize=1)
-llm_output_queue = asyncio.Queue()
+llm_output_queue = asyncio.Queue(maxsize=3)
 
 # Multiprocessing queue for inter-process communication (e.g., for live chat process)
 # This specific queue is intended for the live_chat_process to send messages to the main process.

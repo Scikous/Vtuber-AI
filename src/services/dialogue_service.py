@@ -21,6 +21,7 @@ class DialogueService(BaseService):
         self.llm_output_queue = self.queues.get("llm_output_queue") # Output to TTS/other consumers
 
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event())
+        self.is_audio_streaming_event = shared_resources.get("is_audio_streaming_event", asyncio.Event())
         
         # Service-managed resources
         self.llm_model = None
@@ -105,7 +106,7 @@ class DialogueService(BaseService):
             if self.logger:
                 self.logger.error("One or more required queues are missing in DialogueService. Stopping worker.")
             return
-
+        output = ""
         try:
             while True:
                 message = None
@@ -145,7 +146,7 @@ class DialogueService(BaseService):
 
                 full_string = ""
                 tts_buffer = "" # Buffer for accumulating text for TTS
-
+                first_chunk = True
                 async for result in async_job:
                     if self.terminate_current_dialogue_event.is_set():
                         if self.logger:
@@ -164,20 +165,24 @@ class DialogueService(BaseService):
                             if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
                                 from utils.logger import conditional_print
                                 conditional_print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
-                                asyncio.create_task(self.llm_output_queue.put(text_to_send_to_tts))
+                                # asyncio.create_task(self.llm_output_queue.put(text_to_send_to_tts))
+                                await self.llm_output_queue.put(text_to_send_to_tts)
                                 if self.logger:
                                     self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
                                 tts_buffer = "" # Reset buffer after sending
+                                # if first_chunk:
+                                #     first_chunk = False
+                                #     await self.is_audio_streaming_event.wait()
                     else:
                         if self.logger:
                             self.logger.debug("Received empty chunk_text or chunk_text is None.")
-
+                    
                 # After the loop, if there's anything left in tts_buffer that wasn't sent
                 # (e.g., the LLM finished generating mid-sentence)
                 if tts_buffer.strip():
                     remaining_text_for_tts = tts_buffer.strip()
                     conditional_print("Sending remaining to TTS queue (end of generation): ", remaining_text_for_tts) # Keep for debugging
-                    asyncio.create_task(self.llm_output_queue.put(remaining_text_for_tts))
+                    await self.llm_output_queue.put(remaining_text_for_tts)
                     if self.logger:
                         self.logger.debug(f"Put remaining TTS params to llm_output_queue: {remaining_text_for_tts[:30]}...")
                     tts_buffer = "" # Clear the buffer
