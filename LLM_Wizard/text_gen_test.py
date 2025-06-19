@@ -15,7 +15,7 @@ instructions_string = f"""{instructions}"""
 dummy_data = ["Good day, state your name.", "What is your favorite drink?", "Do you edge?"]
 
 #LLM model to use
-main_model = "LLM_Wizard/qwen2.5-vl-finetune-merged"#"turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+main_model = "LLM_Wizard/qwen2.5-vl-finetune-merged2"#"turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
 # main_model = "turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
 tokenizer_model = "Qwen/Qwen2.5-VL-7B-Instruct"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
 revision ="8.0bpw"
@@ -46,25 +46,24 @@ async def exllamav2_test():
         # {"url": "https://i.dailymail.co.uk/1s/2023/07/10/21/73050285-12283411-Which_way_should_I_go_One_lady_from_the_US_shared_this_incredibl-a-4_1689019614007.jpg"},
         # {"url": "https://images.fineartamerica.com/images-medium-large-5/metal-household-objects-trevor-clifford-photography.jpg"}
     ]
-        prompt = prompt_wrapper("Do you like coffee? also do you remember what i like?", "User is happy to talk with you")
-    #     dummy_memory =[
-    #   "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
-    #   "The intricate symphony of urban life continued its relentless crescendo, with the incessant blare of car horns, the distant wail of sirens, and the muffled murmur of countless conversations weaving a complex tapestry of sound that underscored the profound isolation often experienced amidst the bustling anonymity of a sprawling metropolis.",
-    #   "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
-    #   "Despite the overwhelming complexities and numerous unforeseen obstacles encountered during the arduous, multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
-    # #   "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
-    # ] #["Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!"]
+        prompt = prompt_wrapper("Do you like coffee? also do you remember what i like? Make a very long response", "User is happy to talk with you")
+        dummy_memory =[
+      "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
+      "The intricate symphony of urban life continued its relentless crescendo, with the incessant blare of car horns, the distant wail of sirens, and the muffled murmur of countless conversations weaving a complex tapestry of sound that underscored the profound isolation often experienced amidst the bustling anonymity of a sprawling metropolis.",
+      "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
+      "Despite the overwhelming complexities and numerous unforeseen obstacles encountered during the arduous, multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
+    #   "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
+    ] #["Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!", "Ahahahahah", "wowozers", "i like coke", "great to hear!"]
         
         ##basically warmup
-        response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, images=images, max_tokens=512)
+        response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, images=images, max_tokens=512)
         print(type(response))
         async for result in response:
             output = result.get("text", "")
 
-
         #true speed test
         start = perf_counter()
-        prompt = prompt_wrapper("Bob: Describe the image shown", "Bob: You need brain surgery")
+        prompt = prompt_wrapper("Bob: Describe the image shown", "Alice: You need brain surgery")
         dummy_memory =[
     "Bob: The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
     "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
@@ -82,11 +81,15 @@ async def exllamav2_test():
 
         # while True:
         prompt = "Describe the image."
-        response = await Character.dialogue_generator(prompt=prompt, conversation_history=None, images=images, max_tokens=512)
+        #20ms+ for pure text, 60ms+ with maxed short-term-memory, 230-280ms+ with images
+        response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, images=images, max_tokens=512)
+        full_output = ""
         async for result in response:
             output = result.get("text", "")
             end = perf_counter()
-            print(end-start, output)
+            print(end-start)
+            full_output += output
+            break
             # if contains_sentence_terminator(output):
             #     end = perf_counter()
             #     print(end-start, output)
@@ -97,6 +100,7 @@ async def exllamav2_test():
 
         # print(f"Prompts: {msg}\n\nRESPONSE:\n{response}\n\nTime Taken (Seconds): {end-start}")
         print(f"\n\nTime Taken (Seconds): {end-start}")
+        print(full_output)
 
 asyncio.run(exllamav2_test())
 

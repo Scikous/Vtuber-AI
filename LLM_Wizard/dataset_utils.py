@@ -67,7 +67,7 @@ def prepare_finetuning_input_parquet(csv_path: str, output_parquet_path: str):
 
 
 
-def _build_language_messages(conversation_data: List[Dict[str, Any]], instructions: str) -> List[Dict[str, str]]:
+def _build_language_messages(conversation_data: list, instructions: str):
     """
     Builds a message list for a text-only language model.
 
@@ -88,7 +88,7 @@ def _build_language_messages(conversation_data: List[Dict[str, Any]], instructio
     
     return messages
 
-def _build_vision_messages(conversation_data: List[Dict[str, Any]], instructions: str) -> List[Dict[str, Any]]:
+def _build_vision_messages(conversation_data: list, instructions: str):
     """
     Builds a message list for a vision-language model (like Qwen-VL).
 
@@ -117,7 +117,7 @@ def _apply_chat_template_func(
     instructions: str, 
     tokenizer: AutoTokenizer, 
     is_vision_dataset: bool = False
-) -> Dict[str, str]:
+):
     """
     Applies the appropriate chat template to a conversation example.
 
@@ -168,13 +168,15 @@ def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: st
         df = pd.read_csv(csv_path)
         df = df.fillna('') # Handle potential missing values
 
-        if 'user' not in df.columns:
+        if 'character' not in df.columns:
             raise ValueError(f"CSV file {csv_path} is missing the required 'user' column.")
 
-        df_calibration = df[['user']].rename(columns={'user': 'text'})
+        df_calibration = df[['character']].rename(columns={'character': 'text'})
         df_calibration.to_parquet(output_parquet_path, engine="pyarrow")
         print(f"Successfully saved ExLlamaV2 calibration data to {output_parquet_path}")
         if not df_calibration.empty:
+            # with pd.option_context('display.max_rows', None):
+            #     print(df_calibration)
             print("First few rows of calibration data ('text' column):")
             print(df_calibration.head())
     except FileNotFoundError:
@@ -355,15 +357,18 @@ def main():
     # 2. Prepare the Parquet for ExLlamaV2 calibration (text column)
     prepare_exllamav2_calibration_parquet(csv_path, calibration_parquet_path)
 
-    # 3. Load the raw fine-tuning data and apply the chat template
-    print(f"\nApplying chat template with a max turn limit of: {MAX_TURNS}")
-    templated_dataset = load_and_apply_chat_template(
-        raw_finetuning_parquet_path,
-        INSTRUCTIONS,
-        TOKENIZER,
-        max_turns=MAX_TURNS
-    )
-    templated_dataset.to_parquet(final_templated_parquet_path)
+    dataset_dict = load_dataset("parquet", data_files={"train": calibration_parquet_path})
+    print("WHEHEE"*10,'\n',dataset_dict["text"])
+
+    # # 3. Load the raw fine-tuning data and apply the chat template
+    # print(f"\nApplying chat template with a max turn limit of: {MAX_TURNS}")
+    # templated_dataset = load_and_apply_chat_template(
+    #     raw_finetuning_parquet_path,
+    #     INSTRUCTIONS,
+    #     TOKENIZER,
+    #     max_turns=MAX_TURNS
+    # )
+    # templated_dataset.to_parquet(final_templated_parquet_path)
 
     # if templated_dataset:
     #     print(f"\n--- Example of templated data (from {raw_finetuning_parquet_path}) ---")
