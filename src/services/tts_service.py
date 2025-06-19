@@ -159,6 +159,8 @@ class TTSService(BaseService):
                         await asyncio.gather(*active_tts_tasks, return_exceptions=True)
                         active_tts_tasks.clear()
                         llm_message = None
+                    if not self.is_audio_streaming_event.is_set():
+                        self.terminate_current_dialogue_event.clear()
                     await asyncio.sleep(0.1)
                     continue
 

@@ -165,6 +165,7 @@ def recognize_speech_sync(
                     # However, this callback is in a thread managed by sounddevice.
                     # The event itself is thread-safe for set/clear/is_set.
                     terminate_current_dialogue_event.set()
+                    is_audio_streaming_event.clear()
                     # pause_event_set_by_current_stt = True 
             # else: # Energy below threshold
                 # We want VAD to primarily control clearing the pause event if speech ends.
