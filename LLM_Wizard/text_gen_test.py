@@ -15,8 +15,8 @@ instructions_string = f"""{instructions}"""
 dummy_data = ["Good day, state your name.", "What is your favorite drink?", "Do you edge?"]
 
 #LLM model to use
-# main_model = "LLM_Wizard/qwen2.5-vl-finetune-merged"#"turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
-main_model = "turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+main_model = "LLM_Wizard/qwen2.5-vl-finetune-merged"#"turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
+# main_model = "turboderp/Qwen2.5-VL-7B-Instruct-exl2"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
 tokenizer_model = "Qwen/Qwen2.5-VL-7B-Instruct"#"unsloth/Qwen2.5-VL-7B-Instruct-unsloth-bnb-4bit"#"TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"#"unsloth/Meta-Llama-3.1-8B"#"LLM/Llama-3-8B-Test" #'LLM/Meta-Llama-3.1-8B/'
 revision ="8.0bpw"
 # model = snapshot_download(repo_id=model_name)
@@ -64,19 +64,19 @@ async def exllamav2_test():
 
         #true speed test
         start = perf_counter()
-        prompt = prompt_wrapper("Lemao?", "You need brain surgery")
+        prompt = prompt_wrapper("Bob: Describe the image shown", "Bob: You need brain surgery")
         dummy_memory =[
-    "The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
+    "Bob: The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
     "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
-    "Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
+    "Bob: Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
     "Despite the overwhelming complexities",
-    "and numerous unforeseen obstacles encountered during the arduous",
+    "Bob: and numerous unforeseen obstacles encountered during the arduous",
     "multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
-    "The venerable oak tree",
+    "Bob: The venerable oak tree",
     "standing as an immutable sentinel through countless seasons",
-    "its gnarled branches reaching skyward like ancient",
+    "Bob: its gnarled branches reaching skyward like ancient",
     "petrified arms",
-    "silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy",
+    "Bob: silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy",
     "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
     ] #["Ahahahahah", "wowoz
 

@@ -5,6 +5,7 @@ from transformers import AutoTokenizer
 import json # For model_utils placeholder
 from model_utils import load_character, prompt_wrapper
 import os
+from PIL import Image
 
 # --- Configuration & Setup ---
 # MODEL_PATH = "NousResearch/Meta-Llama-3-8B" # Using a more common model for example
@@ -62,35 +63,101 @@ def prepare_finetuning_input_parquet(csv_path: str, output_parquet_path: str):
     except Exception as e:
         print(f"An unexpected error occurred in prepare_finetuning_input_parquet: {e}")
 
-def _build_conversation_messages(conversation_data: list, instructions: str):
+
+
+
+
+def _build_language_messages(conversation_data: List[Dict[str, Any]], instructions: str) -> List[Dict[str, str]]:
     """
-    Helper function to build messages array from conversation data.
-    conversation_data: List of dictionaries with 'user', 'character', 'context' keys, ordered by conversation flow.
+    Builds a message list for a text-only language model.
+
+    Args:
+        conversation_data: A list of conversation turns.
+        instructions: The system prompt/instructions.
+
+    Returns:
+        A list of messages formatted for a standard chat template.
     """
     messages = [{"role": "system", "content": instructions}]
     
     for turn in conversation_data:
+        # Assumes 'prompt_wrapper' combines user and context into a single string
         prompt = prompt_wrapper(turn["user"], turn["context"])
         messages.append({"role": "user", "content": prompt.strip()})
         messages.append({"role": "assistant", "content": turn["character"]})
     
     return messages
 
+def _build_vision_messages(conversation_data: List[Dict[str, Any]], instructions: str) -> List[Dict[str, Any]]:
+    """
+    Builds a message list for a vision-language model (like Qwen-VL).
 
-# def _build_conversation_messages(conversation_data: list, instructions: str):
-# """
-# Helper function to build messages array from conversation data.
-# conversation_data: List of dictionaries with 'user', 'character', 'context' keys, ordered by conversation flow.
-# """
-# messages = [{"role": "system", "content": instructions}]
+    Args:
+        conversation_data: A list of conversation turns, where each turn includes an image.
+        instructions: The system prompt/instructions.
 
-# for turn in conversation_data:
-#     prompt = prompt_wrapper(turn["user"], turn["context"])
-#     messages.append({"role": "user", "content": [{"type": "text", "text" : prompt.strip()},
-#                                                  {"type": "image", "image" : "nan"}]})
-#     messages.append({"role": "assistant", "content": [{"type": "text", "text": turn["character"]}]})
+    Returns:
+        A list of messages with interleaved text and image content.
+    """
+    # For vision models, the system prompt is also part of the content list
+    messages = [{"role": "system", "content": [{"type": "text", "text": instructions}]}]
 
-# return messages
+    for turn in conversation_data:
+        prompt = prompt_wrapper(turn["user"], turn["context"])
+        messages.append({"role": "user", "content": [{"type": "text", "text" : prompt.strip()},
+                                                    {"type": "image", "image" : Image.open(turn["image"])}]})
+        messages.append({"role": "assistant", "content": [{"type": "text", "text": turn["character"]}]})
+
+    return messages
+
+
+
+def _apply_chat_template_func(
+    example: dict, 
+    instructions: str, 
+    tokenizer: AutoTokenizer, 
+    is_vision_dataset: bool = False
+) -> Dict[str, str]:
+    """
+    Applies the appropriate chat template to a conversation example.
+
+    This function can switch between creating a text-only dataset and a 
+    vision-language dataset based on the `is_vision_dataset` flag.
+
+    Args:
+        example: A dataset sample, expected to have a 'conversation' key.
+        instructions: The system prompt.
+        tokenizer: The tokenizer to use for applying the template.
+        is_vision_dataset: If True, formats for vision; otherwise, formats for text.
+
+    Returns:
+        A dictionary with a "text" key containing the fully formatted prompt string.
+    """
+    if is_vision_dataset:
+        # We need to handle images. Let's add the image to the example for the template.
+        # The Qwen-VL template expects the image to be available in the conversation dict.
+        messages = _build_vision_messages(example["conversation"], instructions)
+
+        # to correctly place the <|image|> token.
+        # images = [turn["image"] for turn in example["conversation"]]
+        return {"messages": messages}
+        # text = tokenizer.apply_chat_template(
+        #     messages,
+        #     tokenize=False,
+        #     add_generation_prompt=False,
+        #     images=images, # Pass images here
+        # )
+    else:
+        # Standard text-only processing
+        messages = _build_language_messages(example["conversation"], instructions)
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=False
+        )
+    return {"text": text}
+
+
 
 def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: str):
     """
@@ -116,22 +183,6 @@ def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: st
         print(f"Error: {ve}")
     except Exception as e:
         print(f"An unexpected error occurred in prepare_exllamav2_calibration_parquet: {e}")
-
-
-def _apply_chat_template_func(example: dict, instructions: str, tokenizer: AutoTokenizer):
-    """
-    Helper function to apply chat template to a conversation example.
-    'example' is expected to have a 'conversation' key containing a list of turns.
-    """
-    messages = _build_conversation_messages(example["conversation"], instructions)
-    
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=True,
-        add_generation_prompt=False,
-        return_tensors="pt" #off for tokenize False
-    )
-    return {"text": text}
 
 def _group_conversations_by_id(dataset, max_turns: int = None):
     """
@@ -197,7 +248,8 @@ def load_and_apply_chat_template(
     instructions: str,
     tokenizer: AutoTokenizer,
     split: str = "train",
-    max_turns: int = None
+    max_turns: int = None,
+    is_vision_dataset: bool = False,
 ) -> Dataset:
     """
     Loads a Parquet file containing conversation data, groups by conversation_id,
@@ -235,7 +287,7 @@ def load_and_apply_chat_template(
         # Apply chat template to each conversation
         formatted_dataset = conversation_dataset.map(
             _apply_chat_template_func,
-            fn_kwargs={'instructions': instructions, 'tokenizer': tokenizer}
+            fn_kwargs={'instructions': instructions, 'tokenizer': tokenizer, 'is_vision_dataset': is_vision_dataset}
         )
         
         print(f"Successfully applied chat template to {len(formatted_dataset)} conversations from {raw_finetuning_parquet_path}")
@@ -311,29 +363,30 @@ def main():
         TOKENIZER,
         max_turns=MAX_TURNS
     )
+    templated_dataset.to_parquet(final_templated_parquet_path)
 
-    if templated_dataset:
-        print(f"\n--- Example of templated data (from {raw_finetuning_parquet_path}) ---")
-        if len(templated_dataset) > 0:
-            # Find and print the long conversation to verify trimming
-            for example in templated_dataset:
-                if example['conversation_id'] == 'long_conv':
-                    print("\n--- Trimmed 'long_conv' example ---")
-                    print(example['text'])
-                    break
-            else: # If loop finishes without break, print the first one
-                print("\n--- First available example ---")
-                print(templated_dataset[28]['text'])
+    # if templated_dataset:
+    #     print(f"\n--- Example of templated data (from {raw_finetuning_parquet_path}) ---")
+    #     if len(templated_dataset) > 0:
+    #         # Find and print the long conversation to verify trimming
+    #         for example in templated_dataset:
+    #             if example['conversation_id'] == 'long_conv':
+    #                 print("\n--- Trimmed 'long_conv' example ---")
+    #                 print(example['text'])
+    #                 break
+    #         else: # If loop finishes without break, print the first one
+    #             print("\n--- First available example ---")
+    #             print(templated_dataset[28]['text'])
 
-            try:
-                templated_dataset.to_parquet(final_templated_parquet_path)
-                print(f"\nSuccessfully saved final templated dataset to {final_templated_parquet_path}")
-            except Exception as e:
-                print(f"Error saving final templated dataset: {e}")
-        else:
-            print("Templated dataset is empty.")
-    else:
-        print("Failed to generate templated dataset.")
+    #         try:
+    #             templated_dataset.to_parquet(final_templated_parquet_path)
+    #             print(f"\nSuccessfully saved final templated dataset to {final_templated_parquet_path}")
+    #         except Exception as e:
+    #             print(f"Error saving final templated dataset: {e}")
+    #     else:
+    #         print("Templated dataset is empty.")
+    # else:
+    #     print("Failed to generate templated dataset.")
 
 if __name__ == "__main__":
     # Added a simple check for placeholder functions to allow standalone execution
