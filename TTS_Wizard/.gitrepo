@@ -6,7 +6,7 @@
 [subrepo]
 	remote = https://github.com/Scikous/TTS-Wizard.git
 	branch = main
-	commit = 9a8c3c2ef221ca2a7d8bb76f4c35cd082e0c4dc4
-	parent = 0cdba95d6ea1710ea4f88e2e6af3747de486556b
+	commit = c97efa6b136d93ce3ce4fd61e74d20dfd9f6cadf
+	parent = 68328f3dfe7ad02013174d8de8c27f81bde70cfd
 	method = merge
 	cmdver = 0.4.9
