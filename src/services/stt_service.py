@@ -32,7 +32,7 @@ class STTService(BaseService):
                 # Current STT system recognizes no sound as 'Thank you.' for reasons unknown
                 if speech and speech.strip().lower() != "thank you.": # Made comparison case-insensitive
                     if self.speech_queue:
-                        await self.speech_queue.put(f"{self.speaker_name}: {speech.strip()}")
+                        await self.speech_queue.put_nowait(f"{self.speaker_name}: {speech.strip()}")
                         if self.logger:
                             self.logger.debug(f"STT captured: {speech.strip()}")
                     elif self.logger:

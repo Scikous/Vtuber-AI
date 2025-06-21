@@ -159,8 +159,8 @@ class TTSService(BaseService):
                         await asyncio.gather(*active_tts_tasks, return_exceptions=True)
                         active_tts_tasks.clear()
                         llm_message = None
-                    if not self.is_audio_streaming_event.is_set():
-                        self.terminate_current_dialogue_event.clear()
+                    self.terminate_current_dialogue_event.clear()
+                    self.is_audio_streaming_event.clear()
                     await asyncio.sleep(0.1)
                     continue
 
@@ -173,7 +173,8 @@ class TTSService(BaseService):
                 task = None
                 if isinstance(self.TTS_SERVICE, RealTimeTTS):
                     # RealTimeTTS manages its own concurrency, so we don't use our semaphore.
-                    task = asyncio.create_task(self._process_item_realtime(tts_params))
+                    # task = asyncio.create_task(self._process_item_realtime(tts_params))
+                    await self._process_item_realtime(tts_params)
                 else:
                     # For queue-based services, wait for a free processing slot.
                     # This is the correct way to handle concurrency and maintain order.
