@@ -8,7 +8,7 @@ try:
     import sounddevice as sd
     import numpy as np
     import webrtcvad
-    import collections
+    from collections import deque
     import threading
     import io
     import wave
@@ -35,8 +35,11 @@ try:
     import torch
     if torch.cuda.is_available():
         MODEL_DEVICE = "cuda"
-        MODEL_COMPUTE_TYPE = "float16" # or "float16", "int8_float16" for mixed precision
+        MODEL_COMPUTE_TYPE = "int8_float16" # or "float16", "int8_float16" for mixed precision
     print(f"PyTorch found. Using device: {MODEL_DEVICE} with compute type: {MODEL_COMPUTE_TYPE}")
+    #maybe try if crashing
+    # torch.cuda.set_per_process_memory_fraction(0.8, 0) 
+    # print("Set per-process memory fraction to 80% for stability.")
 except ImportError:
     MODEL_DEVICE = "cpu"
     MODEL_COMPUTE_TYPE = "int8" # or "float32" for CPU
@@ -117,7 +120,7 @@ def recognize_speech_stream(
     last_speech_time = 0
     
     # Single audio buffer for live transcription
-    live_audio_window = collections.deque(maxlen=int(AUDIO_WINDOW_S * SAMPLE_RATE / FRAME_SIZE))
+    live_audio_window = deque(maxlen=int(AUDIO_WINDOW_S * SAMPLE_RATE / FRAME_SIZE))
     
     def safe_queue_put(item):
         """Helper to safely put items into the asyncio queue from a thread."""
@@ -163,7 +166,15 @@ def recognize_speech_stream(
                     # Transcribe the recent audio window for quick feedback
                     audio_data_np = np.concatenate(list(live_audio_window), axis=0).flatten()
                     
-                    segments, _ = whisper_model.transcribe(audio_data_np, language=LANGUAGE, beam_size=BEAM_SIZE)
+                    segments, _ = whisper_model.transcribe(
+                        audio_data_np,
+                        language=LANGUAGE,
+                        beam_size=BEAM_SIZE,
+                        condition_on_previous_text=False,  # Disable for faster processing
+                        temperature=0.0,  # Deterministic output
+                        compression_ratio_threshold=2.4,  # Early stopping
+                        no_speech_threshold=0.6
+                        )
                     live_text = "".join(seg.text for seg in segments).strip()
                     
                     # Determine if this should be marked as final based on silence duration
@@ -211,7 +222,6 @@ async def consumer_task(stt_queue: asyncio.Queue, terminate_event: asyncio.Event
             continue
 
 
-
 async def speech_to_text(
                          callback, 
                          terminate_event: asyncio.Event,
@@ -240,7 +250,7 @@ async def speech_to_text(
     print("Termination signal received. Shutting down...")
     stop_stt_thread_event.set()
     await asyncio.sleep(0.2)
-    consumer.cancel()
+    # consumer.cancel()
     stt_thread.join(timeout=2)
     print("STT service shut down.")
 
