@@ -1,5 +1,5 @@
 {
-    "MODEL_SIZE": "distil-large-v3",
+    "MODEL_SIZE": "distil-whisper/distil-large-v3.5-ct2",
     "LANGUAGE": "en",
     "BEAM_SIZE": 1,
 
