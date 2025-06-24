@@ -1,0 +1,26 @@
+Metadata-Version: 2.2
+Name: orpheus-speech
+Version: 0.1.0
+Summary: Orpheus Text-to-Speech System
+Home-page: https://github.com/canopyai/orpheus-tts
+Author: Amu Varma
+Author-email: amu@canopylabs.com
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+Requires-Dist: snac
+Requires-Dist: vllm
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Use Orpheus Speech models
+See github (https://github.com/canopyai/Orpheus-TTS-0.1)

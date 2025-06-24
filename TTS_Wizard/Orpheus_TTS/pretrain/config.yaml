@@ -1,0 +1,21 @@
+# Model
+model_name: "meta-llama/Llama-3.2-3B-Instruct"  # Replace with your base model must be compatible with the tokenizer and transformers library
+tokenizer_name: "meta-llama/Llama-3.2-3B-Instruct"
+
+# Training Args
+epochs: 1
+batch_size: 1
+number_processes: 8
+pad_token: 128263
+save_steps: 12000
+learning_rate: 5.0e-5
+ratio: <see read me to choose value>
+
+# Datasets
+text_QA_dataset: <speech input-ids>
+TTS_dataset: <text-input-ids>
+
+# Naming and paths
+save_folder: "checkpoints"
+project_name: "pretrain-orpheus"
+run_name: "pretrain-orpheus"

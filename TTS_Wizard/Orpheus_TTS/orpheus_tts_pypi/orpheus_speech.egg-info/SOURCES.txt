@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+setup.py
+orpheus_speech.egg-info/PKG-INFO
+orpheus_speech.egg-info/SOURCES.txt
+orpheus_speech.egg-info/dependency_links.txt
+orpheus_speech.egg-info/requires.txt
+orpheus_speech.egg-info/top_level.txt
+orpheus_tts/__init__.py
+orpheus_tts/decoder.py
+orpheus_tts/engine_class.py

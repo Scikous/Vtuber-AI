@@ -1,0 +1,17 @@
+# CHANGE THIS TO YOUR OWN DATASET
+TTS_dataset: <PATH_TO_YOUR_DATASET>
+
+model_name: "canopylabs/orpheus-tts-0.1-pretrained"
+
+# Training Args
+epochs: 1
+batch_size: 1
+number_processes: 1
+pad_token: 128263
+save_steps: 5000
+learning_rate: 5.0e-5
+
+# Naming and paths
+save_folder: "checkpoints"
+project_name: "tuning-orpheus"
+run_name: "5e5-0"
