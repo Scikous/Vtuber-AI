@@ -85,28 +85,6 @@ class TTSService(BaseService):
                 if self.llm_output_queue:
                     self.llm_output_queue.task_done()
 
-    # async def _process_item_realtime(self, tts_params: dict):
-    #     """
-    #     Processes a TTS request using RealTimeTTS, which handles its own
-    #     audio playback and does not use the audio_output_queue.
-    #     """
-    #     if self.logger:
-    #         self.logger.debug(f"TTS (RealTime): Delegating playback for: {str(tts_params.get('text', ''))[:50]}...")
-        
-    #     try:
-    #         # RealTimeTTS handles its own threading and playback. We can call it directly.
-    #         # If its `tts` method is blocking, run_in_executor is safer.
-    #         # Assuming `tts` is the correct method based on the original commented-out code.
-    #         loop = asyncio.get_running_loop()
-    #         await loop.run_in_executor(None, lambda: self.TTS_SERVICE.tts_request_async(**tts_params))
-    #     except Exception as e:
-    #         if self.logger:
-    #             self.logger.error(f"Error during real-time synthesis for {str(tts_params.get('text', ''))[:30]}: {e}", exc_info=True)
-    #     finally:
-    #         if self.llm_output_queue:
-    #             self.llm_output_queue.task_done()
-
-
     async def _process_item_realtime(self, tts_params: dict):
         """
         Processes a TTS request using RealTimeTTS by feeding text to its stream.
