@@ -147,8 +147,6 @@ class DialogueService(BaseService):
                 full_string = ""
                 tts_buffer = "" # Buffer for accumulating text for TTS
                 first_sentence_sent = False
-                sentences_generated = 0
-                max_sentences_before_wait = 3  # Generate up to 3 sentences before waiting for TTS
                 
                 async for result in async_job:
                     if self.terminate_current_dialogue_event.is_set():
@@ -166,14 +164,13 @@ class DialogueService(BaseService):
                         
                         if contains_sentence_terminator(chunk_text):
                             text_to_send_to_tts = tts_buffer.strip()
-                            if text_to_send_to_tts: # Ensure we don't send empty or whitespace-only strings
+                            if text_to_send_to_tts and len(text_to_send_to_tts) >= 8: # Ensure we don't send empty or whitespace-only strings
                                 from utils.logger import conditional_print
                                 conditional_print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
                                 await self.llm_output_queue.put(text_to_send_to_tts)
                                 if self.logger:
                                     self.logger.debug(f"Put TTS params to llm_output_queue for sentence: {text_to_send_to_tts[:30]}...")
                                 tts_buffer = "" # Reset buffer after sending
-                                sentences_generated += 1
                                 
                                 # Wait for TTS to start audio playback after first sentence
                                 if not first_sentence_sent:
@@ -186,12 +183,11 @@ class DialogueService(BaseService):
                                         self.logger.info("Audio playback started. Continuing LLM generation...")
                                 
                                 # After first sentence, implement controlled generation
-                                elif sentences_generated >= max_sentences_before_wait:
+                                elif self.llm_output_queue.full():
                                     if self.logger:
-                                        self.logger.debug(f"Generated {sentences_generated} sentences. Yielding control to TTS...")
+                                        self.logger.debug(f"Generated {self.llm_output_queue.qsize()} sentences. Yielding control to TTS...")
                                     # Give TTS some time to process and reduce resource competition
-                                    await asyncio.sleep(0.1)
-                                    sentences_generated = 0  # Reset counter
+                                    await asyncio.sleep(0.2)
                     else:
                         if self.logger:
                             self.logger.debug("Received empty chunk_text or chunk_text is None.")

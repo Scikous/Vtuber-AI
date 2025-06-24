@@ -120,7 +120,7 @@ class TTSService(BaseService):
             self.TTS_SERVICE.tts_request_async(**tts_params)
             
             # Small delay to allow TTS to process and reduce resource competition
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.4)
 
         except Exception as e:
             if self.logger:
