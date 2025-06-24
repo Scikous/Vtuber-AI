@@ -1,3 +1,5 @@
+import logging
+import asyncio
 class STTCallbacks():
     def __init__(self, logger: logging.Logger, speaker_name: str, speech_queue: asyncio.Queue):
         self.logger = logger
