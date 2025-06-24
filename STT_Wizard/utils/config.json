@@ -1,5 +1,5 @@
 {
-    "MODEL_SIZE": "distil-whisper/distil-large-v3.5-ct2",
+    "MODEL_SIZE": "distil-large-v3",
     "LANGUAGE": "en",
     "BEAM_SIZE": 1,
 
@@ -11,7 +11,8 @@
     
     "AUDIO_WINDOW_S": 6,
     "SILENCE_DURATION_S_FOR_FINALIZE": 0.5,
-    "LIVE_TRANSCRIPTION_INTERVAL_S": 0.05, 
-    "ENERGY_THRESHOLD_DBFS": -31.0
+    "ENERGY_THRESHOLD_DBFS": -31.0,
+    "PROACTIVE_PAUSE_S": 0.05,
+    "MIN_CHUNK_S_FOR_INTERIM": 0.1
 
 }

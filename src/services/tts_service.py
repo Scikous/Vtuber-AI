@@ -118,6 +118,9 @@ class TTSService(BaseService):
             # The tts_request_async method is non-blocking. We can call it directly.
             # It will handle feeding the text and starting playback if necessary.
             self.TTS_SERVICE.tts_request_async(**tts_params)
+            
+            # Small delay to allow TTS to process and reduce resource competition
+            await asyncio.sleep(0.05)
 
         except Exception as e:
             if self.logger:

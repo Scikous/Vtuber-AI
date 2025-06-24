@@ -26,8 +26,9 @@ from .utils.stt_utils import calculate_audio_energy_rms, calculate_dbfs, count_w
 # Load configuration
 config = load_config()
 
+
 # --- Configuration for faster-whisper and VAD ---
-MODEL_SIZE = config.get("MODEL_SIZE", "large-v3")  # Options: "tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3"
+MODEL_SIZE = config.get("MODEL_SIZE", "large-v3")  # Options: tiny.en, tiny, base.en, base, small.en, small, medium.en, medium, large-v1, large-v2, large-v3, large, distil-large-v2, distil-medium.en, distil-small.en, distil-large-v3, large-v3-turbo, turbo, "distil-whisper/distil-large-v3.5-ct2"
 LANGUAGE = config.get("LANGUAGE", "en")  # Language code for transcription
 BEAM_SIZE = config.get("BEAM_SIZE", 5)  # Beam size for beam search
 # Determine device and compute type (GPU if available, else CPU)
@@ -66,9 +67,9 @@ FRAME_DURATION_MS = config.get("FRAME_DURATION_MS", 30)  # VAD frame duration (1
 FRAME_SIZE = int(SAMPLE_RATE * FRAME_DURATION_MS / 1000)  # Samples per frame
 VAD_AGGRESSIVENESS = config.get("VAD_AGGRESSIVENESS", 3)  # VAD aggressiveness (0-3, 3 is most aggressive)
 # Timeouts and thresholds for speech detection
-
-LIVE_TRANSCRIPTION_INTERVAL_S = config.get("LIVE_TRANSCRIPTION_INTERVAL_S", 0.5)
 SILENCE_DURATION_S_FOR_FINALIZE = config.get("SILENCE_DURATION_S_FOR_FINALIZE", 1.0)
+PROACTIVE_PAUSE_S = config.get("PROACTIVE_PAUSE_S", 0.05)
+MIN_CHUNK_S_FOR_INTERIM = config.get("MIN_CHUNK_S_FOR_INTERIM", 0.1)
 # Energy threshold for pausing TTS (in dBFS). Adjust as needed.
 # Lower values (more negative) mean more sensitive to sound.
 ENERGY_THRESHOLD_DBFS = config.get("ENERGY_THRESHOLD_DBFS", -40)  # Example: -40dBFS is a reasonable starting point
@@ -80,6 +81,7 @@ ENERGY_THRESHOLD_DBFS = config.get("ENERGY_THRESHOLD_DBFS", -40)  # Example: -40
 # *** NEW: Sliding Window Configuration ***
 AUDIO_WINDOW_S = config.get("AUDIO_WINDOW_S", 8)
 AUDIO_WINDOW_FRAMES = int(AUDIO_WINDOW_S * SAMPLE_RATE)
+
 
 # Silence duration to consider a user's turn complete
 
@@ -96,13 +98,6 @@ def list_available_input_devices():
         print("No input devices found. Ensure microphone is connected and drivers are installed.")
     return input_devices
 
-class TranscriptionResult:
-    """A simple dataclass to distinguish between live and final results."""
-    def __init__(self, text: str, is_final: bool):
-        self.text = text
-        self.is_final = is_final
-    def __repr__(self):
-        return f"TranscriptionResult(text='{self.text}', is_final={self.is_final})"
 
 def recognize_speech_stream(
     callback,
@@ -110,116 +105,130 @@ def recognize_speech_stream(
     loop: asyncio.AbstractEventLoop,
     device_index: int = None
 ):
+    """
+    An optimized, single-threaded speech recognition stream.
+
+    This model prioritizes stability and simplicity. It accepts the inherent
+    latency of the whisper.transcribe() call (~200ms) as a floor and builds
+    the most responsive system possible around it.
+    """
     if not whisper_model:
+        print("Whisper model not available.")
         return
 
     vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
+
+    # --- State Variables ---
+    vad_is_currently_speech = False
+    turn_is_active = False
+    last_speech_time = time.monotonic()
     
-    # State variables
-    is_speaking = False
-    last_speech_time = 0
-    
-    # Single audio buffer for live transcription
-    live_audio_window = deque(maxlen=int(AUDIO_WINDOW_S * SAMPLE_RATE / FRAME_SIZE))
-    
-    def safe_queue_put(item):
-        """Helper to safely put items into the asyncio queue from a thread."""
-        asyncio.run_coroutine_threadsafe(callback(item), loop)
+    current_chunk_audio = []
+    committed_transcript = ""
+
+    def safe_callback(text, is_final):
+        asyncio.run_coroutine_threadsafe(callback(text), loop)
+
+    def process_and_transcribe_chunk():
+        """
+        Takes the current audio buffer, transcribes it, and updates the state.
+        This is the primary "work" function.
+        """
+        nonlocal committed_transcript, current_chunk_audio
+        if not current_chunk_audio:
+            return
+
+        # Create a NumPy array from the buffered audio chunks
+        audio_np = np.concatenate(current_chunk_audio, axis=0).flatten()
+        current_chunk_audio.clear()
+        
+        # Guard against transcribing fragments that are too short
+        if len(audio_np) / SAMPLE_RATE < MIN_CHUNK_S_FOR_INTERIM:
+            return
+
+        print(f"  -> Transcribing {len(audio_np)/SAMPLE_RATE:.2f}s audio...")
+        
+        # --- The Blocking Call ---
+        # We accept that this call will block the loop for ~200-400ms.
+        segments, _ = whisper_model.transcribe(
+            audio_np,
+            language=LANGUAGE,
+            beam_size=BEAM_SIZE,
+            initial_prompt=committed_transcript,
+            temperature=0.0,
+            vad_filter=True, # Use Whisper's VAD for a final cleanup
+            vad_parameters=dict(min_silence_duration_ms=250),
+        )
+
+        new_text = "".join(seg.text for seg in segments).strip()
+
+        # Handle Whisper repeating the prompt
+        if new_text and not new_text.lower().strip().startswith(committed_transcript.lower().strip()):
+            committed_transcript += " " + new_text
+        else:
+            committed_transcript = new_text
+
+        committed_transcript = committed_transcript.strip()
+        print(f"  -> Interim Transcript: '{committed_transcript}'")
+        safe_callback(committed_transcript, is_final=False)
 
     def audio_callback(indata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
-        nonlocal is_speaking, last_speech_time
-        if stop_event.is_set():
-            raise sd.CallbackStop
-        if status:
-            print(f"Warning: PortAudio status: {status}")
+        """This function is called by sounddevice. It's kept extremely light."""
+        nonlocal vad_is_currently_speech, last_speech_time, turn_is_active
+        if stop_event.is_set(): raise sd.CallbackStop
 
         try:
             audio_segment_int16 = (indata * 32767).astype(np.int16)
-            vad_is_speech = vad.is_speech(audio_segment_int16.tobytes(), SAMPLE_RATE)
-        except Exception:
-            vad_is_speech = False
-        
-        if vad_is_speech:
-            if not is_speaking:
-                is_speaking = True
-            last_speech_time = time.monotonic()
-            live_audio_window.append(indata.copy())
-        else:
-            if is_speaking:
-                is_speaking = False
+            vad_is_currently_speech = vad.is_speech(audio_segment_int16.tobytes(), SAMPLE_RATE)
 
-    print("STT stream started [Live Mode].")
-    last_live_transcript_time = 0
+            if vad_is_currently_speech:
+                if not turn_is_active:
+                    turn_is_active = True
+                    print("\nSpeech started...")
+                last_speech_time = time.monotonic()
+                current_chunk_audio.append(indata.copy())
+        except Exception as e:
+            print(f"Error in audio callback: {e}")
+
+    print("STT stream started [Optimized Single-Threaded Model].")
+
     try:
-        with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype='float32',
+        with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype=AUDIO_DTYPE,
                              blocksize=FRAME_SIZE, callback=audio_callback, device=device_index):
+            
             while not stop_event.is_set():
                 current_time = time.monotonic()
-                final = time.perf_counter()
+                time_since_last_speech = current_time - last_speech_time
                 
-                # --- Live Transcription Logic ---
-                if (current_time - last_live_transcript_time > LIVE_TRANSCRIPTION_INTERVAL_S):
-                    if not live_audio_window:
-                        time.sleep(0.05)
-                        continue
-                    
-                    # Transcribe the recent audio window for quick feedback
-                    audio_data_np = np.concatenate(list(live_audio_window), axis=0).flatten()
-                    
-                    segments, _ = whisper_model.transcribe(
-                        audio_data_np,
-                        language=LANGUAGE,
-                        beam_size=BEAM_SIZE,
-                        condition_on_previous_text=False,  # Disable for faster processing
-                        temperature=0.0,  # Deterministic output
-                        compression_ratio_threshold=2.4,  # Early stopping
-                        no_speech_threshold=0.6
-                        )
-                    live_text = "".join(seg.text for seg in segments).strip()
-                    
-                    # Determine if this should be marked as final based on silence duration
-                    is_final = (not is_speaking and 
-                               current_time - last_speech_time > SILENCE_DURATION_S_FOR_FINALIZE)
-                    
-                    if live_text:
-                        # safe_queue_put(TranscriptionResult(live_text, is_final=is_final))
-                        # Clear buffer after finalizing to start fresh for next utterance
-                        if is_final:
-                            safe_queue_put(live_text)
-                            # callback(live_text)
-                            final2 = time.perf_counter()
-                            print(final2-final)
-                            live_audio_window.clear()
-                    
-                    last_live_transcript_time = current_time
+                # --- Proactive Pause Trigger ---
+                # This is the core of our low-latency logic. If the user has paused
+                # briefly, we immediately process the audio collected so far.
+                has_paused = not vad_is_currently_speech and turn_is_active
+                if has_paused and time_since_last_speech > PROACTIVE_PAUSE_S:
+                    process_and_transcribe_chunk()
 
-                time.sleep(0.01)
+                # --- Finalization Trigger ---
+                # If the turn has been silent for a longer period, we finalize it.
+                if turn_is_active and time_since_last_speech > SILENCE_DURATION_S_FOR_FINALIZE:
+                    # Process any final, lingering audio
+                    process_and_transcribe_chunk()
+                    
+                    if committed_transcript:
+                        print(f"Finalizing with: '{committed_transcript}'")
+                        safe_callback(committed_transcript, is_final=True)
+                    
+                    # Reset for the next turn
+                    turn_is_active = False
+                    committed_transcript = ""
+
+                # The sleep duration determines the polling rate for our logic.
+                # A lower value makes the pause detection more responsive.
+                time.sleep(0.02)
 
     except Exception as e:
         print(f"Error in STT stream: {e}\n{traceback.format_exc()}")
     finally:
         print("STT stream stopped.")
-
-async def consumer_task(stt_queue: asyncio.Queue, terminate_event: asyncio.Event):
-    """A simple consumer that prints the live and final transcripts."""
-    while not terminate_event.is_set():
-        try:
-            result: TranscriptionResult = await asyncio.wait_for(stt_queue.get(), timeout=1.0)
-            
-            if not result.is_final:
-                # Live feedback: use carriage return to update the same line
-                # print(f"\rLive: {result.text}", end="", flush=True)
-                pass
-            else:
-                # Final result: print on a new line
-                print("\n" + "="*50)
-                print(f"Final Transcript: {result.text}")
-                print("="*50)
-                # Here you would call your LLM or other processing logic
-                # await process_with_llm(result.text)
-
-        except asyncio.TimeoutError:
-            continue
 
 
 async def speech_to_text(
@@ -231,7 +240,6 @@ async def speech_to_text(
     if not whisper_model:
         return
 
-    stt_output_queue = asyncio.Queue()
     stop_stt_thread_event = threading.Event()
     main_loop = asyncio.get_running_loop()
 
@@ -242,7 +250,6 @@ async def speech_to_text(
     stt_thread.start()
 
     # Run the consumer task
-    # consumer = asyncio.create_task(consumer_task(stt_output_queue, terminate_event))
 
     await terminate_event.wait()
 
@@ -288,7 +295,7 @@ if __name__ == "__main__":
             )
 
             # Wait for a fixed duration for testing, or until the user interrupts
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
 
         except asyncio.CancelledError:
             print("\nMain loop cancelled.")

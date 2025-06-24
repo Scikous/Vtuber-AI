@@ -368,6 +368,7 @@ In the `finetune.py` file, only the **DATASET_PATH** must be changed:
 python -m exllamav2.conversion.convert_exl2 -i LLM_Wizard/qwen2.5-vl-finetune-merged -o LLM_Wizard/exl2_out -b 4.0 -hb 6 -c LLM_Wizard/dataset/exllama_calibration.parquet -l 2040 -r 100 -ss 0
 ```
 
+The **mr** and possibly the **ml** flags need to be set differently to fit be able to fit your data.
 ```
 python -m exllamav2.conversion.convert_exl2 -i LLM_Wizard/qwen2.5-vl-finetune-merged -o LLM_Wizard/exl2_out -c LLM_Wizard/dataset/exllama_calibration.parquet -nr -l 100 -r 10 -mr 3 -b 8.0
 
