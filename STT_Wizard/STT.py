@@ -127,7 +127,7 @@ def recognize_speech_stream(
     committed_transcript = ""
 
     def safe_callback(text, is_final):
-        asyncio.run_coroutine_threadsafe(callback(text), loop)
+        asyncio.run_coroutine_threadsafe(callback(text, is_final), loop)
 
     def process_and_transcribe_chunk():
         """
@@ -234,6 +234,7 @@ def recognize_speech_stream(
 async def speech_to_text(
                          callback, 
                          terminate_event: asyncio.Event,
+                         terminate_current_dialogue_event: asyncio.Event,
                          is_audio_streaming_event: asyncio.Event = asyncio.Event(),
                          device_index: int = None
 ):
