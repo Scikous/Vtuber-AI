@@ -36,17 +36,13 @@ class STTService(BaseService):
         self.logger.info("STT worker starting...")
         loop = asyncio.get_running_loop()
         self._stop_thread_event.clear()
-
-        # A wrapper to adapt the callback signature and schedule it on the event loop
-        def callback_adapter(text, is_final):
-            asyncio.run_coroutine_threadsafe(self._stt_callback(text, is_final), loop)
-
+        
         try:
             # --- Setup Phase ---
             self.logger.info("Starting recognizer thread.")
             self._stt_thread = threading.Thread(
                 target=recognize_speech_stream,
-                args=(callback_adapter, self._stop_thread_event, loop, self.device_index)
+                args=(self._stt_callback, self._stop_thread_event, loop, self.device_index)
             )
             self._stt_thread.start()
 
