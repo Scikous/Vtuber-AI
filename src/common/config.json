@@ -38,7 +38,7 @@
     },
 
     "logging_enabled": true,
-    "max_sentence_len": 8,
+    "min_sentence_len": 8,
 
     "audio_backend_settings": {
         "format": "paFloat32",

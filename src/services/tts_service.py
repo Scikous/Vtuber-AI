@@ -40,6 +40,7 @@ class TTSService(BaseService):
         self.tts_settings = self.config.get("tts_settings", {}) if self.config else {}
         self.tts_concurrency = self.tts_settings.get("tts_concurrency", 2)
         self.wait_for_audio = self.tts_settings.get("wait_for_audio", 0.4)
+        self.min_sentence_len = self.config.get("min_sentence_len", 8)
         tts_service_name = self.tts_settings.get("tts_service_name", "RealTimeTTS")
         service_config = TTS_SERVICE_REGISTRY.get(tts_service_name)
         if not service_config:
@@ -150,7 +151,8 @@ class TTSService(BaseService):
                 if self.logger:
                     self.logger.debug(f"TTS Service received message: {str(llm_message)[:100]}...")
                 
-                tts_params = self.prepare_tts_params(llm_message)
+                tts_params = self.prepare_tts_params(llm_message, self.min_sentence_len)
+
                 
                 task = None
                 if isinstance(self.TTS_SERVICE, RealTimeTTS):

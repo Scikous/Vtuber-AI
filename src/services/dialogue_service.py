@@ -34,6 +34,7 @@ class DialogueService(BaseService):
         self.naive_short_term_memory = deque(maxlen=self.llm_settings.get("short_term_memory_maxlen", 6))
         self.max_tokens = self.llm_settings.get("max_tokens", 512)
         self.wait_for_tts = self.llm_settings.get("wait_for_tts", 0.2)
+        self.min_sentence_len = self.config.get("min_sentence_len", 8)
         self._setup_conversation_logging()
         
         if self.logger:
@@ -166,7 +167,7 @@ class DialogueService(BaseService):
                         
                         if contains_sentence_terminator(chunk_text):
                             text_to_send_to_tts = tts_buffer.strip()
-                            if text_to_send_to_tts and len(text_to_send_to_tts) >= 8: # Ensure we don't send empty or whitespace-only strings
+                            if text_to_send_to_tts and len(text_to_send_to_tts) >= self.min_sentence_len: # Ensure we don't send empty or whitespace-only strings
                                 from utils.logger import conditional_print
                                 conditional_print("Sending to TTS queue: ", text_to_send_to_tts) # Keep for debugging
                                 await self.llm_output_queue.put(text_to_send_to_tts)
