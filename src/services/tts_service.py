@@ -39,6 +39,7 @@ class TTSService(BaseService):
         # --- Configuration-Driven TTS Initialization ---
         self.tts_settings = self.config.get("tts_settings", {}) if self.config else {}
         self.tts_concurrency = self.tts_settings.get("tts_concurrency", 2)
+        self.wait_for_audio = self.tts_settings.get("wait_for_audio", 0.4)
         tts_service_name = self.tts_settings.get("tts_service_name", "RealTimeTTS")
         service_config = TTS_SERVICE_REGISTRY.get(tts_service_name)
         if not service_config:
@@ -98,7 +99,7 @@ class TTSService(BaseService):
             self.TTS_SERVICE.tts_request_async(**tts_params)
             
             # Small delay to allow TTS to process and reduce resource competition
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(self.wait_for_audio)
 
         except Exception as e:
             if self.logger:
@@ -142,7 +143,7 @@ class TTSService(BaseService):
                         llm_message = None
                     self.terminate_current_dialogue_event.clear()
                     self.is_audio_streaming_event.clear()
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.05)
                     continue
 
                 llm_message = await self.llm_output_queue.get()

@@ -32,6 +32,8 @@ class DialogueService(BaseService):
         # Initialize memory and logging
         self.llm_settings = self.config.get("llm_settings", {}) if self.config else {}
         self.naive_short_term_memory = deque(maxlen=self.llm_settings.get("short_term_memory_maxlen", 6))
+        self.max_tokens = self.llm_settings.get("max_tokens", 512)
+        self.wait_for_tts = self.llm_settings.get("wait_for_tts", 0.2)
         self._setup_conversation_logging()
         
         if self.logger:
@@ -140,7 +142,7 @@ class DialogueService(BaseService):
                 if self.logger:
                     self.logger.debug(f"Calling llm_model.dialogue_generator for: {prompt[:100]}...")
 
-                async_job = await self.llm_model.dialogue_generator(prompt, conversation_history=self.naive_short_term_memory, max_tokens=100)
+                async_job = await self.llm_model.dialogue_generator(prompt, conversation_history=self.naive_short_term_memory, max_tokens=self.max_tokens)
                 if self.logger:
                     self.logger.debug(f"Got async_job: {type(async_job)}")
 
@@ -187,7 +189,7 @@ class DialogueService(BaseService):
                                     if self.logger:
                                         self.logger.debug(f"Generated {self.llm_output_queue.qsize()} sentences. Yielding control to TTS...")
                                     # Give TTS some time to process and reduce resource competition
-                                    await asyncio.sleep(0.2)
+                                    await asyncio.sleep(self.wait_for_tts)
                     else:
                         if self.logger:
                             self.logger.debug("Received empty chunk_text or chunk_text is None.")
