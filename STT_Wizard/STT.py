@@ -52,6 +52,8 @@ if WhisperModel:
     try:
         whisper_model = WhisperModel(MODEL_SIZE, device=MODEL_DEVICE, compute_type=MODEL_COMPUTE_TYPE)
         print("faster-whisper model loaded successfully.")
+         # --- WARMUP THE MODEL HERE ---
+        warmup_stt() 
     except Exception as e:
         print(f"Error loading faster-whisper model: {e}")
         whisper_model = None # Ensure it's None if loading failed
@@ -76,7 +78,6 @@ ENERGY_THRESHOLD_DBFS = config.get("ENERGY_THRESHOLD_DBFS", -40)  # Example: -40
 # RMS equivalent can also be used if preferred, but dBFS is often more intuitive.
 # MAX_RMS_FOR_FLOAT32 = 1.0 (for dBFS calculation with float32 audio)
 
-
 # How often we run transcription on the accumulated audio buffer
 # *** NEW: Sliding Window Configuration ***
 AUDIO_WINDOW_S = config.get("AUDIO_WINDOW_S", 8)
@@ -97,6 +98,38 @@ def list_available_input_devices():
     if not input_devices:
         print("No input devices found. Ensure microphone is connected and drivers are installed.")
     return input_devices
+
+
+def warmup_stt():
+    """
+    Warms up the STT model by running a dummy transcription.
+
+    This function should be called once after the Whisper model is loaded.
+    It processes a short silent audio clip, which triggers the Just-In-Time (JIT)
+    compilation and kernel caching in CTranslate2 (the backend for faster-whisper).
+    This significantly reduces the latency of the very first "real" transcription.
+    """
+    if not whisper_model:
+        print("Warmup skipped: Whisper model is not available.")
+        return
+
+    print("Warming up the STT model...")
+    start_time = time.monotonic()
+    
+    # Create a short, silent audio array. 0.5 seconds of silence is plenty.
+    # The audio format must match what the model expects: 16kHz, float32.
+    silent_audio = np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32)
+    
+    # Run a transcription on the silent audio
+    # We don't need the result, just the act of running it is the warmup.
+    try:
+        # Use simple parameters for the warmup
+        _, _ = whisper_model.transcribe(silent_audio, beam_size=1, language=LANGUAGE)
+        
+        end_time = time.monotonic()
+        print(f"STT model warmed up in {end_time - start_time:.2f} seconds.")
+    except Exception as e:
+        print(f"An error occurred during STT model warmup: {e}")
 
 
 def recognize_speech_stream(
