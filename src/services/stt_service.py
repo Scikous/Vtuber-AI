@@ -5,7 +5,7 @@ import asyncio
 import threading
 import traceback
 from .base_service import BaseService
-from STT_Wizard.STT import recognize_speech_stream # We only need the core function
+from STT_Wizard.STT import WhisperSTT # STT CLASS
 from STT_Wizard.utils.callbacks import STTCallbacks
 class STTService(BaseService):
     def __init__(self, shared_resources):
@@ -14,8 +14,13 @@ class STTService(BaseService):
         
         stt_settings = self.config.get("stt_settings", {})
         self.speaker_name = stt_settings.get("speaker_name", "User")
-        self.device_index = stt_settings.get("device_index")
+        self.model_size = stt_settings.get("MODEL_SIZE", "large-v3")
+        self.language = stt_settings.get("LANGUAGE", "en")
+        self.device = stt_settings.get("DEVICE", "cuda")
+        self.compute_type = stt_settings.get("COMPUTE_TYPE", "int8_float16")
+        self.device_index = stt_settings.get("DEVICE_INDEX", 0)
 
+        self.STTCLASS = WhisperSTT(self.model_size, self.language, self.device, self.compute_type, **stt_settings)
         # Service-specific state for managing the thread
         self._stt_thread = None
         self._stop_thread_event = threading.Event()
@@ -41,7 +46,7 @@ class STTService(BaseService):
             # --- Setup Phase ---
             self.logger.info("Starting recognizer thread.")
             self._stt_thread = threading.Thread(
-                target=recognize_speech_stream,
+                target=self.STTCLASS.listen_and_transcribe,
                 args=(self._stt_callback, self._stop_thread_event, loop, self.device_index)
             )
             self._stt_thread.start()
