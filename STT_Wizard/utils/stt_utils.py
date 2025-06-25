@@ -4,6 +4,106 @@ import numpy as np
 import math
 import logging
 
+import asyncio
+import threading
+import numpy as np
+from abc import ABC, abstractmethod
+from typing import Callable, Awaitable, Any
+
+class STTBase(ABC):
+    """
+    Abstract Base Class for Speech-to-Text (STT) implementations.
+
+    This class defines the standard interface for all STT engines, ensuring they
+    can be used interchangeably. It handles model initialization and defines
+    the core transcription methods that subclasses must implement.
+    """
+
+    def __init__(self, model_path: str = None, language: str = None, device: str = None, compute_type: str = None, **stt_settings):
+        """
+        Initializes the STT engine.
+
+        Args:
+            model_path (str, optional): Path or identifier for the STT model.
+            language: Language code for transcription (e.g., 'en')
+            device (str, optional): The device to run the model on (e.g., 'cpu', 'cuda').
+            compute_type (str, optional): The computation type for the model (e.g., 'int8', 'float16').
+            **stt_settings: Additional keyword arguments for the specific implementation. Namely STT settings
+        """
+        self.model_path = model_path
+        self.device = device
+        self.compute_type = compute_type
+        self.model = None
+
+        # The constructor of the base class triggers the model loading process,
+        # which must be implemented by the subclass.
+        self._load_model()
+
+    @abstractmethod
+    def _load_model(self):
+        """
+        Loads the specific STT model into memory.
+
+        Subclasses must implement this method to handle the loading of their
+        respective models and prepare them for transcription. This method
+        is called automatically during initialization.
+        """
+        raise NotImplementedError("Subclasses must implement the _load_model method.")
+
+    @abstractmethod
+    async def transcribe_audio(self, audio_data: np.ndarray, **kwargs) -> str:
+        """
+        Transcribes a given audio segment.
+
+        This method takes a complete audio segment as a NumPy array and returns
+        the transcribed text.
+
+        Args:
+            audio_data (np.ndarray): The audio data to be transcribed.
+            **kwargs: Additional implementation-specific parameters for transcription.
+
+        Returns:
+            str: The resulting transcription text.
+        """
+        raise NotImplementedError("Subclasses must implement the transcribe_audio method.")
+
+    @abstractmethod #could be async as well -- mayhaps
+    def listen_and_transcribe(self, callback: Callable[[str, bool], Awaitable[None]], **kwargs):
+        """
+        Listens to an audio input stream and provides real-time transcriptions.
+
+        This method should handle capturing audio from a microphone, detecting speech,
+        and calling the provided callback function with transcription results.
+
+        Args:
+            callback: An awaitable callback function to be invoked with transcription results.
+                      It receives two arguments:
+                      - text (str): The transcribed text.
+                      - is_final (bool): True if the transcription segment is final.
+            **kwargs: Additional parameters, typically including:
+                      - stop_event (threading.Event): An event to signal when to stop listening.
+                      - loop (asyncio.AbstractEventLoop): The event loop to run the callback in.
+                      - device_index (int, optional): The index of the audio input device.
+        """
+        raise NotImplementedError("Subclasses must implement the listen_and_transcribe method.")
+
+    def list_available_input_devices(self) -> list:
+        """
+        Provides a list of available audio input devices.
+
+        This is a concrete utility method that can be used by any subclass.
+
+        Returns:
+            list: A list of available input devices, as provided by the helper function.
+        """
+        try:
+            return list_available_input_devices()
+        except Exception as e:
+            print(f"Could not list audio devices. Is 'sounddevice' installed and working? Error: {e}")
+            return []
+
+
+
 def calculate_audio_energy_rms(audio_chunk: np.ndarray) -> float:
     """
     Calculates the Root Mean Square (RMS) energy of an audio chunk.
