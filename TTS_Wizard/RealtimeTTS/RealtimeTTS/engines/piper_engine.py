@@ -74,7 +74,8 @@ class PiperEngine(BaseEngine):
         Returns:
             tuple: (format, channels, rate)
         """
-        return pyaudio.paInt16, 1, 16000
+        # return pyaudio.paInt16, 1, 16000
+        return pyaudio.paInt16, 1, 22050
 
     def synthesize(self, text: str) -> bool:
         """
@@ -124,12 +125,12 @@ class PiperEngine(BaseEngine):
             # Open the synthesized WAV file and (optionally) validate audio properties.
             with wave.open(output_wav_path, "rb") as wf:
                 # If you require specific WAV properties, check them:
-                if wf.getnchannels() != 1 or wf.getframerate() != 16000 or wf.getsampwidth() != 2:
-                    print(f"Unexpected WAV properties: "
-                        f"Channels={wf.getnchannels()}, "
-                        f"Rate={wf.getframerate()}, "
-                        f"Width={wf.getsampwidth()}")
-                    return False
+                # if wf.getnchannels() != 1 or wf.getframerate() != 16000 or wf.getsampwidth() != 2:
+                #     print(f"Unexpected WAV properties: "
+                #         f"Channels={wf.getnchannels()}, "
+                #         f"Rate={wf.getframerate()}, "
+                #         f"Width={wf.getsampwidth()}")
+                #     return False
 
                 # Read audio data and put it into the queue.
                 audio_data = wf.readframes(wf.getnframes())

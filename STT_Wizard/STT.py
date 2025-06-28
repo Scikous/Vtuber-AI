@@ -26,7 +26,7 @@ from .utils.stt_utils import calculate_audio_energy_rms, calculate_dbfs, count_w
 class WhisperSTT(STTBase):
     """Whisper-based Speech-to-Text implementation using faster-whisper."""
     
-    def __init__(self, model_size: str = None, language: str = None, device: str = None, compute_type: str = None, **stt_settings):
+    def __init__(self, model_size: str = None, language: str = None, device: str = None, compute_type: str = None, stt_is_listening_event: threading.Event = None, stt_can_finish_event: threading.Event = None, **stt_settings):
         """Initialize WhisperSTT with configuration.
         
         Args:
@@ -71,20 +71,22 @@ class WhisperSTT(STTBase):
         self.sample_rate = self.config.get("SAMPLE_RATE", 16000)
         self.channels = self.config.get("CHANNELS", 1)
         self.audio_dtype = self.config.get("AUDIO_DTYPE", "float32")
-        self.frame_duration_ms = self.config.get("FRAME_DURATION_MS", 30)
+        self.frame_duration_ms = self.config.get("FRAME_DURATION_MS", 10)
         self.frame_size = int(self.sample_rate * self.frame_duration_ms / 1000)
         self.vad_aggressiveness = self.config.get("VAD_AGGRESSIVENESS", 3)
         
         # Speech detection parameters
-        self.silence_duration_s_for_finalize = self.config.get("SILENCE_DURATION_S_FOR_FINALIZE", 1.0)
+        self.silence_duration_s_for_finalize = self.config.get("SILENCE_DURATION_S_FOR_FINALIZE", 0.5)
         self.proactive_pause_s = self.config.get("PROACTIVE_PAUSE_S", 0.05)
         self.min_chunk_s_for_interim = self.config.get("MIN_CHUNK_S_FOR_INTERIM", 0.1)
         self.energy_threshold_dbfs = self.config.get("ENERGY_THRESHOLD_DBFS", -40)
         
         # Audio window configuration
-        self.audio_window_s = self.config.get("AUDIO_WINDOW_S", 8)
+        self.audio_window_s = self.config.get("AUDIO_WINDOW_S", 6)
         self.audio_window_frames = int(self.audio_window_s * self.sample_rate)
         
+        self.stt_is_listening_event = stt_is_listening_event
+        self.stt_can_finish_event = stt_can_finish_event
         # Initialize the parent class
         super().__init__(model_path=self.model_size, device=self.device, compute_type=self.compute_type)
     
@@ -152,6 +154,7 @@ class WhisperSTT(STTBase):
             temperature=temperature,
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=250),
+            
         )
         
         return "".join(seg.text for seg in segments).strip()
@@ -166,9 +169,11 @@ class WhisperSTT(STTBase):
         
         self._recognize_speech_stream(callback, stop_event, loop, device_index)
     
+
+
     def _recognize_speech_stream(self, callback, stop_event: threading.Event, 
-                                     loop: asyncio.AbstractEventLoop, device_index: int = None):
-        """Internal method for speech recognition streaming."""
+                                    loop: asyncio.AbstractEventLoop, device_index: int = None):
+        """Internal method for speech recognition streaming with fast-first approach."""
         if not self.model:
             print("Whisper model not available.")
             return
@@ -179,15 +184,52 @@ class WhisperSTT(STTBase):
         vad_is_currently_speech = False
         turn_is_active = False
         last_speech_time = time.monotonic()
+        turn_start_time = None
+        first_word_sent = False  # Track if we've sent the fast first word
         
         current_chunk_audio = []
         committed_transcript = ""
 
-        def safe_callback(text, is_final):
-            asyncio.run_coroutine_threadsafe(callback(text, is_final), loop)
+        def safe_callback(text, is_final, is_first_word=False):
+            asyncio.run_coroutine_threadsafe(callback(text, is_final, is_first_word), loop)
+
+        def transcribe_first_word():
+            """Quick transcription with fast settings to get first word ASAP."""
+            nonlocal first_word_sent
+            if not current_chunk_audio or first_word_sent:
+                return
+
+            # Use minimal audio for first word detection
+            audio_np = np.concatenate(current_chunk_audio, axis=0).flatten()
+            
+            # Only need a very short segment for first word
+            min_samples = int(0.2 * self.sample_rate)  # 0.5 seconds minimum
+            if len(audio_np) < min_samples:
+                return
+
+            print(f"  -> Fast transcribing first word from {len(audio_np)/self.sample_rate:.2f}s audio...")
+            
+            # Fast settings for first word
+            segments, _ = self.model.transcribe(
+                audio_np,
+                language=self.language,
+                beam_size=1,  # Minimal beam size for speed
+                temperature=0.8,  # Higher temp for faster processing
+                vad_filter=False,  # Skip VAD for speed
+                # No initial prompt for speed
+            )
+
+            if segments:
+                first_text = "".join(seg.text for seg in segments).strip()
+                if first_text:
+                    print(f"  -> Fast First Word(s): '{first_text}'")
+                    safe_callback(first_text, is_final=False, is_first_word=True)
+                    first_word_sent = True
+                    self.stt_is_listening_event.clear()
+
 
         def process_and_transcribe_chunk():
-            """Process and transcribe the current audio buffer."""
+            """Process and transcribe with full accuracy settings."""
             nonlocal committed_transcript, current_chunk_audio
             if not current_chunk_audio:
                 return
@@ -200,15 +242,15 @@ class WhisperSTT(STTBase):
             if len(audio_np) / self.sample_rate < self.min_chunk_s_for_interim:
                 return
 
-            print(f"  -> Transcribing {len(audio_np)/self.sample_rate:.2f}s audio...")
+            print(f"  -> Full transcribing {len(audio_np)/self.sample_rate:.2f}s audio...")
             
-            # Transcribe the audio
+            # Full accuracy transcription
             segments, _ = self.model.transcribe(
                 audio_np,
                 language=self.language,
-                beam_size=self.beam_size,
+                beam_size=self.beam_size,  # Full beam size for accuracy
                 initial_prompt=committed_transcript,
-                temperature=0.0,
+                temperature=0.0,  # Low temp for accuracy
                 vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=250),
             )
@@ -222,12 +264,12 @@ class WhisperSTT(STTBase):
                 committed_transcript = new_text
 
             committed_transcript = committed_transcript.strip()
-            print(f"  -> Interim Transcript: '{committed_transcript}'")
+            print(f"  -> Full Transcript: '{committed_transcript}'")
             safe_callback(committed_transcript, is_final=False)
 
         def audio_callback(indata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
             """Audio callback function for sounddevice."""
-            nonlocal vad_is_currently_speech, last_speech_time, turn_is_active
+            nonlocal vad_is_currently_speech, last_speech_time, turn_is_active, turn_start_time
             if stop_event.is_set(): 
                 raise sd.CallbackStop
 
@@ -238,39 +280,60 @@ class WhisperSTT(STTBase):
                 if vad_is_currently_speech:
                     if not turn_is_active:
                         turn_is_active = True
+                        first_word_sent = False  # Reset for new turn
+
                         print("\nSpeech started...")
                     last_speech_time = time.monotonic()
                     current_chunk_audio.append(indata.copy())
+                    if not turn_start_time:
+                        turn_start_time = time.monotonic()
             except Exception as e:
                 print(f"Error in audio callback: {e}")
 
-        print("STT stream started [Optimized Single-Threaded Model].")
+        print("STT stream started [Fast-First Model].")
 
         try:
             with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype=self.audio_dtype,
-                                 blocksize=self.frame_size, callback=audio_callback, device=device_index):
+                                blocksize=self.frame_size, callback=audio_callback, device=device_index):
                 
                 while not stop_event.is_set():
                     current_time = time.monotonic()
                     time_since_last_speech = current_time - last_speech_time
                     
-                    # Proactive pause trigger
+                    # Fast first word trigger - very early in the speech
+                    if (turn_is_active and not first_word_sent and 
+                        len(current_chunk_audio) > 0 and vad_is_currently_speech and
+                        turn_start_time > 0.3):  # Just 300ms after speech starts
+                        transcribe_first_word()
+                        print("transcribing first word", turn_start_time)
+                        turn_start_time = 0.0
+                        # first_word_sent = True
+                    # print(turn_start_time)
+                    # print(turn_is_active, first_word_sent, time_since_last_speech)
+                    
+                    # Proactive pause trigger for full transcription
                     has_paused = not vad_is_currently_speech and turn_is_active
                     if has_paused and time_since_last_speech > self.proactive_pause_s:
                         process_and_transcribe_chunk()
 
                     # Finalization trigger
-                    if turn_is_active and time_since_last_speech > self.silence_duration_s_for_finalize:
+                    if turn_is_active and first_word_sent and time_since_last_speech > self.silence_duration_s_for_finalize:
                         # Process any final, lingering audio
+
+                        self.stt_is_listening_event.set()
+                        self.stt_can_finish_event.wait()
                         process_and_transcribe_chunk()
                         
                         if committed_transcript:
                             print(f"Finalizing with: '{committed_transcript}'")
                             safe_callback(committed_transcript, is_final=True)
+
                         
                         # Reset for the next turn
                         turn_is_active = False
                         committed_transcript = ""
+                        first_word_sent = False
+                        self.stt_can_finish_event.clear()
 
                     # Sleep for polling rate
                     time.sleep(0.02)
@@ -279,6 +342,7 @@ class WhisperSTT(STTBase):
             print(f"Error in STT stream: {e}\n{traceback.format_exc()}")
         finally:
             print("STT stream stopped.")
+
     
     def list_available_input_devices(self):
         """List available audio input devices."""
@@ -460,3 +524,21 @@ def recognize_speech_stream(
         print(f"Error in STT stream: {e}\n{traceback.format_exc()}")
     finally:
         print("STT stream stopped.")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        

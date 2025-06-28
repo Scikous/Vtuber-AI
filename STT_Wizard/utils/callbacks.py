@@ -6,7 +6,7 @@ class STTCallbacks():
         self.speaker_name = speaker_name
         self.speech_queue = speech_queue
 
-    async def rstt_callback(self, speech_text: str, is_final: bool):
+    async def rstt_callback(self, speech_text: str, is_final: bool, is_first_word: bool):
         """Async callback to handle transcribed text from the STT thread."""
         # This callback is thread-safe because it's scheduled on the main event loop.
         
@@ -14,7 +14,7 @@ class STTCallbacks():
         if speech_text and speech_text.strip().lower() != "thank you.":
             try:
                 # You can use the 'is_final' flag for more nuanced logic if needed
-                if is_final:
+                if is_final or is_first_word:
                     self.logger.info(f"Final STT transcription: '{speech_text.strip()}'")
                     await self.speech_queue.put(f"{self.speaker_name}: {speech_text.strip()}")
                 else:

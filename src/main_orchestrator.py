@@ -5,6 +5,7 @@ Services now handle their own model loading and configuration.
 
 import sys
 import asyncio
+import threading
 import logging
 import os
 from dotenv import load_dotenv
@@ -35,8 +36,10 @@ class MainOrchestrator:
         # Shared events for coordination between services
         self.shared_events = {
             "terminate_current_dialogue_event": asyncio.Event(),
+            "immediate_livechat_fetch_event": asyncio.Event(),
             "is_audio_streaming_event": asyncio.Event(),
-            "immediate_livechat_fetch_event": asyncio.Event()
+            "stt_is_listening_event": threading.Event(),
+            "stt_can_finish_event": threading.Event(),
         }
         
         # Minimal shared resources - only what truly needs to be shared

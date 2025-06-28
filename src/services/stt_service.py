@@ -20,7 +20,14 @@ class STTService(BaseService):
         self.compute_type = stt_settings.get("COMPUTE_TYPE", "int8_float16")
         self.device_index = stt_settings.get("DEVICE_INDEX", 0)
 
-        self.STTCLASS = WhisperSTT(self.model_size, self.language, self.device, self.compute_type, **stt_settings)
+        self.stt_is_listening_event = self.shared_resources.get(
+            "stt_is_listening_event", threading.Event()
+            )
+        self.stt_can_finish_event = self.shared_resources.get(
+            "stt_can_finish_event", threading.Event()
+            )
+        
+        self.STTCLASS = WhisperSTT(self.model_size, self.language, self.device, self.compute_type, self.stt_is_listening_event, self.stt_can_finish_event, **stt_settings)
         # Service-specific state for managing the thread
         self._stt_thread = None
         self._stop_thread_event = threading.Event()

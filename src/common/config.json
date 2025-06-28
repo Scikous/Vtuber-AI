@@ -29,7 +29,7 @@
         "VAD_AGGRESSIVENESS": 3,
         
         "AUDIO_WINDOW_S": 6,
-        "SILENCE_DURATION_S_FOR_FINALIZE": 0.5,
+        "SILENCE_DURATION_S_FOR_FINALIZE": 0.1,
         "ENERGY_THRESHOLD_DBFS": -31.0,
         "PROACTIVE_PAUSE_S": 0.05,
         "MIN_CHUNK_S_FOR_INTERIM": 0.1
@@ -38,7 +38,8 @@
     "tts_settings":{
         "tts_concurrency": 2,
         "tts_service_name": "RealTimeTTS",
-        "wait_for_audio": 0.4
+        "wait_for_audio": 0.4,
+        "tts_engine": "coqui"
     },
 
     "logging_enabled": true,

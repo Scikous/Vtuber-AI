@@ -22,6 +22,7 @@ class DialogueService(BaseService):
 
         self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event())
         self.is_audio_streaming_event = shared_resources.get("is_audio_streaming_event", asyncio.Event())
+        self.stt_is_listening_event = self.shared_resources.get("stt_is_listening_event", asyncio.Event())
         
         # Character configuration placeholders
         self.character_name = None
@@ -155,7 +156,7 @@ class DialogueService(BaseService):
                             if self.logger:
                                 self.logger.info("Interruption event set. Cancelling current dialogue generation.")
                             await llm_character_model.cancel_dialogue_generation()
-                            break # Exit the async for loop
+                            # break # Exit the async for loop
 
                         chunk_text = result.get("text", "")
                         
@@ -170,12 +171,18 @@ class DialogueService(BaseService):
                                     if self.logger:
                                         self.logger.debug(f"Queued sentence for TTS: {text_to_send_to_tts[:50]}...")
                                     tts_buffer = ""
-                                    
+
+
                                     if not first_sentence_sent:
-                                        first_sentence_sent = True
                                         if self.logger:
                                             self.logger.info("Waiting for audio playback to start...")
+                                        first_sentence_sent = True
+
+                                        if not self.stt_is_listening_event.is_set():
+                                            await llm_character_model.cancel_dialogue_generation()
+                                            break
                                         await self.is_audio_streaming_event.wait()
+                                        
                                         if self.logger:
                                             self.logger.info("Audio playback started. Resuming LLM generation.")
                                     
@@ -206,7 +213,6 @@ class DialogueService(BaseService):
                             self.write_to_log_fn(self.conversation_log_file, ("UnknownSpeaker", message))
                         
                         self.write_to_log_fn(self.conversation_log_file, (self.character_name, full_string))
-
         except asyncio.CancelledError:
             if self.logger:
                 self.logger.info(f"{self.__class__.__name__} worker cancelled.")

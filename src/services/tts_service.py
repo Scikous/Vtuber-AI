@@ -1,9 +1,10 @@
 import asyncio
+import threading
 from .base_service import BaseService
 from TTS_Wizard import tts_client
 from TTS_Wizard.tts_exp import XTTS_Service
 from TTS_Wizard.tts_utils import prepare_tts_params_gpt_sovits, prepare_tts_params_xtts, prepare_tts_params_rtts
-from TTS_Wizard.realtimetts import RealTimeTTS
+from TTS_Wizard.realtimetts import RealTimeTTS, pipertts_engine, coquitts_engine
 
 # A registry to map service names to their respective classes and param functions.
 # This makes the service easily extensible.
@@ -35,6 +36,12 @@ class TTSService(BaseService):
         self.is_audio_streaming_event = self.shared_resources.get(
             "is_audio_streaming_event", asyncio.Event()
         )
+        self.stt_is_listening_event = self.shared_resources.get(
+            "stt_is_listening_event", threading.Event()
+            )
+        self.stt_can_finish_event = self.shared_resources.get(
+            "stt_can_finish_event", threading.Event()
+            )
         
         # --- Configuration-Driven TTS Initialization ---
         self.tts_settings = self.config.get("tts_settings", {}) if self.config else {}
@@ -48,7 +55,22 @@ class TTSService(BaseService):
             
         # Instantiate the selected TTS service
         # NOTE: You might need to pass specific arguments to the service's __init__ method
-        self.TTS_SERVICE = service_config["class"](is_audio_streaming_event=self.is_audio_streaming_event,terminate_current_dialogue_event=self.terminate_current_dialogue_event) 
+        tts_engine = self.tts_settings.get("tts_engine", "piper")
+        if tts_engine == "piper":
+            model_file = self.tts_settings.get("model_file", "TTS_Wizard/temp/piper/en_US-john-medium.onnx")
+            config_file = self.tts_settings.get("config_file", "TTS_Wizard/temp/piper/en_US-john-medium.onnx.json")
+            piper_path = self.tts_settings.get("piper_path", "TTS_Wizard/temp/piper/piper")
+            stream_options = {"frames_per_buffer": 256}
+            tts_engine = pipertts_engine(model_file, config_file, piper_path)
+        elif tts_engine == "coqui":
+            tts_engine = coquitts_engine(use_deepspeed=True)
+            # Ultra-low latency settings
+            stream_options = {
+                "frames_per_buffer": self.tts_settings.get("frames_per_buffer", 64),
+                "playout_chunk_size": self.tts_settings.get("playout_chunk_size", 64)
+            }
+
+        self.TTS_SERVICE = service_config["class"](tts_engine, stream_options=stream_options,is_audio_streaming_event=self.is_audio_streaming_event,terminate_current_dialogue_event=self.terminate_current_dialogue_event, stt_is_listening_event=self.stt_is_listening_event, stt_can_finish_event=self.stt_can_finish_event) 
         self.prepare_tts_params = service_config["params_fn"]
         
         
@@ -97,7 +119,7 @@ class TTSService(BaseService):
         try:
             # The tts_request_async method is non-blocking. We can call it directly.
             # It will handle feeding the text and starting playback if necessary.
-            self.TTS_SERVICE.tts_request_async(**tts_params)
+            await self.TTS_SERVICE.tts_request_async(**tts_params)
             
             # Small delay to allow TTS to process and reduce resource competition
             await asyncio.sleep(self.wait_for_audio)
@@ -171,8 +193,6 @@ class TTSService(BaseService):
                 
                 if task:
                     active_tts_tasks.append(task)
-                #if audio is NOT already playing DO NOT get new audio -- LLM will hog all the resources increacing latency dramatically
-                # await self.is_audio_streaming_event.wait()
 
         except asyncio.CancelledError:
             if self.logger:
