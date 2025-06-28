@@ -53,14 +53,15 @@ async def exllamav2_test():
         prompt = prompt_wrapper("Bob: Describe the image shown", "Alice: You need brain surgery")
         prompt = "Describe the image."
         #20ms+ for pure text, 60ms+ with maxed short-term-memory, 230-280ms+ with images (may be lower with smaller images, but also higher with different images)
-        response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, images=images, max_tokens=512)
+        # response = await Character.dialogue_generator(prompt=prompt, conversation_history=dummy_memory, images=images, max_tokens=512)
+        response = await Character.dialogue_generator(prompt="How", conversation_history=None, images=None, max_tokens=512)
         full_output = ""
         async for result in response:
             output = result.get("text", "")
             end = perf_counter()
             print(end-start)
             full_output += output
-            break
+            # break
             # if contains_sentence_terminator(output):
             #     end = perf_counter()
             #     print(end-start, output)
