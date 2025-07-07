@@ -6,7 +6,7 @@
 [subrepo]
 	remote = https://github.com/Scikous/Livechat-Wizard.git
 	branch = main
-	commit = 442b34a077119c8d8e07e663aee30878abb31635
-	parent = b325dbc4e6e0e958bd3ad41d82b551d778218995
+	commit = 48761e1124ac1f31c1b04d156a6e7f54d37d7b9b
+	parent = e5ddc43099d1bb6e507e4574e1a8c9f8f839aa2c
 	method = merge
 	cmdver = 0.4.9
