@@ -6,7 +6,7 @@
 [subrepo]
 	remote = https://github.com/Scikous/STT-Wizard.git
 	branch = main
-	commit = 6daa3058cd794a51ab3d2271bea4f16a38bcaafc
-	parent = 78d7f6df270af51f7993a34ea7baed8f0af5f6b0
+	commit = 676a84f209652283eacca6d3ecf0fa6e0a46943e
+	parent = b8e3b990472cab219b7b553319ca2757317d2b7c
 	method = merge
 	cmdver = 0.4.9
