@@ -178,8 +178,3 @@ characters/
 !characters/characters.json
 dataset/*
 !dataset/.gitkeep
-LLM_Wizard/exl2_out/
-LLM_Wizard/gentest.py
-LLM_Wizard/qwen2.5-vl-finetune-merged2/
-LLM_Wizard/qwen2.5-vl-finetune/
-LLM_Wizard/qwen2.5-vl-finetuned/

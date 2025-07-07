@@ -49,19 +49,9 @@ class VtuberLLMBase(ABC):
 
     @classmethod
     @abstractmethod
-    async def load_model(cls, *args, **kwargs):
+    def load_model(cls, *args, **kwargs):
         """Loads all necessary model resources and returns an instance of the class."""
         pass
-
-    @abstractmethod
-    async def warmup(self):
-        """
-        Loads the model weights and performs any necessary warmup operations.
-        This method should be called before the model is ready to generate text.
-        """
-        pass
-
-    
 
     @abstractmethod
     async def dialogue_generator(self, prompt: str, **kwargs):
@@ -100,7 +90,7 @@ class VtuberExllamav2(VtuberLLMBase):
         self.resources = resources
 
     @classmethod
-    async def load_model(cls, config: LLMModelConfig):
+    def load_model(cls, config: LLMModelConfig):
         """
         Loads an ExLlamaV2 model based on the provided configuration.
         """
@@ -147,14 +137,7 @@ class VtuberExllamav2(VtuberLLMBase):
             generator=generator, gen_settings=gen_settings, 
             tokenizer=hf_tokenizer, vision_model=vision_model
         )
-
-        instance = cls(config, loaded_resources)
-
-        # 7. Perform warmup on the new instance
-        await instance.warmup()
-
-        return instance
-
+        return cls(config, loaded_resources)
 
     async def _prepare_prompt_and_embeddings(self, prompt: str, conversation_history: Optional[List[str]], images: Optional[List[Dict]]):
         """Handles image embedding and chat template application."""
@@ -223,63 +206,6 @@ class VtuberExllamav2(VtuberLLMBase):
                 log.error(f"Error trying to cancel async_job: {e}")
         else:
             log.warning("No cancellable dialogue generation job to cancel.")
-
-    async def warmup(self):
-        """
-        Warms up the model by running a short, dummy generation.
-        This pre-compiles CUDA kernels and initializes memory allocations,
-        reducing latency on the first real generation request.
-        """
-        log.info("Warming up the LLM... (This may take a moment)")
-        try:
-            # 1. Define a simple, short prompt. No need for history or images.
-            warmup_prompt = "Hello, world."
-            images = [
-                # {"file": "media/test_image_1.jpg"},
-                # {"file": "media/test_image_2.jpg"},
-                # {"url": "https://media.istockphoto.com/id/1212540739/photo/mom-cat-with-kitten.jpg?s=612x612&w=0&k=20&c=RwoWm5-6iY0np7FuKWn8FTSieWxIoO917FF47LfcBKE="},
-                {"url": "https://i.dailymail.co.uk/1s/2023/07/10/21/73050285-12283411-Which_way_should_I_go_One_lady_from_the_US_shared_this_incredibl-a-4_1689019614007.jpg"},
-                {"url": "https://images.fineartamerica.com/images-medium-large-5/metal-household-objects-trevor-clifford-photography.jpg"}
-            ]
-            dummy_memory =[
-                "Bob: The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
-                "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
-                "Bob: Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
-                "Despite the overwhelming complexities",
-                "Bob: and numerous unforeseen obstacles encountered during the arduous",
-                "multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
-                "Bob: The venerable oak tree",
-                "standing as an immutable sentinel through countless seasons",
-                "Bob: its gnarled branches reaching skyward like ancient",
-                "petrified arms",
-                "Bob: silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy",
-                "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
-                "Bob: and numerous unforeseen obstacles encountered during the arduous",
-                "multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
-                "Bob: Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
-                "Despite the overwhelming complexities",
-                "Bob: and numerous unforeseen obstacles encountered during the arduous",
-                "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
-            ]
-
-
-            warmup_job = await self.dialogue_generator(prompt=warmup_prompt, conversation_history=dummy_memory, images=images, max_tokens=512)
-
-            # 4. Await the job's result to ensure it runs to completion.
-            # We don't care about the output, just that the computation happens.
-            async for _ in warmup_job:
-                pass
-                
-
-            # 5. Clear the job reference to avoid confusion with real jobs.
-            # The dialogue_generator method will set self.current_async_job later.
-            self.current_async_job = None
-            
-            log.info("LLM warmup complete. Model is ready.")
-
-        except Exception as e:
-            # Log an error but don't prevent the application from starting.
-            log.error(f"An error occurred during LLM warmup: {e}")
 
     async def cleanup(self):
         """Asynchronously cleans up model resources."""
