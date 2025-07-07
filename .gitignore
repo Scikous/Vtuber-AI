@@ -211,3 +211,13 @@ venv7/
 src/services/tts_service_legacy.py
 .git-rewrite/
 MULTIPROCESSING_README.md
+
+.srp.sh.swp
+STT_Wizard/optimized_stt.py
+TTS_Wizard/Orpheus_TTS/output.wav
+TTS_Wizard/Orpheus_TTS/test.py
+TTS_Wizard/temp/
+TTS_Wizard/tts_client2.py
+models/
+output.wav
+venvRun/
