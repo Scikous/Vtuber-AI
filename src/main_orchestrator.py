@@ -72,7 +72,7 @@ class MainOrchestrator:
         self.service_manager.register_service(STTService(self.shared_resources))
         self.service_manager.register_service(DialogueService(self.shared_resources))
         self.service_manager.register_service(TTSService(self.shared_resources))
-        self.service_manager.register_service(LiveChatService(self.shared_resources))
+        # self.service_manager.register_service(LiveChatService(self.shared_resources))
         # self.service_manager.register_service(AudioStreamService(self.shared_resources))
         
         self.logger.info("All services registered.")
@@ -126,6 +126,8 @@ class MainOrchestrator:
             self.logger.info("Vtuber-AI Orchestration shutting down.")
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.set_start_method('spawn', force=True)
     # Basic logging setup for standalone execution
     # In a real application, run.py would handle this more robustly.
     logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(name)s: %(message)s')

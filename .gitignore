@@ -204,8 +204,6 @@ LLM_Wizard/qwen2.5-vl-finetuned/
 TTS_Wizard/GPT_SoVITS/tts_exp.py
 TTS_Wizard/GPT_SoVITS_Win/
 TTS_Wizard/output.wav
-TTS_Wizard/Orpheus_TTS/output.wav
-TTS_Wizard/Orpheus_TTS/test.py
 srp.sh
 test_multiprocess_performance.py
 unsloth_compiled_cache/
