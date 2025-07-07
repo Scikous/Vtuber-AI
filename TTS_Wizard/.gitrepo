@@ -4,7 +4,7 @@
 ; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
 ;
 [subrepo]
-	remote = https://github.com/Scikous/TTS-Wizard.git
+	remote = git@github.com:Scikous/TTS-Wizard.git
 	branch = main
 	commit = 9a9747a43dbb07873999ff279721b1c4db74a848
 	parent = 3f248080c1e379f692dd90d38deda1d0b8add715
