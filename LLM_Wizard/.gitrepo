@@ -4,7 +4,7 @@
 ; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
 ;
 [subrepo]
-	remote = https://github.com/Scikous/LLM-Wizard.git
+	remote = git@github.com:Scikous/LLM-Wizard.git
 	branch = main
 	commit = a8dd44eca1f0f96fe95d38694b08ad421273ffd7
 	parent = a1ddcffbaef3c53fb791f01bd04a73aa4a5b23b6
