@@ -6,7 +6,7 @@
 [subrepo]
 	remote = git@github.com:Scikous/LLM-Wizard.git
 	branch = main
-	commit = a8dd44eca1f0f96fe95d38694b08ad421273ffd7
-	parent = a1ddcffbaef3c53fb791f01bd04a73aa4a5b23b6
+	commit = d1b3206420b652ac13307a592158d9ae2ada9d20
+	parent = a3856b8299d009ba5211d8d75c06ab49ea6923d8
 	method = merge
 	cmdver = 0.4.9
