@@ -21,69 +21,332 @@ except ImportError as e:
     # For now, we'll let it proceed and fail later if these are used without being imported.
     WhisperModel = None # Placeholder to avoid immediate crash if script is imported but not run
 
-from .utils.stt_utils import calculate_audio_energy_rms, calculate_dbfs, count_words
+from .utils.stt_utils import calculate_audio_energy_rms, calculate_dbfs, count_words, STTBase
 
-# Load configuration
-config = load_config()
+class WhisperSTT(STTBase):
+    """Whisper-based Speech-to-Text implementation using faster-whisper."""
+    
+    def __init__(self, model_size: str = None, language: str = None, device: str = None, compute_type: str = None, stt_is_listening_event: threading.Event = None, stt_can_finish_event: threading.Event = None, **stt_settings):
+        """Initialize WhisperSTT with configuration.
+        
+        Args:
+            model_size: Whisper model size -- Options: tiny.en, tiny, base.en, base, small.en, small, medium.en, medium, large-v1, large-v2, large-v3, large, distil-large-v2, distil-medium.en, distil-small.en, distil-large-v3, large-v3-turbo, turbo, "distil-whisper/distil-large-v3.5-ct2"
+            language: Language code for transcription (e.g., 'en')
+            device: Device to run on ('cpu', 'cuda')
+            compute_type: Compute type ('int8', 'float16', 'int8_float16', etc.)
+            **stt_settings: Additional keyword arguments for the specific implementation. Namely STT settings
+        
+        """
+        # Load configuration
+        if not stt_settings:
+            self.config = load_config()
+        else:
+            self.config = stt_settings
+        # Set parameters with fallbacks to config
+        self.model_size = model_size or self.config.get("MODEL_SIZE", "large-v3")
+        self.language = language or self.config.get("LANGUAGE", "en")
+        self.beam_size = self.config.get("BEAM_SIZE", 5)
+        
+        # Determine device and compute type
+        if device is None or compute_type is None:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    self.device = device or "cuda"
+                    self.compute_type = compute_type or "int8_float16"
+                    print(f"PyTorch found. Using device: {self.device} with compute type: {self.compute_type}")
+                else:
+                    self.device = device or "cpu"
+                    self.compute_type = compute_type or "int8"
+                    print(f"CUDA not available. Using device: {self.device} with compute type: {self.compute_type}")
+            except ImportError:
+                self.device = device or "cpu"
+                self.compute_type = compute_type or "int8"
+                print("PyTorch not found. Defaulting to CPU for faster-whisper.")
+        else:
+            self.device = device
+            self.compute_type = compute_type
+        
+        # Audio parameters
+        self.sample_rate = self.config.get("SAMPLE_RATE", 16000)
+        self.channels = self.config.get("CHANNELS", 1)
+        self.audio_dtype = self.config.get("AUDIO_DTYPE", "float32")
+        self.frame_duration_ms = self.config.get("FRAME_DURATION_MS", 10)
+        self.frame_size = int(self.sample_rate * self.frame_duration_ms / 1000)
+        self.vad_aggressiveness = self.config.get("VAD_AGGRESSIVENESS", 3)
+        
+        # Speech detection parameters
+        self.silence_duration_s_for_finalize = self.config.get("SILENCE_DURATION_S_FOR_FINALIZE", 0.5)
+        self.proactive_pause_s = self.config.get("PROACTIVE_PAUSE_S", 0.05)
+        self.min_chunk_s_for_interim = self.config.get("MIN_CHUNK_S_FOR_INTERIM", 0.1)
+        self.energy_threshold_dbfs = self.config.get("ENERGY_THRESHOLD_DBFS", -40)
+        
+        # Audio window configuration
+        self.audio_window_s = self.config.get("AUDIO_WINDOW_S", 6)
+        self.audio_window_frames = int(self.audio_window_s * self.sample_rate)
+        
+        self.stt_is_listening_event = stt_is_listening_event
+        self.stt_can_finish_event = stt_can_finish_event
+        # Initialize the parent class
+        super().__init__(model_path=self.model_size, device=self.device, compute_type=self.compute_type)
+    
+    def _load_model(self):
+        """Load the Whisper model."""
+        if not WhisperModel:
+            print("WhisperModel could not be imported. STT will not function.")
+            self.model = None
+            return
+            
+        print(f"Loading faster-whisper model: {self.model_size}...")
+        try:
+            self.model = WhisperModel(self.model_size, device=self.device, compute_type=self.compute_type)
+            print("faster-whisper model loaded successfully.")
+            # Warmup the model
+            self._warmup_model()
+        except Exception as e:
+            print(f"Error loading faster-whisper model: {e}")
+            self.model = None
+    
+    def _warmup_model(self):
+        """Warm up the STT model by running a dummy transcription."""
+        if not self.model:
+            print("Warmup skipped: Whisper model is not available.")
+            return
+
+        print("Warming up the STT model...")
+        start_time = time.monotonic()
+        
+        # Create a short, silent audio array
+        silent_audio = np.zeros(int(self.sample_rate * 0.5), dtype=np.float32)
+        
+        try:
+            # Use simple parameters for the warmup
+            _, _ = self.model.transcribe(silent_audio, beam_size=1, language=self.language)
+            
+            end_time = time.monotonic()
+            print(f"STT model warmed up in {end_time - start_time:.2f} seconds.")
+        except Exception as e:
+            print(f"An error occurred during STT model warmup: {e}")
+    
+    async def transcribe_audio(self, audio_data: np.ndarray, **kwargs) -> str:
+        """Transcribe audio data using Whisper.
+        
+        Args:
+            audio_data: NumPy array containing audio data
+            **kwargs: Additional transcription parameters
+            
+        Returns:
+            Transcribed text
+        """
+        if not self.model:
+            raise RuntimeError("Whisper model not available")
+        
+        language = kwargs.get('language', self.language)
+        beam_size = kwargs.get('beam_size', self.beam_size)
+        initial_prompt = kwargs.get('initial_prompt', '')
+        temperature = kwargs.get('temperature', 0.0)
+        
+        segments, _ = self.model.transcribe(
+            audio_data,
+            language=language,
+            beam_size=beam_size,
+            initial_prompt=initial_prompt,
+            temperature=temperature,
+            vad_filter=True,
+            vad_parameters=dict(min_silence_duration_ms=250),
+            
+        )
+        
+        return "".join(seg.text for seg in segments).strip()
+    
+    def listen_and_transcribe(self, callback, stop_event, loop, device_index, **kwargs):
+        """Listen for audio input and transcribe it.
+        
+        Args:
+            callback: Async callback function for transcription results
+            **kwargs: Additional parameters including stop_event, loop, device_index
+        """
+        
+        self._recognize_speech_stream(callback, stop_event, loop, device_index)
+    
 
 
-# --- Configuration for faster-whisper and VAD ---
-MODEL_SIZE = config.get("MODEL_SIZE", "large-v3")  # Options: tiny.en, tiny, base.en, base, small.en, small, medium.en, medium, large-v1, large-v2, large-v3, large, distil-large-v2, distil-medium.en, distil-small.en, distil-large-v3, large-v3-turbo, turbo, "distil-whisper/distil-large-v3.5-ct2"
-LANGUAGE = config.get("LANGUAGE", "en")  # Language code for transcription
-BEAM_SIZE = config.get("BEAM_SIZE", 5)  # Beam size for beam search
-# Determine device and compute type (GPU if available, else CPU)
-try:
-    import torch
-    if torch.cuda.is_available():
-        MODEL_DEVICE = "cuda"
-        MODEL_COMPUTE_TYPE = "int8_float16" # or "float16", "int8_float16" for mixed precision
-    print(f"PyTorch found. Using device: {MODEL_DEVICE} with compute type: {MODEL_COMPUTE_TYPE}")
-    #maybe try if crashing
-    # torch.cuda.set_per_process_memory_fraction(0.8, 0) 
-    # print("Set per-process memory fraction to 80% for stability.")
-except ImportError:
-    MODEL_DEVICE = "cpu"
-    MODEL_COMPUTE_TYPE = "int8" # or "float32" for CPU
-    print("PyTorch not found. Defaulting to CPU for faster-whisper.")
+    def _recognize_speech_stream(self, callback, stop_event: threading.Event, 
+                                    loop: asyncio.AbstractEventLoop, device_index: int = None):
+        """Internal method for speech recognition streaming with fast-first approach."""
+        if not self.model:
+            print("Whisper model not available.")
+            return
 
-# Initialize WhisperModel (globally, once)
-if WhisperModel:
-    print(f"Loading faster-whisper model: {MODEL_SIZE}...")
-    try:
-        whisper_model = WhisperModel(MODEL_SIZE, device=MODEL_DEVICE, compute_type=MODEL_COMPUTE_TYPE)
-        print("faster-whisper model loaded successfully.")
-    except Exception as e:
-        print(f"Error loading faster-whisper model: {e}")
-        whisper_model = None # Ensure it's None if loading failed
-else:
-    whisper_model = None
-    print("WhisperModel could not be imported. STT will not function.")
+        vad = webrtcvad.Vad(self.vad_aggressiveness)
 
-# Audio parameters for VAD and recording
-SAMPLE_RATE = config.get("SAMPLE_RATE", 16000)  # Whisper models are trained on 16kHz audio
-CHANNELS = config.get("CHANNELS", 1)
-AUDIO_DTYPE = config.get("AUDIO_DTYPE", "float32")  # Data type for audio, faster-whisper expects float32
-FRAME_DURATION_MS = config.get("FRAME_DURATION_MS", 30)  # VAD frame duration (10, 20, or 30 ms)
-FRAME_SIZE = int(SAMPLE_RATE * FRAME_DURATION_MS / 1000)  # Samples per frame
-VAD_AGGRESSIVENESS = config.get("VAD_AGGRESSIVENESS", 3)  # VAD aggressiveness (0-3, 3 is most aggressive)
-# Timeouts and thresholds for speech detection
-SILENCE_DURATION_S_FOR_FINALIZE = config.get("SILENCE_DURATION_S_FOR_FINALIZE", 1.0)
-PROACTIVE_PAUSE_S = config.get("PROACTIVE_PAUSE_S", 0.05)
-MIN_CHUNK_S_FOR_INTERIM = config.get("MIN_CHUNK_S_FOR_INTERIM", 0.1)
-# Energy threshold for pausing TTS (in dBFS). Adjust as needed.
-# Lower values (more negative) mean more sensitive to sound.
-ENERGY_THRESHOLD_DBFS = config.get("ENERGY_THRESHOLD_DBFS", -40)  # Example: -40dBFS is a reasonable starting point
-# RMS equivalent can also be used if preferred, but dBFS is often more intuitive.
-# MAX_RMS_FOR_FLOAT32 = 1.0 (for dBFS calculation with float32 audio)
+        # State variables
+        vad_is_currently_speech = False
+        turn_is_active = False
+        last_speech_time = time.monotonic()
+        turn_start_time = None
+        first_word_sent = False  # Track if we've sent the fast first word
+        
+        current_chunk_audio = []
+        committed_transcript = ""
+
+        def safe_callback(text, is_final, is_first_word=False):
+            asyncio.run_coroutine_threadsafe(callback(text, is_final, is_first_word), loop)
+
+        def transcribe_first_word():
+            """Quick transcription with fast settings to get first word ASAP."""
+            nonlocal first_word_sent
+            if not current_chunk_audio or first_word_sent:
+                return
+
+            # Use minimal audio for first word detection
+            audio_np = np.concatenate(current_chunk_audio, axis=0).flatten()
+            
+            # Only need a very short segment for first word
+            min_samples = int(0.2 * self.sample_rate)  # 0.5 seconds minimum
+            if len(audio_np) < min_samples:
+                return
+
+            print(f"  -> Fast transcribing first word from {len(audio_np)/self.sample_rate:.2f}s audio...")
+            
+            # Fast settings for first word
+            segments, _ = self.model.transcribe(
+                audio_np,
+                language=self.language,
+                beam_size=1,  # Minimal beam size for speed
+                temperature=0.8,  # Higher temp for faster processing
+                vad_filter=False,  # Skip VAD for speed
+                # No initial prompt for speed
+            )
+
+            if segments:
+                first_text = "".join(seg.text for seg in segments).strip()
+                if first_text:
+                    print(f"  -> Fast First Word(s): '{first_text}'")
+                    safe_callback(first_text, is_final=False, is_first_word=True)
+                    first_word_sent = True
+                    self.stt_is_listening_event.clear()
 
 
-# How often we run transcription on the accumulated audio buffer
-# *** NEW: Sliding Window Configuration ***
-AUDIO_WINDOW_S = config.get("AUDIO_WINDOW_S", 8)
-AUDIO_WINDOW_FRAMES = int(AUDIO_WINDOW_S * SAMPLE_RATE)
+        def process_and_transcribe_chunk():
+            """Process and transcribe with full accuracy settings."""
+            nonlocal committed_transcript, current_chunk_audio
+            if not current_chunk_audio:
+                return
 
+            # Create a NumPy array from the buffered audio chunks
+            audio_np = np.concatenate(current_chunk_audio, axis=0).flatten()
+            current_chunk_audio.clear()
+            
+            # Guard against transcribing fragments that are too short
+            if len(audio_np) / self.sample_rate < self.min_chunk_s_for_interim:
+                return
 
-# Silence duration to consider a user's turn complete
+            print(f"  -> Full transcribing {len(audio_np)/self.sample_rate:.2f}s audio...")
+            
+            # Full accuracy transcription
+            segments, _ = self.model.transcribe(
+                audio_np,
+                language=self.language,
+                beam_size=self.beam_size,  # Full beam size for accuracy
+                initial_prompt=committed_transcript,
+                temperature=0.0,  # Low temp for accuracy
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=250),
+            )
+
+            new_text = "".join(seg.text for seg in segments).strip()
+
+            # Handle Whisper repeating the prompt
+            if new_text and not new_text.lower().strip().startswith(committed_transcript.lower().strip()):
+                committed_transcript += " " + new_text
+            else:
+                committed_transcript = new_text
+
+            committed_transcript = committed_transcript.strip()
+            print(f"  -> Full Transcript: '{committed_transcript}'")
+            safe_callback(committed_transcript, is_final=False)
+
+        def audio_callback(indata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
+            """Audio callback function for sounddevice."""
+            nonlocal vad_is_currently_speech, last_speech_time, turn_is_active, turn_start_time
+            if stop_event.is_set(): 
+                raise sd.CallbackStop
+
+            try:
+                audio_segment_int16 = (indata * 32767).astype(np.int16)
+                vad_is_currently_speech = vad.is_speech(audio_segment_int16.tobytes(), self.sample_rate)
+
+                if vad_is_currently_speech:
+                    if not turn_is_active:
+                        turn_is_active = True
+                        first_word_sent = False  # Reset for new turn
+
+                        print("\nSpeech started...")
+                    last_speech_time = time.monotonic()
+                    current_chunk_audio.append(indata.copy())
+                    if not turn_start_time:
+                        turn_start_time = time.monotonic()
+            except Exception as e:
+                print(f"Error in audio callback: {e}")
+
+        print("STT stream started [Fast-First Model].")
+
+        try:
+            with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype=self.audio_dtype,
+                                blocksize=self.frame_size, callback=audio_callback, device=device_index):
+                
+                while not stop_event.is_set():
+                    current_time = time.monotonic()
+                    time_since_last_speech = current_time - last_speech_time
+                    
+                    # Fast first word trigger - very early in the speech
+                    if (turn_is_active and not first_word_sent and 
+                        len(current_chunk_audio) > 0 and vad_is_currently_speech and
+                        turn_start_time > 0.3):  # Just 300ms after speech starts
+                        transcribe_first_word()
+                        print("transcribing first word", turn_start_time)
+                        turn_start_time = 0.0
+                        # first_word_sent = True
+                    # print(turn_start_time)
+                    # print(turn_is_active, first_word_sent, time_since_last_speech)
+                    
+                    # Proactive pause trigger for full transcription
+                    has_paused = not vad_is_currently_speech and turn_is_active
+                    if has_paused and time_since_last_speech > self.proactive_pause_s:
+                        process_and_transcribe_chunk()
+
+                    # Finalization trigger
+                    if turn_is_active and first_word_sent and time_since_last_speech > self.silence_duration_s_for_finalize:
+                        # Process any final, lingering audio
+
+                        self.stt_is_listening_event.set()
+                        self.stt_can_finish_event.wait()
+                        process_and_transcribe_chunk()
+                        
+                        if committed_transcript:
+                            print(f"Finalizing with: '{committed_transcript}'")
+                            safe_callback(committed_transcript, is_final=True)
+
+                        
+                        # Reset for the next turn
+                        turn_is_active = False
+                        committed_transcript = ""
+                        first_word_sent = False
+                        self.stt_can_finish_event.clear()
+
+                    # Sleep for polling rate
+                    time.sleep(0.02)
+
+        except Exception as e:
+            print(f"Error in STT stream: {e}\n{traceback.format_exc()}")
+        finally:
+            print("STT stream stopped.")
+
+    
+    def list_available_input_devices(self):
+        """List available audio input devices."""
+        return list_available_input_devices()
 
 def list_available_input_devices():
     """Lists available audio input devices using sounddevice."""
@@ -97,6 +360,38 @@ def list_available_input_devices():
     if not input_devices:
         print("No input devices found. Ensure microphone is connected and drivers are installed.")
     return input_devices
+
+
+def warmup_stt():
+    """
+    Warms up the STT model by running a dummy transcription.
+
+    This function should be called once after the Whisper model is loaded.
+    It processes a short silent audio clip, which triggers the Just-In-Time (JIT)
+    compilation and kernel caching in CTranslate2 (the backend for faster-whisper).
+    This significantly reduces the latency of the very first "real" transcription.
+    """
+    if not whisper_model:
+        print("Warmup skipped: Whisper model is not available.")
+        return
+
+    print("Warming up the STT model...")
+    start_time = time.monotonic()
+    
+    # Create a short, silent audio array. 0.5 seconds of silence is plenty.
+    # The audio format must match what the model expects: 16kHz, float32.
+    silent_audio = np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32)
+    
+    # Run a transcription on the silent audio
+    # We don't need the result, just the act of running it is the warmup.
+    try:
+        # Use simple parameters for the warmup
+        _, _ = whisper_model.transcribe(silent_audio, beam_size=1, language=LANGUAGE)
+        
+        end_time = time.monotonic()
+        print(f"STT model warmed up in {end_time - start_time:.2f} seconds.")
+    except Exception as e:
+        print(f"An error occurred during STT model warmup: {e}")
 
 
 def recognize_speech_stream(
@@ -231,88 +526,19 @@ def recognize_speech_stream(
         print("STT stream stopped.")
 
 
-async def speech_to_text(
-                         callback, 
-                         terminate_event: asyncio.Event,
-                         terminate_current_dialogue_event: asyncio.Event,
-                         is_audio_streaming_event: asyncio.Event = asyncio.Event(),
-                         device_index: int = None
-):
-    if not whisper_model:
-        return
-
-    stop_stt_thread_event = threading.Event()
-    main_loop = asyncio.get_running_loop()
-
-    stt_thread = threading.Thread(
-        target=recognize_speech_stream,
-        args=(callback, stop_stt_thread_event, main_loop, device_index)
-    )
-    stt_thread.start()
-
-    # Run the consumer task
-
-    await terminate_event.wait()
-
-    # Cleanup
-    print("Termination signal received. Shutting down...")
-    stop_stt_thread_event.set()
-    await asyncio.sleep(0.2)
-    # consumer.cancel()
-    stt_thread.join(timeout=2)
-    print("STT service shut down.")
 
 
-if __name__ == "__main__":
-    async def _stt_test_callback(speech_text):
-        """This function is now the final destination for a complete utterance."""
-        print(f"\n\n--- FINAL TRANSCRIPT RECEIVED ---\n'{speech_text}'\n---------------------------------\n")
 
-    async def main_test_loop():
-        print("Listing available input devices...")
-        list_available_input_devices()
+
+
+
+
+
+
+
+
+
+
+
+
         
-        # Using system default device for simplicity in this example
-        # You can uncomment and adapt your device selection logic here if needed
-        selected_device_index = None 
-        print(f"Using system default input device.")
-        
-        print("\n--- Starting Real-Time STT Test ---")
-        print("Speak into the microphone. The system will transcribe in real-time.")
-        print("It will print the final text after you pause or end a sentence with punctuation.")
-        print("The test will run for 30 seconds or until you press Ctrl+C.")
-        
-        # This event will be used to signal shutdown for the entire application
-        terminate_event = asyncio.Event()
-
-        try:
-            # Start the STT service. It will run in the background.
-            stt_service_task = asyncio.create_task(
-                speech_to_text(
-                    _stt_test_callback,
-                    terminate_event,
-                    device_index=None
-                )
-            )
-
-            # Wait for a fixed duration for testing, or until the user interrupts
-            await asyncio.sleep(60)
-
-        except asyncio.CancelledError:
-            print("\nMain loop cancelled.")
-        except KeyboardInterrupt:
-            print("\nTest stopped by user (Ctrl+C).")
-        except Exception as e:
-            print(f"An error occurred in the main test loop: {e}")
-            traceback.print_exc()
-        finally:
-            print("--- Exiting STT test program ---")
-            # Signal the STT service to shut down gracefully
-            terminate_event.set()
-            # Wait for the service to finish cleaning up
-            await asyncio.sleep(1) 
-
-    if WhisperModel and whisper_model:
-        asyncio.run(main_test_loop())
-    else:
-        print("Whisper model not loaded. Cannot run STT test.")
