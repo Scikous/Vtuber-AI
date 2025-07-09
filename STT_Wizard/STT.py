@@ -319,7 +319,7 @@ class WhisperSTT(STTBase):
                     # Finalization trigger
                     if turn_is_active and first_word_sent and time_since_last_speech > self.silence_duration_s_for_finalize:
                         # Process any final, lingering audio
-
+                        print("finalizing")
                         self.stt_is_listening_event.set()
                         self.stt_can_finish_event.wait()
                         process_and_transcribe_chunk()
@@ -362,183 +362,117 @@ def list_available_input_devices():
     return input_devices
 
 
-def warmup_stt():
-    """
-    Warms up the STT model by running a dummy transcription.
 
-    This function should be called once after the Whisper model is loaded.
-    It processes a short silent audio clip, which triggers the Just-In-Time (JIT)
-    compilation and kernel caching in CTranslate2 (the backend for faster-whisper).
-    This significantly reduces the latency of the very first "real" transcription.
-    """
-    if not whisper_model:
-        print("Warmup skipped: Whisper model is not available.")
-        return
+if __name__ == "__main__":
+    # This script is designed to be part of a package. To run it standalone,
+    # you may need to adjust the relative imports at the top of the file.
+    # For example, change:
+    # from .utils.config import load_config
+    # to a mock version if you don't have the package structure:
+    # def load_config(): return {}
+    # And create a dummy STTBase class:
+    # class STTBase:
+    #     def __init__(self, *args, **kwargs): pass
+    #     def _load_model(self): raise NotImplementedError
 
-    print("Warming up the STT model...")
-    start_time = time.monotonic()
+    async def main_callback(text: str, is_final: bool, is_first_word: bool):
+        """
+        Asynchronous callback function to handle transcription results.
+        This function is executed in the main thread's asyncio event loop.
+        """
+        print(f"Transcript -> is_first_word: {is_first_word}, is_final: {is_final}, text: \"{text}\"")
+
+    # 1. Initialize threading events required by the WhisperSTT class
+    # This event is set by STT when it detects a pause and is waiting for a signal to finalize.
+    stt_is_listening_event = threading.Event()
+    # This event is set by an external process (e.g., an LLM) to tell STT it can finalize.
+    stt_can_finish_event = threading.Event()
     
-    # Create a short, silent audio array. 0.5 seconds of silence is plenty.
-    # The audio format must match what the model expects: 16kHz, float32.
-    silent_audio = np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32)
-    
-    # Run a transcription on the silent audio
-    # We don't need the result, just the act of running it is the warmup.
+    # 2. Instantiate the STT model
     try:
-        # Use simple parameters for the warmup
-        _, _ = whisper_model.transcribe(silent_audio, beam_size=1, language=LANGUAGE)
-        
-        end_time = time.monotonic()
-        print(f"STT model warmed up in {end_time - start_time:.2f} seconds.")
-    except Exception as e:
-        print(f"An error occurred during STT model warmup: {e}")
-
-
-def recognize_speech_stream(
-    callback,
-    stop_event: threading.Event,
-    loop: asyncio.AbstractEventLoop,
-    device_index: int = None
-):
-    """
-    An optimized, single-threaded speech recognition stream.
-
-    This model prioritizes stability and simplicity. It accepts the inherent
-    latency of the whisper.transcribe() call (~200ms) as a floor and builds
-    the most responsive system possible around it.
-    """
-    if not whisper_model:
-        print("Whisper model not available.")
-        return
-
-    vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
-
-    # --- State Variables ---
-    vad_is_currently_speech = False
-    turn_is_active = False
-    last_speech_time = time.monotonic()
-    
-    current_chunk_audio = []
-    committed_transcript = ""
-
-    def safe_callback(text, is_final):
-        asyncio.run_coroutine_threadsafe(callback(text, is_final), loop)
-
-    def process_and_transcribe_chunk():
-        """
-        Takes the current audio buffer, transcribes it, and updates the state.
-        This is the primary "work" function.
-        """
-        nonlocal committed_transcript, current_chunk_audio
-        if not current_chunk_audio:
-            return
-
-        # Create a NumPy array from the buffered audio chunks
-        audio_np = np.concatenate(current_chunk_audio, axis=0).flatten()
-        current_chunk_audio.clear()
-        
-        # Guard against transcribing fragments that are too short
-        if len(audio_np) / SAMPLE_RATE < MIN_CHUNK_S_FOR_INTERIM:
-            return
-
-        print(f"  -> Transcribing {len(audio_np)/SAMPLE_RATE:.2f}s audio...")
-        
-        # --- The Blocking Call ---
-        # We accept that this call will block the loop for ~200-400ms.
-        segments, _ = whisper_model.transcribe(
-            audio_np,
-            language=LANGUAGE,
-            beam_size=BEAM_SIZE,
-            initial_prompt=committed_transcript,
-            temperature=0.0,
-            vad_filter=True, # Use Whisper's VAD for a final cleanup
-            vad_parameters=dict(min_silence_duration_ms=250),
+        whisper_model = WhisperSTT(
+            stt_is_listening_event=stt_is_listening_event,
+            stt_can_finish_event=stt_can_finish_event
         )
+    except NameError:
+        print("Could not initialize WhisperSTT. Make sure all dependencies are installed and imports are correct.")
+        exit(1)
 
-        new_text = "".join(seg.text for seg in segments).strip()
-
-        # Handle Whisper repeating the prompt
-        if new_text and not new_text.lower().strip().startswith(committed_transcript.lower().strip()):
-            committed_transcript += " " + new_text
-        else:
-            committed_transcript = new_text
-
-        committed_transcript = committed_transcript.strip()
-        print(f"  -> Interim Transcript: '{committed_transcript}'")
-        safe_callback(committed_transcript, is_final=False)
-
-    def audio_callback(indata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
-        """This function is called by sounddevice. It's kept extremely light."""
-        nonlocal vad_is_currently_speech, last_speech_time, turn_is_active
-        if stop_event.is_set(): raise sd.CallbackStop
-
+    # 3. Select an audio device
+    print("\nListing available audio input devices...")
+    devices = list_available_input_devices()
+    device_index = None
+    if devices:
         try:
-            audio_segment_int16 = (indata * 32767).astype(np.int16)
-            vad_is_currently_speech = vad.is_speech(audio_segment_int16.tobytes(), SAMPLE_RATE)
+            choice = input(f"Enter the device ID to use (or press Enter for default): ")
+            if choice.strip():
+                device_index = int(choice)
+                print(f"Using device ID {device_index}.")
+            else:
+                print("Using default audio device.")
+        except (ValueError, IndexError):
+            print("Invalid input. Using default audio device.")
+            device_index = None
+    
+    # 4. Set up for threading and graceful shutdown
+    stop_event = threading.Event()
+    loop = asyncio.get_event_loop()
 
-            if vad_is_currently_speech:
-                if not turn_is_active:
-                    turn_is_active = True
-                    print("\nSpeech started...")
-                last_speech_time = time.monotonic()
-                current_chunk_audio.append(indata.copy())
-        except Exception as e:
-            print(f"Error in audio callback: {e}")
+    # 5. The listen_and_transcribe function is blocking, so it must run in a separate thread.
+    listener_thread = threading.Thread(
+        target=whisper_model.listen_and_transcribe,
+        args=(main_callback, stop_event, loop, device_index),
+        daemon=True
+    )
 
-    print("STT stream started [Optimized Single-Threaded Model].")
-
-    try:
-        with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype=AUDIO_DTYPE,
-                             blocksize=FRAME_SIZE, callback=audio_callback, device=device_index):
+    # 6. This thread simulates an external component (like an LLM) that controls when
+    # the STT should finalize its transcription.
+    def llm_interaction_simulator():
+        while not stop_event.is_set():
+            # Wait until the STT signals that it has detected a pause in speech.
+            stt_is_listening_event.wait(timeout=1.0) 
+            if stop_event.is_set():
+                break
             
-            while not stop_event.is_set():
-                current_time = time.monotonic()
-                time_since_last_speech = current_time - last_speech_time
+            if stt_is_listening_event.is_set():
+                print("\n[SIMULATOR] STT is paused. Simulating LLM response time...")
+                time.sleep(1.5)  # Simulate work
                 
-                # --- Proactive Pause Trigger ---
-                # This is the core of our low-latency logic. If the user has paused
-                # briefly, we immediately process the audio collected so far.
-                has_paused = not vad_is_currently_speech and turn_is_active
-                if has_paused and time_since_last_speech > PROACTIVE_PAUSE_S:
-                    process_and_transcribe_chunk()
+                print("[SIMULATOR] LLM ready. Allowing STT to finalize.")
+                stt_can_finish_event.set()  # Signal STT to proceed with finalization
+                stt_is_listening_event.clear() # Reset the event for the next turn
 
-                # --- Finalization Trigger ---
-                # If the turn has been silent for a longer period, we finalize it.
-                if turn_is_active and time_since_last_speech > SILENCE_DURATION_S_FOR_FINALIZE:
-                    # Process any final, lingering audio
-                    process_and_transcribe_chunk()
-                    
-                    if committed_transcript:
-                        print(f"Finalizing with: '{committed_transcript}'")
-                        safe_callback(committed_transcript, is_final=True)
-                    
-                    # Reset for the next turn
-                    turn_is_active = False
-                    committed_transcript = ""
+    llm_sim_thread = threading.Thread(target=llm_interaction_simulator, daemon=True)
 
-                # The sleep duration determines the polling rate for our logic.
-                # A lower value makes the pause detection more responsive.
-                time.sleep(0.02)
-
-    except Exception as e:
-        print(f"Error in STT stream: {e}\n{traceback.format_exc()}")
-    finally:
-        print("STT stream stopped.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    print("\nStarting listener. Speak into your microphone. Press Ctrl+C to stop.")
+    try:
+        listener_thread.start()
+        llm_sim_thread.start()
         
+        # The main thread runs the asyncio event loop to execute the callbacks
+        # scheduled by the listener_thread.
+        loop.run_forever()
+
+    except KeyboardInterrupt:
+        print("\nCaught interrupt signal. Shutting down gracefully.")
+    finally:
+        # 7. Graceful shutdown sequence
+        stop_event.set()
+        
+        # Unblock any waiting events to allow threads to exit cleanly
+        stt_is_listening_event.set()
+        stt_can_finish_event.set()
+        
+        if listener_thread.is_alive():
+            listener_thread.join()
+        if llm_sim_thread.is_alive():
+            llm_sim_thread.join()
+
+        if loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+            
+        # Closing the loop can sometimes cause issues on exit. It's often
+        # sufficient to just stop it and let the program terminate.
+        # loop.close()
+        
+        print("Shutdown complete.")
