@@ -24,7 +24,9 @@ except:
     print(f"Could not load tokenizer for {MODEL_PATH}. Ensure you are logged in or the model is available.")
     sys.exit(1)
 
-
+# Define paths (consider making these configurable, e.g., via argparse)
+BASE_PATH = "LLM_Wizard/dataset/"
+CSV_PATH = BASE_PATH + "John_Smith_Base.csv" # Your input CSV    
 # Load character details (globally or pass as needed)
 CHARACTER_JSON_PATH = 'LLM_Wizard/characters/character.json'
 # Dummy character loading will be handled in main() if file doesn't exist
@@ -306,18 +308,14 @@ def load_and_apply_chat_template(
 
 # --- Main Execution ---
 def main():
-    # Define paths (consider making these configurable, e.g., via argparse)
-    base_path = "LLM_Wizard/dataset/"
-    csv_path = base_path + "John_Smith_Base.csv" # Your input CSV
-    
     # --- END NEW ---
     
     # Create dummy CSV and character.json if they don't exist for the script to run
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    os.makedirs(os.path.dirname(CSV_PATH), exist_ok=True)
     os.makedirs(os.path.dirname(CHARACTER_JSON_PATH), exist_ok=True)
 
-    if not os.path.exists(csv_path):
-        print(f"Creating dummy CSV at {csv_path}")
+    if not os.path.exists(CSV_PATH):
+        print(f"Creating dummy CSV at {CSV_PATH}")
         # Add more data to test the trimming logic
         dummy_data = {
             'user': [f"Turn {i}" for i in range(1, 18)] + ["Hi", "Hello again"],
@@ -325,7 +323,7 @@ def main():
             'context': [f"Context for turn {i}" for i in range(1, 18)] + ["Greeting", "Follow-up"],
             'conversation_id': ["long_conv"] * 17 + ["short_conv"] * 2
         }
-        pd.DataFrame(dummy_data).to_csv(csv_path, index=False)
+        pd.DataFrame(dummy_data).to_csv(CSV_PATH, index=False)
 
     if not os.path.exists(CHARACTER_JSON_PATH):
         print(f"Creating dummy character JSON at {CHARACTER_JSON_PATH}")
@@ -342,9 +340,9 @@ def main():
     INSTRUCTIONS, USER_NAME, CHARACTER_NAME = load_character(CHARACTER_JSON_PATH)
 
 
-    raw_finetuning_parquet_path = base_path + "finetuning_input.parquet"
-    calibration_parquet_path = base_path + "exllama_calibration.parquet"
-    final_templated_parquet_path = base_path + "final_templated_finetuning_data.parquet"
+    raw_finetuning_parquet_path = BASE_PATH + "finetuning_input.parquet"
+    calibration_parquet_path = BASE_PATH + "exllama_calibration.parquet"
+    final_templated_parquet_path = BASE_PATH + "final_templated_finetuning_data.parquet"
 
 
     print(f"Using tokenizer: {MODEL_PATH}")
@@ -352,10 +350,10 @@ def main():
     print(f"System Instructions (loaded from {CHARACTER_JSON_PATH}):\n{INSTRUCTIONS}\n")
 
     # 1. Prepare the raw input Parquet for fine-tuning (user, character, context columns)
-    prepare_finetuning_input_parquet(csv_path, raw_finetuning_parquet_path)
+    prepare_finetuning_input_parquet(CSV_PATH, raw_finetuning_parquet_path)
 
     # 2. Prepare the Parquet for ExLlamaV2 calibration (text column)
-    prepare_exllamav2_calibration_parquet(csv_path, calibration_parquet_path)
+    prepare_exllamav2_calibration_parquet(CSV_PATH, calibration_parquet_path)
 
     dataset_dict = load_dataset("parquet", data_files={"train": calibration_parquet_path})
     print("WHEHEE"*10,'\n',dataset_dict["text"])

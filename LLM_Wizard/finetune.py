@@ -15,7 +15,7 @@ import argparse
 # 1️⃣ CONFIGURATION
 # ======================================================================================
 # Set your fine-tuning mode here: "language" or "vision"
-FINETUNING_MODE = "language" # or "language"
+FINETUNING_MODE = "language"
 
 # You can also use command-line arguments for more flexibility
 # parser = argparse.ArgumentParser(description="Unified Fine-tuning Script for Qwen2.5-VL")
@@ -26,14 +26,14 @@ FINETUNING_MODE = "language" # or "language"
 # ======================================================================================
 # 2️⃣ COMMON SETUP: Model ID, Dataset, and Paths
 # ======================================================================================
-model_id = "unsloth/Qwen2.5-VL-7B-Instruct-bnb-4bit"
-dataset_path = "LLM_Wizard/dataset/final_templated_finetuning_data.parquet"
-output_dir = f"LLM_Wizard/qwen2.5-vl-finetune-{FINETUNING_MODE}"
-save_dir = f"LLM_Wizard/qwen2.5-vl-finetune-merged-{FINETUNING_MODE}"
+MODEL_ID = "unsloth/Qwen2.5-VL-7B-Instruct-bnb-4bit"
+DATASET_PATH = "LLM_Wizard/dataset/final_templated_finetuning_data.parquet"
+OUTPUT_DIR = f"LLM_Wizard/qwen2.5-vl-finetune-{FINETUNING_MODE}"
+SAVE_DIR = f"LLM_Wizard/qwen2.5-vl-finetune-merged-{FINETUNING_MODE}"
 
 # Load the dataset once
-dataset = load_dataset("parquet", data_files={"train": dataset_path})
-print(f"✅ Successfully loaded dataset from {dataset_path}")
+dataset = load_dataset("parquet", data_files={"train": DATASET_PATH})
+print(f"✅ Successfully loaded dataset from {DATASET_PATH}")
 
 # ======================================================================================
 # 3️⃣ MODE-SPECIFIC SETUP: Model Loading and PEFT Configuration
@@ -42,7 +42,7 @@ if FINETUNING_MODE == "vision":
     print("🚀 Initializing VISION fine-tuning mode...")
     # Load model and tokenizer using FastVisionModel
     model, tokenizer = FastVisionModel.from_pretrained(
-        model_id,
+        MODEL_ID,
         load_in_4bit=True,
         use_gradient_checkpointing="unsloth",
     )
@@ -83,7 +83,7 @@ if FINETUNING_MODE == "vision":
         "weight_decay": 0.01,
         "lr_scheduler_type": "linear",
         "seed": 3407,
-        "output_dir": output_dir,
+        "OUTPUT_DIR": OUTPUT_DIR,
         "report_to": "none",     # For Weights and Biases
         
         # You MUST put the below items for vision finetuning:
@@ -98,7 +98,7 @@ elif FINETUNING_MODE == "language":
     print("🚀 Initializing LANGUAGE fine-tuning mode...")
     # Load model and tokenizer using FastLanguageModel
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_id,
+        MODEL_ID,
         load_in_4bit=True,
         use_gradient_checkpointing="unsloth",
     )
@@ -142,7 +142,7 @@ elif FINETUNING_MODE == "language":
         "weight_decay": 0.01,
         "lr_scheduler_type": "linear",
         "seed": 3407,
-        "output_dir": output_dir,
+        "OUTPUT_DIR": OUTPUT_DIR,
         "report_to": "none",     # For Weights and Biases
     # max_seq_length=2048,
 
@@ -175,6 +175,6 @@ trainer.train()
 print("✅ Training complete.")
 
 # Save the final merged model
-print(f"💾 Saving merged model to {save_dir}...")
-model.save_pretrained_merged(save_dir, tokenizer, save_method="merged_16bit")
-print(f"✅ Model successfully saved to {save_dir}")
+print(f"💾 Saving merged model to {SAVE_DIR}...")
+model.save_pretrained_merged(SAVE_DIR, tokenizer, save_method="merged_16bit")
+print(f"✅ Model successfully saved to {SAVE_DIR}")
