@@ -168,8 +168,9 @@ class TTSService(BaseService):
                     self.is_audio_streaming_event.clear()
                     await asyncio.sleep(0.05)
                     continue
-
+                print("PRE LLM MESSAGE"*10)
                 llm_message = await self.llm_output_queue.get()
+                print("LLM MESSAGE", llm_message)
                 if self.logger:
                     self.logger.debug(f"TTS Service received message: {str(llm_message)[:100]}...")
                 

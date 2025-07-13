@@ -2,6 +2,9 @@
 Handles the generation of responses using the LLM.
 Manages its own LLM model loading and character configuration using a context manager.
 """
+# from dotenv import load_dotenv
+# load_dotenv()
+
 import asyncio
 import os
 from collections import deque
@@ -10,7 +13,6 @@ from LLM_Wizard.models import LLMModelConfig, VtuberExllamav2
 from utils.file_operations import write_messages_csv
 from utils.env_utils import get_env_var
 from .base_service import BaseService
-
 class DialogueService(BaseService):
     def __init__(self, shared_resources):
         super().__init__(shared_resources)

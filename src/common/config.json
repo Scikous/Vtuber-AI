@@ -21,7 +21,7 @@
         "DEVICE": "cuda",
         "COMPUTE_TYPE": "int8_float16",
         
-        "DEVICE_INDEX": 10,
+        "DEVICE_INDEX": 17,
         "SAMPLE_RATE": 16000,
         "CHANNELS": 1,
         "AUDIO_DTYPE": "float32",
