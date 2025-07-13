@@ -88,10 +88,16 @@ class WhisperSTT(STTBase):
         self.stt_is_listening_event = stt_is_listening_event
         self.stt_can_finish_event = stt_can_finish_event
         # Initialize the parent class
-        super().__init__(model_path=self.model_size, device=self.device, compute_type=self.compute_type)
+        # The model is now loaded explicitly, not in the constructor.
+        self.model = None
+        # super().__init__(model_path=self.model_size, device=self.device, compute_type=self.compute_type)
     
     def _load_model(self):
         """Load the Whisper model."""
+        if self.model:
+            print("Model already loaded.")
+            return
+
         if not WhisperModel:
             print("WhisperModel could not be imported. STT will not function.")
             self.model = None
@@ -159,6 +165,75 @@ class WhisperSTT(STTBase):
         
         return "".join(seg.text for seg in segments).strip()
     
+    def transcribe_audio_sync(self, audio_data: np.ndarray, **kwargs) -> str:
+        """Synchronous wrapper for transcribe_audio."""
+        return asyncio.run(self.transcribe_audio(audio_data, **kwargs))
+
+    def listen_and_buffer(self, full_utterance_callback, fast_transcribe_callback, stop_event: threading.Event, user_has_stopped_speaking_event: threading.Event, device_index: int = None):
+        """
+        Listens to the microphone, performs VAD, and calls callbacks for both
+        a fast, initial transcription and the full utterance.
+        """
+        vad = webrtcvad.Vad(self.vad_aggressiveness)
+        audio_buffer = deque()
+        is_speaking = False
+        fast_transcribe_triggered = False
+        last_speech_time = time.monotonic()
+        
+        # Buffer for the initial chunk for fast transcription
+        fast_transcribe_chunk_s = 0.5 # 500ms
+        fast_transcribe_frames = int(fast_transcribe_chunk_s * self.sample_rate)
+        
+        def audio_callback(indata: np.ndarray, frames: int, time_info, status):
+            nonlocal is_speaking, last_speech_time, fast_transcribe_triggered
+            if stop_event.is_set():
+                raise sd.CallbackStop
+
+            try:
+                audio_segment_int16 = (indata * 32767).astype(np.int16)
+                is_speech = vad.is_speech(audio_segment_int16.tobytes(), self.sample_rate)
+                
+                if is_speech:
+                    if not is_speaking:
+                        print("Speech detected.")
+                        is_speaking = True
+                        fast_transcribe_triggered = False
+                        user_has_stopped_speaking_event.clear()
+
+                    audio_buffer.extend(indata.flatten().tolist())
+                    last_speech_time = time.monotonic()
+
+                    # Trigger fast transcribe after collecting a small chunk
+                    if not fast_transcribe_triggered and len(audio_buffer) > fast_transcribe_frames:
+                        fast_chunk = np.array(list(audio_buffer), dtype=np.float32)
+                        fast_transcribe_callback(fast_chunk)
+                        fast_transcribe_triggered = True
+
+                elif is_speaking:
+                    audio_buffer.extend(indata.flatten().tolist())
+            except Exception as e:
+                print(f"Error in audio callback: {e}")
+
+        print("STT is listening...")
+        try:
+            with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype=self.audio_dtype,
+                                blocksize=self.frame_size, callback=audio_callback, device=device_index):
+                while not stop_event.is_set():
+                    time.sleep(0.1)
+                    if is_speaking and (time.monotonic() - last_speech_time) > self.silence_duration_s_for_finalize:
+                        print("End of speech detected.")
+                        user_has_stopped_speaking_event.set()
+                        
+                        audio_data_np = np.array(list(audio_buffer), dtype=np.float32)
+                        audio_buffer.clear()
+                        is_speaking = False
+                        
+                        full_utterance_callback(audio_data_np)
+        except Exception as e:
+            print(f"Error in STT listen_and_buffer: {e}\n{traceback.format_exc()}")
+        finally:
+            print("STT listening stopped.")
+
     def listen_and_transcribe(self, callback, stop_event, loop, device_index, **kwargs):
         """Listen for audio input and transcribe it.
         
@@ -308,8 +383,6 @@ class WhisperSTT(STTBase):
                         print("transcribing first word", turn_start_time)
                         turn_start_time = 0.0
                         # first_word_sent = True
-                    # print(turn_start_time)
-                    # print(turn_is_active, first_word_sent, time_since_last_speech)
                     
                     # Proactive pause trigger for full transcription
                     has_paused = not vad_is_currently_speech and turn_is_active
@@ -363,116 +436,116 @@ def list_available_input_devices():
 
 
 
-if __name__ == "__main__":
-    # This script is designed to be part of a package. To run it standalone,
-    # you may need to adjust the relative imports at the top of the file.
-    # For example, change:
-    # from .utils.config import load_config
-    # to a mock version if you don't have the package structure:
-    # def load_config(): return {}
-    # And create a dummy STTBase class:
-    # class STTBase:
-    #     def __init__(self, *args, **kwargs): pass
-    #     def _load_model(self): raise NotImplementedError
+# if __name__ == "__main__":
+#     # This script is designed to be part of a package. To run it standalone,
+#     # you may need to adjust the relative imports at the top of the file.
+#     # For example, change:
+#     # from .utils.config import load_config
+#     # to a mock version if you don't have the package structure:
+#     # def load_config(): return {}
+#     # And create a dummy STTBase class:
+#     # class STTBase:
+#     #     def __init__(self, *args, **kwargs): pass
+#     #     def _load_model(self): raise NotImplementedError
 
-    async def main_callback(text: str, is_final: bool, is_first_word: bool):
-        """
-        Asynchronous callback function to handle transcription results.
-        This function is executed in the main thread's asyncio event loop.
-        """
-        print(f"Transcript -> is_first_word: {is_first_word}, is_final: {is_final}, text: \"{text}\"")
+#     async def main_callback(text: str, is_final: bool, is_first_word: bool):
+#         """
+#         Asynchronous callback function to handle transcription results.
+#         This function is executed in the main thread's asyncio event loop.
+#         """
+#         print(f"Transcript -> is_first_word: {is_first_word}, is_final: {is_final}, text: \"{text}\"")
 
-    # 1. Initialize threading events required by the WhisperSTT class
-    # This event is set by STT when it detects a pause and is waiting for a signal to finalize.
-    stt_is_listening_event = threading.Event()
-    # This event is set by an external process (e.g., an LLM) to tell STT it can finalize.
-    stt_can_finish_event = threading.Event()
+#     # 1. Initialize threading events required by the WhisperSTT class
+#     # This event is set by STT when it detects a pause and is waiting for a signal to finalize.
+#     stt_is_listening_event = threading.Event()
+#     # This event is set by an external process (e.g., an LLM) to tell STT it can finalize.
+#     stt_can_finish_event = threading.Event()
     
-    # 2. Instantiate the STT model
-    try:
-        whisper_model = WhisperSTT(
-            stt_is_listening_event=stt_is_listening_event,
-            stt_can_finish_event=stt_can_finish_event
-        )
-    except NameError:
-        print("Could not initialize WhisperSTT. Make sure all dependencies are installed and imports are correct.")
-        exit(1)
+#     # 2. Instantiate the STT model
+#     try:
+#         whisper_model = WhisperSTT(
+#             stt_is_listening_event=stt_is_listening_event,
+#             stt_can_finish_event=stt_can_finish_event
+#         )
+#     except NameError:
+#         print("Could not initialize WhisperSTT. Make sure all dependencies are installed and imports are correct.")
+#         exit(1)
 
-    # 3. Select an audio device
-    print("\nListing available audio input devices...")
-    devices = list_available_input_devices()
-    device_index = None
-    if devices:
-        try:
-            choice = input(f"Enter the device ID to use (or press Enter for default): ")
-            if choice.strip():
-                device_index = int(choice)
-                print(f"Using device ID {device_index}.")
-            else:
-                print("Using default audio device.")
-        except (ValueError, IndexError):
-            print("Invalid input. Using default audio device.")
-            device_index = None
+#     # 3. Select an audio device
+#     print("\nListing available audio input devices...")
+#     devices = list_available_input_devices()
+#     device_index = None
+#     if devices:
+#         try:
+#             choice = input(f"Enter the device ID to use (or press Enter for default): ")
+#             if choice.strip():
+#                 device_index = int(choice)
+#                 print(f"Using device ID {device_index}.")
+#             else:
+#                 print("Using default audio device.")
+#         except (ValueError, IndexError):
+#             print("Invalid input. Using default audio device.")
+#             device_index = None
     
-    # 4. Set up for threading and graceful shutdown
-    stop_event = threading.Event()
-    loop = asyncio.get_event_loop()
+#     # 4. Set up for threading and graceful shutdown
+#     stop_event = threading.Event()
+#     loop = asyncio.get_event_loop()
 
-    # 5. The listen_and_transcribe function is blocking, so it must run in a separate thread.
-    listener_thread = threading.Thread(
-        target=whisper_model.listen_and_transcribe,
-        args=(main_callback, stop_event, loop, device_index),
-        daemon=True
-    )
+#     # 5. The listen_and_transcribe function is blocking, so it must run in a separate thread.
+#     listener_thread = threading.Thread(
+#         target=whisper_model.listen_and_transcribe,
+#         args=(main_callback, stop_event, loop, device_index),
+#         daemon=True
+#     )
 
-    # 6. This thread simulates an external component (like an LLM) that controls when
-    # the STT should finalize its transcription.
-    def llm_interaction_simulator():
-        while not stop_event.is_set():
-            # Wait until the STT signals that it has detected a pause in speech.
-            stt_is_listening_event.wait(timeout=1.0) 
-            if stop_event.is_set():
-                break
+#     # 6. This thread simulates an external component (like an LLM) that controls when
+#     # the STT should finalize its transcription.
+#     def llm_interaction_simulator():
+#         while not stop_event.is_set():
+#             # Wait until the STT signals that it has detected a pause in speech.
+#             stt_is_listening_event.wait(timeout=1.0) 
+#             if stop_event.is_set():
+#                 break
             
-            if stt_is_listening_event.is_set():
-                print("\n[SIMULATOR] STT is paused. Simulating LLM response time...")
-                time.sleep(1.5)  # Simulate work
+#             if stt_is_listening_event.is_set():
+#                 print("\n[SIMULATOR] STT is paused. Simulating LLM response time...")
+#                 time.sleep(1.5)  # Simulate work
                 
-                print("[SIMULATOR] LLM ready. Allowing STT to finalize.")
-                stt_can_finish_event.set()  # Signal STT to proceed with finalization
-                stt_is_listening_event.clear() # Reset the event for the next turn
+#                 print("[SIMULATOR] LLM ready. Allowing STT to finalize.")
+#                 stt_can_finish_event.set()  # Signal STT to proceed with finalization
+#                 stt_is_listening_event.clear() # Reset the event for the next turn
 
-    llm_sim_thread = threading.Thread(target=llm_interaction_simulator, daemon=True)
+#     llm_sim_thread = threading.Thread(target=llm_interaction_simulator, daemon=True)
 
-    print("\nStarting listener. Speak into your microphone. Press Ctrl+C to stop.")
-    try:
-        listener_thread.start()
-        llm_sim_thread.start()
+#     print("\nStarting listener. Speak into your microphone. Press Ctrl+C to stop.")
+#     try:
+#         listener_thread.start()
+#         llm_sim_thread.start()
         
-        # The main thread runs the asyncio event loop to execute the callbacks
-        # scheduled by the listener_thread.
-        loop.run_forever()
+#         # The main thread runs the asyncio event loop to execute the callbacks
+#         # scheduled by the listener_thread.
+#         loop.run_forever()
 
-    except KeyboardInterrupt:
-        print("\nCaught interrupt signal. Shutting down gracefully.")
-    finally:
-        # 7. Graceful shutdown sequence
-        stop_event.set()
+#     except KeyboardInterrupt:
+#         print("\nCaught interrupt signal. Shutting down gracefully.")
+#     finally:
+#         # 7. Graceful shutdown sequence
+#         stop_event.set()
         
-        # Unblock any waiting events to allow threads to exit cleanly
-        stt_is_listening_event.set()
-        stt_can_finish_event.set()
+#         # Unblock any waiting events to allow threads to exit cleanly
+#         stt_is_listening_event.set()
+#         stt_can_finish_event.set()
         
-        if listener_thread.is_alive():
-            listener_thread.join()
-        if llm_sim_thread.is_alive():
-            llm_sim_thread.join()
+#         if listener_thread.is_alive():
+#             listener_thread.join()
+#         if llm_sim_thread.is_alive():
+#             llm_sim_thread.join()
 
-        if loop.is_running():
-            loop.call_soon_threadsafe(loop.stop)
+#         if loop.is_running():
+#             loop.call_soon_threadsafe(loop.stop)
             
-        # Closing the loop can sometimes cause issues on exit. It's often
-        # sufficient to just stop it and let the program terminate.
-        # loop.close()
+#         # Closing the loop can sometimes cause issues on exit. It's often
+#         # sufficient to just stop it and let the program terminate.
+#         # loop.close()
         
-        print("Shutdown complete.")
+#         print("Shutdown complete.")

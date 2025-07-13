@@ -33,11 +33,7 @@ class STTBase(ABC):
         self.model_path = model_path
         self.device = device
         self.compute_type = compute_type
-        self.model = None
-
-        # The constructor of the base class triggers the model loading process,
-        # which must be implemented by the subclass.
-        self._load_model()
+        # self._load_model() # Model loading is now explicit
 
     @abstractmethod
     def _load_model(self):
