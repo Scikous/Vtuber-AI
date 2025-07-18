@@ -15,8 +15,15 @@ from transformers import PreTrainedTokenizer
 
 log = logging.getLogger(__name__)
 
-
-def apply_chat_template(instructions, prompt, tokenizer, conversation_history=None, tokenize=True):
+def apply_chat_template(
+    instructions: str,
+    prompt: str,
+    tokenizer: PreTrainedTokenizer,
+    conversation_history: Optional[List[str]] = None,
+    tokenize: bool = True,
+    add_generation_prompt: bool = True,
+    continue_final_message: bool = False
+):
     """
     Applies a chat template to the prompt with optional conversation history.
     
@@ -24,34 +31,36 @@ def apply_chat_template(instructions, prompt, tokenizer, conversation_history=No
         instructions: System instructions string
         prompt: Current user message string
         tokenizer: Tokenizer to use
-        previous_conversation: List of previous messages in order [user_msg1, assistant_msg1, user_msg2, assistant_msg2, ...]
+        conversation_history: List of previous messages in order [user_msg1, assistant_msg1, user_msg2, assistant_msg2, ...]
                             First message should be user, then alternating user/assistant
+        tokenize: Whether to tokenize the output
+        add_generation_prompt: Whether to add a generation prompt
+        continue_final_message: Whether to treat the prompt as a continuation of the assistant's message
     """
-    
     messages = [{"role": "system", "content": instructions}]
     
-    # Add previous conversation history if provided
     if conversation_history:
         for i, msg in enumerate(conversation_history):
-            # Alternate between user and assistant roles
-            # Even indices (0, 2, 4...) are user messages
-            # Odd indices (1, 3, 5...) are assistant messages
+            # even = user, odd = assistant
             role = "user" if i % 2 == 0 else "assistant"
             messages.append({"role": role, "content": msg})
     
-    # Add the current prompt as the latest user message
-    messages.append({"role": "user", "content": prompt})
-    # print("FINAL MESSAGES", messages)
-    if tokenize : add_bos_token = True
-    else: add_bos_token = False
-    tokenized_chat = tokenizer.apply_chat_template(
+    # continue from last LLM generation or create brand new generation
+    if continue_final_message:
+        messages.append({"role": "assistant", "content": prompt})
+    else:
+        messages.append({"role": "user", "content": prompt})
+    
+    # apply_chat_template handles BOS token logic internally when tokenize=True
+    return tokenizer.apply_chat_template(
         messages, 
         tokenize=tokenize, 
-        add_generation_prompt=True,
-        add_bos_token=add_bos_token, 
+        add_generation_prompt=add_generation_prompt,
+        continue_final_message=continue_final_message,
         return_tensors="pt"
     )
-    return tokenized_chat
+
+
 
 def prompt_wrapper(message, context=""):
     from textwrap import dedent
@@ -239,38 +248,3 @@ async def get_image(file: Optional[str] = None, url: Optional[str] = None) -> Im
         except aiohttp.ClientError as e:
             log.error(f"Failed to download image from URL '{url}': {e}")
             raise
-
-def apply_chat_template(
-    instructions: str,
-    prompt: str,
-    tokenizer: PreTrainedTokenizer,
-    conversation_history: Optional[List[str]] = None,
-    tokenize: bool = True
-):
-    """
-    Applies a chat template to the prompt with optional conversation history.
-    
-    Args:
-        instructions: System instructions string.
-        prompt: Current user message string.
-        tokenizer: The Hugging Face tokenizer to use.
-        conversation_history: List of previous messages, alternating between user and assistant.
-                              e.g., [user_msg1, assistant_msg1, user_msg2, ...]
-        tokenize: If True, returns tokenized tensors. If False, returns the formatted string.
-    """
-    messages = [{"role": "system", "content": instructions}]
-    
-    if conversation_history:
-        for i, msg in enumerate(conversation_history):
-            role = "user" if i % 2 == 0 else "assistant"
-            messages.append({"role": role, "content": msg})
-    
-    messages.append({"role": "user", "content": prompt})
-    
-    # apply_chat_template handles BOS token logic internally when tokenize=True
-    return tokenizer.apply_chat_template(
-        messages, 
-        tokenize=tokenize, 
-        add_generation_prompt=True,
-        return_tensors="pt" if tokenize else None
-    )
