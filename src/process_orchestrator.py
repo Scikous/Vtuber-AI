@@ -26,7 +26,6 @@ class ProcessOrchestrator:
         self.config = app_config.load_config()
         self.shutdown_event = mp.Event()
         self.user_has_stopped_speaking_event = mp.Event()
-        self.tts_go_event = mp.Event()
         
         # --- Inter-Process Communication Queues ---
         self.queues = {
@@ -52,14 +51,14 @@ class ProcessOrchestrator:
                 self.shutdown_event,
                 self.queues["stt_stream_queue"],
                 self.queues["llm_control_queue"],
-                self.tts_go_event,
                 self.user_has_stopped_speaking_event
             ]),
             "gpu": (gpu_worker, [
                 self.shutdown_event, 
                 self.queues["llm_control_queue"], 
                 self.queues["llm_to_tts_queue"],
-                self.tts_go_event
+                self.user_has_stopped_speaking_event
+
             ]),
         }
         

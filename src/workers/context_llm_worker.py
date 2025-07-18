@@ -15,7 +15,6 @@ logger = app_logger.get_logger("ContextLLMWorker")
 async def context_runner(shutdown_event: mp.Event, 
                          stt_stream_queue: mp.Queue, 
                          llm_control_queue: mp.Queue, 
-                         tts_go_event: mp.Event,
                          user_has_stopped_speaking_event: mp.Event):
     """The main async runner for the Context LLM worker."""
     config = app_config.load_config()
@@ -35,12 +34,13 @@ async def context_runner(shutdown_event: mp.Event,
         logger.info("✅ Context LLM model loaded.")
         
         initial_prompt = None
+        tts_playback_approved = False
 
         while not shutdown_event.is_set():
             try:
-                if user_has_stopped_speaking_event.is_set() and not tts_go_event.is_set():
+                if user_has_stopped_speaking_event.is_set() and not tts_playback_approved:
                     logger.info("Context Worker: User stopped speaking. Approving TTS playback.")
-                    tts_go_event.set()
+                    tts_playback_approved = True
                     try:
                         # STT sends finalized the most clean transcript
                         # If initial prompt is not None, assume transcript meaning hasn't changed
@@ -53,6 +53,7 @@ async def context_runner(shutdown_event: mp.Event,
                     initial_prompt = None
 
                 if not stt_stream_queue.empty():
+                    tts_playback_approved = False
                     transcript = stt_stream_queue.get_nowait()
                     print("CONTEXT WORKER: Received sentence:", transcript)
                     if initial_prompt is None:
@@ -89,14 +90,13 @@ async def context_runner(shutdown_event: mp.Event,
 def context_llm_worker(shutdown_event: mp.Event, 
                          stt_stream_queue: mp.Queue, 
                          llm_control_queue: mp.Queue, 
-                         tts_go_event: mp.Event,
                          user_has_stopped_speaking_event: mp.Event):
     """Entry point for the Context LLM worker process."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(context_runner(
-            shutdown_event, stt_stream_queue, llm_control_queue, tts_go_event, user_has_stopped_speaking_event
+            shutdown_event, stt_stream_queue, llm_control_queue, user_has_stopped_speaking_event
         ))
     except KeyboardInterrupt:
         pass

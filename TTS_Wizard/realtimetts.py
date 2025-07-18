@@ -34,7 +34,7 @@ class RealTimeTTS():
         self.stt_can_finish_event = stt_can_finish_event or threading.Event()
 
         # This event is passed from the orchestrator, controlled by the STT VAD
-        self.tts_go_event = kwargs.get("tts_go_event")
+        self.user_has_stopped_speaking_event = kwargs.get("user_has_stopped_speaking_event")
         
         # Internal state for timing
         self.start_time = None
@@ -85,9 +85,9 @@ class RealTimeTTS():
 
         def on_audio_chunk(_):
             # Gate playback based on user speaking state
-            if self.tts_go_event and not self.tts_go_event.is_set():
+            if self.user_has_stopped_speaking_event and not self.user_has_stopped_speaking_event.is_set():
                 print("User is speaking, holding TTS playback...")
-                self.tts_go_event.wait() # Block until STT sets the event
+                self.user_has_stopped_speaking_event.wait() # Block until STT sets the event
 
         return before_sentence_callback, on_sentence_callback, on_audio_chunk
 

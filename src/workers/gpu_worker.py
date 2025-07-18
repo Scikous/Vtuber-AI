@@ -16,7 +16,7 @@ from LLM_Wizard.models import LLMModelConfig, VtuberExllamav2
 from LLM_Wizard.model_utils import load_character, contains_sentence_terminator
 from TTS_Wizard.realtimetts import RealTimeTTS, pipertts_engine, coquitts_engine
 
-async def gpu_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, tts_go_event):
+async def gpu_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, user_has_stopped_speaking_event):
     """The main async runner for the GPU worker."""
     logger = app_logger.get_logger("GPUWorker")
     config = app_config.load_config()
@@ -32,7 +32,7 @@ async def gpu_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, tts_go
         tts_engine = pipertts_engine(tts_settings.get("model_file"), tts_settings.get("config_file"), tts_settings.get("piper_path"))
     else: # coqui
         tts_engine = coquitts_engine(use_deepspeed=True)
-    tts_model = RealTimeTTS(tts_engine, tts_go_event=tts_go_event)
+    tts_model = RealTimeTTS(tts_engine, user_has_stopped_speaking_event=user_has_stopped_speaking_event)
     logger.info("✅ TTS model loaded.")
 
     llm_settings = config.get("llm_settings", {})
@@ -146,12 +146,12 @@ async def gpu_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, tts_go
     logger.info("GPU worker has shut down.")
 
 
-def gpu_worker(shutdown_event: mp.Event, llm_control_queue: mp.Queue, llm_to_tts_queue: mp.Queue, tts_go_event: mp.Event):
+def gpu_worker(shutdown_event: mp.Event, llm_control_queue: mp.Queue, llm_to_tts_queue: mp.Queue, user_has_stopped_speaking_event: mp.Event):
     """Entry point for the GPU worker process."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(gpu_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, tts_go_event))
+        loop.run_until_complete(gpu_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, user_has_stopped_speaking_event))
     except KeyboardInterrupt:
         pass
     finally:
