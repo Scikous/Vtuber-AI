@@ -11,6 +11,17 @@
         "character_info_json": "LLM_Wizard/characters/character.json"
     },
 
+    "context_llm_settings":
+    {
+        "context_llm_class_name": "VtuberExllamav2",
+        "context_llm_model_path": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "context_llm_model_revision": "main",
+        "context_llm_tokenizer_model_path": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "context_llm_max_tokens": 10,
+        "context_llm_is_vision_model": false,
+        "context_llm_instructions": "You are a context analysis AI. Does the New Phrase significantly change the core meaning or intent of the Original Phrase? Respond with only 'Yes' or 'No'."
+    },
+
     "stt_settings":
     {
         "speaker_name": "LMFAO",

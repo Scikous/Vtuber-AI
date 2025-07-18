@@ -11,55 +11,59 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.common import config as app_config
 from src.utils import logger as app_logger
 
-# Import new worker functions
+# Import worker functions
 from src.workers.stt_client_worker import stt_client_worker
 from src.workers.dialogue_client_worker import dialogue_client_worker
 from src.workers.gpu_worker import gpu_worker
+from src.workers.context_llm_worker import context_llm_worker
 
 class ProcessOrchestrator:
     """
     Manages the lifecycle of all service processes under the new architecture.
-    - GPU Worker: A single process that manages all models on the GPU.
-    - Client Workers: CPU-bound processes for STT, Dialogue logic, etc.
     """
     def __init__(self):
         self.logger = app_logger.get_logger("ProcessOrchestrator")
         self.config = app_config.load_config()
         self.shutdown_event = mp.Event()
         self.user_has_stopped_speaking_event = mp.Event()
+        self.tts_go_event = mp.Event()
         
         # --- Inter-Process Communication Queues ---
         self.queues = {
-            # GPU Worker Queues
-            "stt_requests": mp.Queue(),
-            "llm_requests": mp.Queue(),
-            "tts_requests": mp.Queue(),
+            # STT -> Context Worker
+            "stt_stream_queue": mp.Queue(),
 
-            # Client Worker Communication Queues
-            "stt_to_llm_queue": mp.Queue(), # STT results posted here
-            "llm_to_tts_queue": mp.Queue(), # LLM results posted here
+            # Context Worker -> Main LLM (GPU)
+            "llm_control_queue": mp.Queue(),
+
+            # Main LLM (GPU) -> TTS (GPU)
+            "llm_to_tts_queue": mp.Queue(maxsize=3),
         }
 
         # Worker process definitions
         self.workers: Dict[str, mp.Process] = {}
         self.worker_definitions = {
-            "gpu": (gpu_worker, [self.shutdown_event, self.user_has_stopped_speaking_event, self.queues]),
             "stt_client": (stt_client_worker, [
                 self.shutdown_event, 
                 self.user_has_stopped_speaking_event,
-                self.queues["stt_requests"], 
-                self.queues["stt_to_llm_queue"]
+                self.queues["stt_stream_queue"]
             ]),
-            "dialogue_client": (dialogue_client_worker, [
+            "context_llm": (context_llm_worker, [
                 self.shutdown_event,
-                self.queues["stt_to_llm_queue"],
-                self.queues["llm_requests"],
+                self.queues["stt_stream_queue"],
+                self.queues["llm_control_queue"],
+                self.tts_go_event,
+                self.user_has_stopped_speaking_event
+            ]),
+            "gpu": (gpu_worker, [
+                self.shutdown_event, 
+                self.queues["llm_control_queue"], 
                 self.queues["llm_to_tts_queue"],
-                self.queues["tts_requests"]
+                self.tts_go_event
             ]),
         }
         
-        self.logger.info("ProcessOrchestrator initialized with new architecture.")
+        self.logger.info("ProcessOrchestrator initialized with Guard LLM architecture.")
 
     def start_workers(self):
         """
