@@ -169,253 +169,74 @@ class WhisperSTT(STTBase):
         """Synchronous wrapper for transcribe_audio."""
         return asyncio.run(self.transcribe_audio(audio_data, **kwargs))
 
-    def listen_and_buffer(self, full_utterance_callback, fast_transcribe_callback, stop_event: threading.Event, user_has_stopped_speaking_event: threading.Event, device_index: int = None):
+    def listen_and_transcribe(self, sentence_callback, stop_event: threading.Event, user_has_stopped_speaking_event: threading.Event, device_index: int = None):
         """
-        Listens to the microphone, performs VAD, and calls callbacks for both
-        a fast, initial transcription and the full utterance.
+        Listens to the microphone, performs VAD, and calls a callback with each transcribed
+        sentence as it's detected in real-time.
         """
         vad = webrtcvad.Vad(self.vad_aggressiveness)
         audio_buffer = deque()
         is_speaking = False
-        fast_transcribe_triggered = False
-        last_speech_time = time.monotonic()
-        
-        # Buffer for the initial chunk for fast transcription
-        fast_transcribe_chunk_s = 0.5 # 500ms
-        fast_transcribe_frames = int(fast_transcribe_chunk_s * self.sample_rate)
         
         def audio_callback(indata: np.ndarray, frames: int, time_info, status):
-            nonlocal is_speaking, last_speech_time, fast_transcribe_triggered
-            if stop_event.is_set():
-                raise sd.CallbackStop
-
+            nonlocal is_speaking
+            if stop_event.is_set(): raise sd.CallbackStop
             try:
-                audio_segment_int16 = (indata * 32767).astype(np.int16)
-                is_speech = vad.is_speech(audio_segment_int16.tobytes(), self.sample_rate)
-                
+                is_speech = vad.is_speech((indata * 32767).astype(np.int16).tobytes(), self.sample_rate)
                 if is_speech:
                     if not is_speaking:
-                        print("Speech detected.")
                         is_speaking = True
-                        fast_transcribe_triggered = False
                         user_has_stopped_speaking_event.clear()
-
+                        print("Speech detected.")
                     audio_buffer.extend(indata.flatten().tolist())
-                    last_speech_time = time.monotonic()
-
-                    # Trigger fast transcribe after collecting a small chunk
-                    if not fast_transcribe_triggered and len(audio_buffer) > fast_transcribe_frames:
-                        fast_chunk = np.array(list(audio_buffer), dtype=np.float32)
-                        fast_transcribe_callback(fast_chunk)
-                        fast_transcribe_triggered = True
-
-                elif is_speaking:
-                    audio_buffer.extend(indata.flatten().tolist())
+                else:
+                    is_speaking = False
             except Exception as e:
                 print(f"Error in audio callback: {e}")
 
-        print("STT is listening...")
+        print("STT is listening for sentences...")
         try:
             with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype=self.audio_dtype,
                                 blocksize=self.frame_size, callback=audio_callback, device=device_index):
+                
+                last_transcript = ""
+                was_speaking = False
+                final_audio_buffer_len = 0
+                
                 while not stop_event.is_set():
-                    time.sleep(0.1)
-                    if is_speaking and (time.monotonic() - last_speech_time) > self.silence_duration_s_for_finalize:
+                    time.sleep(0.1) # Polling rate
+                    
+                    if is_speaking:
+                        was_speaking = True
+                        # Continuously transcribe while speaking
+                        if len(audio_buffer) > self.sample_rate * 1.5: # 1.5-second buffer
+                            audio_np = np.array(list(audio_buffer), dtype=np.float32)
+                            current_transcript = self.transcribe_audio_sync(audio_np, beam_size=1, temperature=0.5)
+
+                            if len(current_transcript) > len(last_transcript):
+                                new_text = current_transcript[len(last_transcript):]
+                                # Simple sentence detection
+                                if '.' in new_text or '?' in new_text or '!' in new_text:
+                                    last_transcript = current_transcript
+                                    sentence_callback(current_transcript)
+                                    final_audio_buffer_len = len(audio_buffer)
+                    
+                    elif was_speaking: # User just stopped speaking
+                        was_speaking = False
                         print("End of speech detected.")
                         user_has_stopped_speaking_event.set()
                         
-                        audio_data_np = np.array(list(audio_buffer), dtype=np.float32)
+                        #  Only transcribe if sentence would be different -- equal audio lengths == same sentence
+                        if len(audio_buffer) > 0 and len(audio_buffer) > final_audio_buffer_len: 
+                            final_audio_np = np.array(list(audio_buffer), dtype=np.float32)
+                            final_transcript = self.transcribe_audio_sync(final_audio_np, beam_size=5, temperature=0.0)
+                            sentence_callback(final_transcript)
+
                         audio_buffer.clear()
-                        is_speaking = False
-                        
-                        full_utterance_callback(audio_data_np)
-        except Exception as e:
-            print(f"Error in STT listen_and_buffer: {e}\n{traceback.format_exc()}")
-        finally:
-            print("STT listening stopped.")
-
-    def listen_and_transcribe(self, callback, stop_event, loop, device_index, **kwargs):
-        """Listen for audio input and transcribe it.
-        
-        Args:
-            callback: Async callback function for transcription results
-            **kwargs: Additional parameters including stop_event, loop, device_index
-        """
-        
-        self._recognize_speech_stream(callback, stop_event, loop, device_index)
-    
-
-
-    def _recognize_speech_stream(self, callback, stop_event: threading.Event, 
-                                    loop: asyncio.AbstractEventLoop, device_index: int = None):
-        """Internal method for speech recognition streaming with fast-first approach."""
-        if not self.model:
-            print("Whisper model not available.")
-            return
-
-        vad = webrtcvad.Vad(self.vad_aggressiveness)
-
-        # State variables
-        vad_is_currently_speech = False
-        turn_is_active = False
-        last_speech_time = time.monotonic()
-        turn_start_time = None
-        first_word_sent = False  # Track if we've sent the fast first word
-        
-        current_chunk_audio = []
-        committed_transcript = ""
-
-        def safe_callback(text, is_final, is_first_word=False):
-            asyncio.run_coroutine_threadsafe(callback(text, is_final, is_first_word), loop)
-
-        def transcribe_first_word():
-            """Quick transcription with fast settings to get first word ASAP."""
-            nonlocal first_word_sent
-            if not current_chunk_audio or first_word_sent:
-                return
-
-            # Use minimal audio for first word detection
-            audio_np = np.concatenate(current_chunk_audio, axis=0).flatten()
-            
-            # Only need a very short segment for first word
-            min_samples = int(0.2 * self.sample_rate)  # 0.5 seconds minimum
-            if len(audio_np) < min_samples:
-                return
-
-            print(f"  -> Fast transcribing first word from {len(audio_np)/self.sample_rate:.2f}s audio...")
-            
-            # Fast settings for first word
-            segments, _ = self.model.transcribe(
-                audio_np,
-                language=self.language,
-                beam_size=1,  # Minimal beam size for speed
-                temperature=0.8,  # Higher temp for faster processing
-                vad_filter=False,  # Skip VAD for speed
-                # No initial prompt for speed
-            )
-
-            if segments:
-                first_text = "".join(seg.text for seg in segments).strip()
-                if first_text:
-                    print(f"  -> Fast First Word(s): '{first_text}'")
-                    safe_callback(first_text, is_final=False, is_first_word=True)
-                    first_word_sent = True
-                    self.stt_is_listening_event.clear()
-
-
-        def process_and_transcribe_chunk():
-            """Process and transcribe with full accuracy settings."""
-            nonlocal committed_transcript, current_chunk_audio
-            if not current_chunk_audio:
-                return
-
-            # Create a NumPy array from the buffered audio chunks
-            audio_np = np.concatenate(current_chunk_audio, axis=0).flatten()
-            current_chunk_audio.clear()
-            
-            # Guard against transcribing fragments that are too short
-            if len(audio_np) / self.sample_rate < self.min_chunk_s_for_interim:
-                return
-
-            print(f"  -> Full transcribing {len(audio_np)/self.sample_rate:.2f}s audio...")
-            
-            # Full accuracy transcription
-            segments, _ = self.model.transcribe(
-                audio_np,
-                language=self.language,
-                beam_size=self.beam_size,  # Full beam size for accuracy
-                initial_prompt=committed_transcript,
-                temperature=0.0,  # Low temp for accuracy
-                vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=250),
-            )
-
-            new_text = "".join(seg.text for seg in segments).strip()
-
-            # Handle Whisper repeating the prompt
-            if new_text and not new_text.lower().strip().startswith(committed_transcript.lower().strip()):
-                committed_transcript += " " + new_text
-            else:
-                committed_transcript = new_text
-
-            committed_transcript = committed_transcript.strip()
-            print(f"  -> Full Transcript: '{committed_transcript}'")
-            safe_callback(committed_transcript, is_final=False)
-
-        def audio_callback(indata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
-            """Audio callback function for sounddevice."""
-            nonlocal vad_is_currently_speech, last_speech_time, turn_is_active, turn_start_time
-            if stop_event.is_set(): 
-                raise sd.CallbackStop
-
-            try:
-                audio_segment_int16 = (indata * 32767).astype(np.int16)
-                vad_is_currently_speech = vad.is_speech(audio_segment_int16.tobytes(), self.sample_rate)
-
-                if vad_is_currently_speech:
-                    if not turn_is_active:
-                        turn_is_active = True
-                        first_word_sent = False  # Reset for new turn
-
-                        print("\nSpeech started...")
-                    last_speech_time = time.monotonic()
-                    current_chunk_audio.append(indata.copy())
-                    if not turn_start_time:
-                        turn_start_time = time.monotonic()
-            except Exception as e:
-                print(f"Error in audio callback: {e}")
-
-        print("STT stream started [Fast-First Model].")
-
-        try:
-            with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype=self.audio_dtype,
-                                blocksize=self.frame_size, callback=audio_callback, device=device_index):
-                
-                while not stop_event.is_set():
-                    current_time = time.monotonic()
-                    time_since_last_speech = current_time - last_speech_time
-                    
-                    # Fast first word trigger - very early in the speech
-                    if (turn_is_active and not first_word_sent and 
-                        len(current_chunk_audio) > 0 and vad_is_currently_speech and
-                        turn_start_time > 0.3):  # Just 300ms after speech starts
-                        transcribe_first_word()
-                        print("transcribing first word", turn_start_time)
-                        turn_start_time = 0.0
-                        # first_word_sent = True
-                    
-                    # Proactive pause trigger for full transcription
-                    has_paused = not vad_is_currently_speech and turn_is_active
-                    if has_paused and time_since_last_speech > self.proactive_pause_s:
-                        process_and_transcribe_chunk()
-
-                    # Finalization trigger
-                    if turn_is_active and first_word_sent and time_since_last_speech > self.silence_duration_s_for_finalize:
-                        # Process any final, lingering audio
-                        print("finalizing")
-                        self.stt_is_listening_event.set()
-                        self.stt_can_finish_event.wait()
-                        process_and_transcribe_chunk()
-                        
-                        if committed_transcript:
-                            print(f"Finalizing with: '{committed_transcript}'")
-                            safe_callback(committed_transcript, is_final=True)
-
-                        
-                        # Reset for the next turn
-                        turn_is_active = False
-                        committed_transcript = ""
-                        first_word_sent = False
-                        self.stt_can_finish_event.clear()
-
-                    # Sleep for polling rate
-                    time.sleep(0.02)
+                        last_transcript = ""
 
         except Exception as e:
-            print(f"Error in STT stream: {e}\n{traceback.format_exc()}")
-        finally:
-            print("STT stream stopped.")
-
+            print(f"Error in STT listen_and_transcribe: {e}")
     
     def list_available_input_devices(self):
         """List available audio input devices."""
@@ -434,118 +255,3 @@ def list_available_input_devices():
         print("No input devices found. Ensure microphone is connected and drivers are installed.")
     return input_devices
 
-
-
-# if __name__ == "__main__":
-#     # This script is designed to be part of a package. To run it standalone,
-#     # you may need to adjust the relative imports at the top of the file.
-#     # For example, change:
-#     # from .utils.config import load_config
-#     # to a mock version if you don't have the package structure:
-#     # def load_config(): return {}
-#     # And create a dummy STTBase class:
-#     # class STTBase:
-#     #     def __init__(self, *args, **kwargs): pass
-#     #     def _load_model(self): raise NotImplementedError
-
-#     async def main_callback(text: str, is_final: bool, is_first_word: bool):
-#         """
-#         Asynchronous callback function to handle transcription results.
-#         This function is executed in the main thread's asyncio event loop.
-#         """
-#         print(f"Transcript -> is_first_word: {is_first_word}, is_final: {is_final}, text: \"{text}\"")
-
-#     # 1. Initialize threading events required by the WhisperSTT class
-#     # This event is set by STT when it detects a pause and is waiting for a signal to finalize.
-#     stt_is_listening_event = threading.Event()
-#     # This event is set by an external process (e.g., an LLM) to tell STT it can finalize.
-#     stt_can_finish_event = threading.Event()
-    
-#     # 2. Instantiate the STT model
-#     try:
-#         whisper_model = WhisperSTT(
-#             stt_is_listening_event=stt_is_listening_event,
-#             stt_can_finish_event=stt_can_finish_event
-#         )
-#     except NameError:
-#         print("Could not initialize WhisperSTT. Make sure all dependencies are installed and imports are correct.")
-#         exit(1)
-
-#     # 3. Select an audio device
-#     print("\nListing available audio input devices...")
-#     devices = list_available_input_devices()
-#     device_index = None
-#     if devices:
-#         try:
-#             choice = input(f"Enter the device ID to use (or press Enter for default): ")
-#             if choice.strip():
-#                 device_index = int(choice)
-#                 print(f"Using device ID {device_index}.")
-#             else:
-#                 print("Using default audio device.")
-#         except (ValueError, IndexError):
-#             print("Invalid input. Using default audio device.")
-#             device_index = None
-    
-#     # 4. Set up for threading and graceful shutdown
-#     stop_event = threading.Event()
-#     loop = asyncio.get_event_loop()
-
-#     # 5. The listen_and_transcribe function is blocking, so it must run in a separate thread.
-#     listener_thread = threading.Thread(
-#         target=whisper_model.listen_and_transcribe,
-#         args=(main_callback, stop_event, loop, device_index),
-#         daemon=True
-#     )
-
-#     # 6. This thread simulates an external component (like an LLM) that controls when
-#     # the STT should finalize its transcription.
-#     def llm_interaction_simulator():
-#         while not stop_event.is_set():
-#             # Wait until the STT signals that it has detected a pause in speech.
-#             stt_is_listening_event.wait(timeout=1.0) 
-#             if stop_event.is_set():
-#                 break
-            
-#             if stt_is_listening_event.is_set():
-#                 print("\n[SIMULATOR] STT is paused. Simulating LLM response time...")
-#                 time.sleep(1.5)  # Simulate work
-                
-#                 print("[SIMULATOR] LLM ready. Allowing STT to finalize.")
-#                 stt_can_finish_event.set()  # Signal STT to proceed with finalization
-#                 stt_is_listening_event.clear() # Reset the event for the next turn
-
-#     llm_sim_thread = threading.Thread(target=llm_interaction_simulator, daemon=True)
-
-#     print("\nStarting listener. Speak into your microphone. Press Ctrl+C to stop.")
-#     try:
-#         listener_thread.start()
-#         llm_sim_thread.start()
-        
-#         # The main thread runs the asyncio event loop to execute the callbacks
-#         # scheduled by the listener_thread.
-#         loop.run_forever()
-
-#     except KeyboardInterrupt:
-#         print("\nCaught interrupt signal. Shutting down gracefully.")
-#     finally:
-#         # 7. Graceful shutdown sequence
-#         stop_event.set()
-        
-#         # Unblock any waiting events to allow threads to exit cleanly
-#         stt_is_listening_event.set()
-#         stt_can_finish_event.set()
-        
-#         if listener_thread.is_alive():
-#             listener_thread.join()
-#         if llm_sim_thread.is_alive():
-#             llm_sim_thread.join()
-
-#         if loop.is_running():
-#             loop.call_soon_threadsafe(loop.stop)
-            
-#         # Closing the loop can sometimes cause issues on exit. It's often
-#         # sufficient to just stop it and let the program terminate.
-#         # loop.close()
-        
-#         print("Shutdown complete.")
