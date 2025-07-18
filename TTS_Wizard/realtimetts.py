@@ -11,9 +11,7 @@ class RealTimeTTS():
     This class takes a pre-configured TTS engine and handles the real-time
     streaming, playback, and event management.
     """
-    def __init__(self, tts_engine, stream_options={}, 
-                 is_audio_streaming_event=None, terminate_current_dialogue_event=None, 
-                 stt_is_listening_event=None, stt_can_finish_event=None, **kwargs):
+    def __init__(self, tts_engine, stream_options={}, **kwargs):
         """
         Initializes the RealTimeTTS system.
 
@@ -27,12 +25,6 @@ class RealTimeTTS():
         """
         self.engine = tts_engine
         
-        # Use provided events or create new ones
-        self.is_audio_streaming_event = is_audio_streaming_event or asyncio.Event()
-        self.terminate_current_dialogue_event = terminate_current_dialogue_event or asyncio.Event()
-        self.stt_is_listening_event = stt_is_listening_event or threading.Event()
-        self.stt_can_finish_event = stt_can_finish_event or threading.Event()
-
         # This event is passed from the orchestrator, controlled by the STT VAD
         self.user_has_stopped_speaking_event = kwargs.get("user_has_stopped_speaking_event")
         
@@ -97,18 +89,15 @@ class RealTimeTTS():
         self.engine.shutdown()
 
     def on_audio_stream_start_callback(self):
-        self.is_audio_streaming_event.set()
         if self.start_time:
             delta = time.time() - self.start_time
             print(f"<TTFT> Time to first audio: {delta:.2f}s")
         
     def on_audio_stream_stop_callback(self):
-        self.is_audio_streaming_event.clear()
         print("Audio stream stopped.")
 
     async def tts_request_clear(self):
         self.stream.stop()
-        self.is_audio_streaming_event.clear()
 
 
     async def tts_request_async(self, text, min_sentence_len=8, **kwargs):
@@ -122,7 +111,7 @@ class RealTimeTTS():
 
         self.stream.feed(text)
 
-        if not self.is_audio_streaming_event.is_set():
+        if not self.stream.is_playing():
             # print("🚀 Ready for ultra-fast audio stream...")
             print("🚀 Starting ultra-fast audio stream...")
             
@@ -136,8 +125,6 @@ class RealTimeTTS():
                 force_first_fragment_after_words=6,  # Reduced for faster response
                 muted=False
             )
-
-
 
 
 
