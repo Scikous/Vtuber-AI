@@ -2,8 +2,10 @@
 Application Utilities for Vtuber-AI
 Provides miscellaneous utility functions and decorators for the application.
 """
+import sys
 import os
 import time
+import asyncio
 from functools import wraps
 from contextlib import contextmanager
 
@@ -67,5 +69,7 @@ def retry_with_backoff(max_retries=3, initial_delay=5, backoff_factor=2, excepti
             
     return decorator
 
-# Example of how to import asyncio if needed for type hinting or other utilities
-import asyncio
+def setup_project_root():
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if project_root not in sys.path:
+        sys.path.append(project_root)
