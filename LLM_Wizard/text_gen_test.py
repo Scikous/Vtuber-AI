@@ -75,7 +75,6 @@ async def exllamav2_test():
         print(full_output)
 
 asyncio.run(exllamav2_test())
-
 # #test using the standard huggingface loader
 # def huggingface_test():
     
