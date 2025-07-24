@@ -20,8 +20,7 @@ class RealTimeTTS():
                         (e.g., CoquiEngine, PiperEngine).
             stream_options (dict, optional): A dictionary of options to be passed 
                                              to the TextToAudioStream. Defaults to None.
-            is_audio_streaming_event (asyncio.Event, optional): Event to signal when audio is playing.
-            terminate_current_dialogue_event (asyncio.Event, optional): Event to signal interruption.
+            **kwargs: Additional keyword arguments. -- usually an event.
         """
         self.engine = tts_engine
         
@@ -57,12 +56,6 @@ class RealTimeTTS():
 
         def before_sentence_callback(_):
             nonlocal sentence_synth_start
-            if self.terminate_current_dialogue_event.is_set():
-                print("Dialogue termination requested, stopping stream.")
-                self.stream.stop()
-                self.is_audio_streaming_event.clear()
-                return
-            
             if self.start_time:
                 sentence_synth_start = time.time()
                 elapsed = sentence_synth_start - self.start_time
@@ -106,7 +99,7 @@ class RealTimeTTS():
         If playback is already in progress, it simply queues the text.
         """
         # Set the start time for this specific TTS request for accurate metrics
-        if not self.is_audio_streaming_event.is_set():
+        if not self.stream.is_playing():
              self.start_time = time.time()
 
         self.stream.feed(text)
