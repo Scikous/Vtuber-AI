@@ -169,7 +169,7 @@ class WhisperSTT(STTBase):
         """Synchronous wrapper for transcribe_audio."""
         return asyncio.run(self.transcribe_audio(audio_data, **kwargs))
 
-    def listen_and_transcribe(self, sentence_callback, stop_event: threading.Event, user_has_stopped_speaking_event: threading.Event, device_index: int = None):
+    def listen_and_transcribe(self, sentence_callback, stop_event: threading.Event, user_has_stopped_speaking_event: threading.Event, gpu_request_queue=None, gpu_request_event=None, worker_id="STT", device_index: int = None):
         """
         Listens to the microphone, performs VAD, and calls a callback with each transcribed
         sentence as it's detected in real-time.
@@ -177,6 +177,18 @@ class WhisperSTT(STTBase):
         vad = webrtcvad.Vad(self.vad_aggressiveness)
         audio_buffer = deque()
         is_speaking = False
+
+        # Helper function for transcription to manage the semaphore
+        def run_transcription(audio_data, **kwargs):
+            gpu_request_queue.put({"type": "acquire", "priority": 1, "worker_id": worker_id})
+            gpu_request_event.wait()
+            try:
+                # logger.info("STT: GPU acquired for transcription.")
+                result = self.transcribe_audio_sync(audio_data, **kwargs)
+                return result
+            finally:
+                # logger.info("STT: Releasing GPU.")
+                gpu_request_queue.put({"type": "release", "worker_id": worker_id})
         
         def audio_callback(indata: np.ndarray, frames: int, time_info, status):
             nonlocal is_speaking
@@ -211,7 +223,7 @@ class WhisperSTT(STTBase):
                         # Continuously transcribe while speaking
                         if len(audio_buffer) > self.sample_rate * 1.5: # 1.5-second buffer
                             audio_np = np.array(list(audio_buffer), dtype=np.float32)
-                            current_transcript = self.transcribe_audio_sync(audio_np, beam_size=1, temperature=0.5)
+                            current_transcript = run_transcription(audio_np, beam_size=1, temperature=0.5)
 
                             if len(current_transcript) > len(last_transcript):
                                 new_text = current_transcript[len(last_transcript):]
@@ -229,7 +241,7 @@ class WhisperSTT(STTBase):
                         #  Only transcribe if sentence would be different -- equal audio lengths == same sentence
                         if len(audio_buffer) > 0 and len(audio_buffer) > final_audio_buffer_len: 
                             final_audio_np = np.array(list(audio_buffer), dtype=np.float32)
-                            final_transcript = self.transcribe_audio_sync(final_audio_np, beam_size=5, temperature=0.0)
+                            final_transcript = run_transcription(final_audio_np, beam_size=5, temperature=0.0)
                             sentence_callback(final_transcript)
 
                         audio_buffer.clear()
@@ -254,4 +266,3 @@ def list_available_input_devices():
     if not input_devices:
         print("No input devices found. Ensure microphone is connected and drivers are installed.")
     return input_devices
-
