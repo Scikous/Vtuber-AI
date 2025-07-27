@@ -17,7 +17,7 @@ def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event:
     stt_handler = WhisperSTT(**stt_settings)
     worker_id = "STT"
 
-    # Model loading (low priority)    
+    # Load model with GPU management
     gpu_request_queue.put({"type": "acquire", "priority": 5, "worker_id": worker_id})
     worker_event.wait()
     try:
@@ -29,14 +29,38 @@ def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event:
     finally:
         gpu_request_queue.put({"type": "release", "worker_id": worker_id})
 
-    
+    def transcription_with_gpu(audio_data, **kwargs):
+            gpu_request_queue.put({"type": "acquire", "priority": 1, "worker_id": worker_id})
+            worker_event.wait()
+            try:
+                return stt_handler.transcribe_audio_sync(audio_data, **kwargs)
+            finally:
+                gpu_request_queue.put({"type": "release", "worker_id": worker_id})
+
+    def on_speech_start():
+        user_has_stopped_speaking_event.clear()
+        logger.info("Speech detected, clearing user_has_stopped_speaking_event")
+
+    def on_speech_end():
+        user_has_stopped_speaking_event.set()
+        logger.info("End of speech detected, setting user_has_stopped_speaking_event")
+
     def sentence_callback(sentence):
         if sentence:
             logger.info(f"STT Client: Sending sentence: '{sentence}'")
             stt_stream_queue.put(sentence)
+
     try:
-        stt_handler.listen_and_transcribe(sentence_callback, shutdown_event, user_has_stopped_speaking_event, gpu_request_queue=gpu_request_queue, gpu_request_event=worker_event, worker_id=worker_id)
+        logger.info("Starting STT client worker.")
+        stt_handler.process_audio(
+            sentence_callback=sentence_callback,
+            transcription_func=transcription_with_gpu,
+            on_speech_start=on_speech_start,
+            on_speech_end=on_speech_end
+        )
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received in STT client worker.")
-    
+    except Exception as e:
+        logger.error(f"Error in STT client worker: {e}")
+
     logger.info("STT client worker has shut down.")
