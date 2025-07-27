@@ -32,13 +32,13 @@ class ProcessOrchestrator:
                 "LLM": mp.Event(),
                 "TTS": mp.Event()
             }
-        # Inter-Process Communication Queues with limits
-        queue_maxsize = self.config.get("queue_settings", {}).get("maxsize", 3)
+        # Inter-Process Communication Queues with limits -- helps further avoid GPU saturation
+        queue_settings = self.config.get("queue_settings", {})
         self.queues = {
-            "stt_stream_queue": mp.Queue(maxsize=queue_maxsize),
-            "llm_control_queue": mp.Queue(maxsize=queue_maxsize),
-            "llm_to_tts_queue": mp.Queue(maxsize=queue_maxsize),
-            "gpu_request_queue": mp.Queue(),
+            "stt_stream_queue": mp.Queue(maxsize=queue_settings.get("stt_stream_queue_maxsize", 3)),
+            "llm_control_queue": mp.Queue(maxsize=queue_settings.get("llm_control_queue_maxsize", 3)),
+            "llm_to_tts_queue": mp.Queue(maxsize=queue_settings.get("llm_to_tts_queue_maxsize", 3)),
+            "gpu_request_queue": mp.Queue(maxsize=queue_settings.get("gpu_request_queue_maxsize", 0)),
         }
 
         self.workers: Dict[str, mp.Process] = {}
