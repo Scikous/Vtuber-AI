@@ -1,0 +1,53 @@
+# stream2sentence is the core of RealtimeTTS - it quickly converts streamed text into sentences for real-time synthesis
+stream2sentence==0.3.1
+
+# azure-cognitiveservices-speech is for AzureEngine
+azure-cognitiveservices-speech==1.43.0
+
+# coqui_tts is for CoquiEngine
+coqui_tts==0.26.0
+
+# elevenlabs is for ElevenlabsEngine
+elevenlabs==1.57.0
+
+# gtts is for GTTSEngine
+gtts==2.5.4
+
+# openai is for OpenAIEngine
+openai==1.77.0
+
+# pyttsx3 is for SystemEngine
+pyttsx3==2.98
+
+# edge-tts is for EdgeEngine
+edge-tts==7.0.2
+
+# kokoro is for KokoroEngine
+kokoro==0.9.4
+
+# snac is for OrpheusEngine
+snac==1.2.1
+
+# fugashi is to support japanese language for KokoroEngine
+fugashi==1.4.0
+jaconv==0.4.0
+mojimoji==0.0.13
+pyopenjtalk==0.4.1
+
+# pypinyin is to support chinese language for KokoroEngine
+pypinyin==0.54.0st
+ordered_set==4.1.0
+jieba==0.42.1
+cn2an==0.5.23
+
+# pyaudio is for playing chunks over output device
+pyaudio==0.2.14
+
+# pydub is used to convert chunks from mp3 to pcm (for openai tts)
+pydub==0.25.1
+
+# resampy is used to resample from the tts to the target device sample rate 
+resampy==0.4.3
+
+# deepspeed is for CoquiTTS
+deepspeed==0.17.1

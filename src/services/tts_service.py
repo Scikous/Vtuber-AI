@@ -1,115 +1,206 @@
 import asyncio
-from TTS_Wizard import tts_client
+import threading
 from .base_service import BaseService
+from TTS_Wizard import tts_client
+from TTS_Wizard.tts_exp import XTTS_Service
+from TTS_Wizard.tts_utils import prepare_tts_params_gpt_sovits, prepare_tts_params_xtts, prepare_tts_params_rtts
+from TTS_Wizard.realtimetts import RealTimeTTS, pipertts_engine, coquitts_engine
+
+# A registry to map service names to their respective classes and param functions.
+# This makes the service easily extensible.
+TTS_SERVICE_REGISTRY = {
+    "RealTimeTTS": {
+        "class": RealTimeTTS,
+        "params_fn": prepare_tts_params_rtts
+    },
+    "XTTS": {
+        "class": XTTS_Service,
+        "params_fn": prepare_tts_params_xtts
+    },
+    "GPT-SoVITS": {
+        "class": tts_client, # Assuming tts_client is the class/module for this
+        "params_fn": prepare_tts_params_gpt_sovits
+    }
+}
 
 class TTSService(BaseService):
     def __init__(self, shared_resources=None):
         super().__init__(shared_resources)
-        self.queues = shared_resources.get("queues") if shared_resources else None
-        self.llm_output_queue = self.queues.get("llm_output_queue") if self.queues else None
-        self.logger = shared_resources.get("logger") if shared_resources else None
-        self.terminate_current_dialogue_event = shared_resources.get("terminate_current_dialogue_event", asyncio.Event())
 
-    async def synthesize_streaming(self, tts_params: dict):
-        """
-        Synthesize speech from text using the TTS module
-        """
-        return tts_client.send_tts_request(**tts_params)
+        self.llm_output_queue = self.queues.get("llm_output_queue")
+        self.audio_output_queue = self.queues.get("audio_output_queue")
+        
+        self.terminate_current_dialogue_event = self.shared_resources.get(
+            "terminate_current_dialogue_event", asyncio.Event()
+        )
+        self.is_audio_streaming_event = self.shared_resources.get(
+            "is_audio_streaming_event", asyncio.Event()
+        )
+        self.stt_is_listening_event = self.shared_resources.get(
+            "stt_is_listening_event", threading.Event()
+            )
+        self.stt_can_finish_event = self.shared_resources.get(
+            "stt_can_finish_event", threading.Event()
+            )
+        
+        # --- Configuration-Driven TTS Initialization ---
+        self.tts_settings = self.config.get("tts_settings", {}) if self.config else {}
+        self.tts_concurrency = self.tts_settings.get("tts_concurrency", 2)
+        self.wait_for_audio = self.tts_settings.get("wait_for_audio", 0.4)
+        self.min_sentence_len = self.config.get("min_sentence_len", 8)
+        tts_service_name = self.tts_settings.get("tts_service_name", "RealTimeTTS")
+        service_config = TTS_SERVICE_REGISTRY.get(tts_service_name)
+        if not service_config:
+            raise ValueError(f"Unknown TTS service name: {tts_service_name}")
+            
+        # Instantiate the selected TTS service
+        # NOTE: You might need to pass specific arguments to the service's __init__ method
+        tts_engine = self.tts_settings.get("tts_engine", "piper")
+        if tts_engine == "piper":
+            model_file = self.tts_settings.get("model_file", "TTS_Wizard/temp/piper/en_US-john-medium.onnx")
+            config_file = self.tts_settings.get("config_file", "TTS_Wizard/temp/piper/en_US-john-medium.onnx.json")
+            piper_path = self.tts_settings.get("piper_path", "TTS_Wizard/temp/piper/piper")
+            stream_options = {"frames_per_buffer": 256}
+            tts_engine = pipertts_engine(model_file, config_file, piper_path)
+        elif tts_engine == "coqui":
+            tts_engine = coquitts_engine(use_deepspeed=True)
+            # Ultra-low latency settings
+            stream_options = {
+                "frames_per_buffer": self.tts_settings.get("frames_per_buffer", 64),
+                "playout_chunk_size": self.tts_settings.get("playout_chunk_size", 64)
+            }
 
-    async def _process_tts_item(self, tts_params: dict, semaphore: asyncio.Semaphore):
-        """Helper function to process a single TTS request with semaphore control."""
+        self.TTS_SERVICE = service_config["class"](tts_engine, stream_options=stream_options,is_audio_streaming_event=self.is_audio_streaming_event,terminate_current_dialogue_event=self.terminate_current_dialogue_event, stt_is_listening_event=self.stt_is_listening_event, stt_can_finish_event=self.stt_can_finish_event) 
+        self.prepare_tts_params = service_config["params_fn"]
+        
+        
+        if self.logger:
+            self.logger.info(f"TTSService initialized with service: {tts_service_name}, concurrency: {self.tts_concurrency}")
+
+    def synthesize_streaming(self, tts_params: dict):
+        """Synthesize speech from text using the configured TTS module."""
+        # This method remains generic and useful for queue-based services.
+        return self.TTS_SERVICE.send_tts_request(**tts_params)
+
+    async def _process_item_queued(self, tts_params: dict, semaphore: asyncio.Semaphore):
+        """
+        Processes a TTS request by generating audio chunks and putting them
+        into the audio_output_queue. Used for services like XTTS.
+        """
         async with semaphore:
             if self.logger:
-                self.logger.debug(f"TTS Service: Starting processing for: {str(tts_params.get('text', ''))[:50]}...")
-            try:
-                async for audio_chunk in await self.synthesize_streaming(tts_params): # Removed await here as synthesize_streaming is an async generator
+                self.logger.debug(f"TTS (Queued): Starting processing for: {str(tts_params.get('text', ''))[:50]}...")
+            
+            loop = asyncio.get_running_loop()
+            
+            def tts_request_handler():
+                for audio_chunk in self.synthesize_streaming(tts_params):
                     if audio_chunk:
-                        audio_queue = self.shared_resources['queues']['audio_output_queue']
-                        await audio_queue.put(audio_chunk)
-                        if self.logger:
-                            self.logger.debug(f"TTS Service: Put audio chunk of size {len(audio_chunk)} to audio_output_queue for text: {str(tts_params.get('text', ''))[:30]}...")
-                    else:
-                        if self.logger:
-                            self.logger.debug(f"TTS Service: Received empty audio chunk for text: {str(tts_params.get('text', ''))[:30]}...")
+                        loop.call_soon_threadsafe(self.audio_output_queue.put_nowait, audio_chunk)
+            
+            try:
+                # Run the blocking, streaming TTS generation in a separate thread
+                await loop.run_in_executor(None, tts_request_handler)
             except Exception as e:
                 if self.logger:
-                    self.logger.error(f"Error during synthesize_streaming for {str(tts_params.get('text', ''))[:30]}: {e}", exc_info=True)
+                    self.logger.error(f"Error during queued synthesis for {str(tts_params.get('text', ''))[:30]}: {e}", exc_info=True)
             finally:
-                if self.llm_output_queue: # Check if queue exists before calling task_done
+                semaphore.release()
+                if self.llm_output_queue:
                     self.llm_output_queue.task_done()
 
+    async def _process_item_realtime(self, tts_params: dict):
+        """
+        Processes a TTS request using RealTimeTTS by feeding text to its stream.
+        """
+        if self.logger:
+            self.logger.debug(f"TTS (RealTime): Feeding text to stream: {str(tts_params.get('text', ''))[:50]}...")
+        
+        try:
+            # The tts_request_async method is non-blocking. We can call it directly.
+            # It will handle feeding the text and starting playback if necessary.
+            await self.TTS_SERVICE.tts_request_async(**tts_params)
+            
+            # Small delay to allow TTS to process and reduce resource competition
+            await asyncio.sleep(self.wait_for_audio)
+
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Error during real-time synthesis for {str(tts_params.get('text', ''))[:30]}: {e}", exc_info=True)
+        finally:
+            # Crucially, mark the item from the input queue as done.
+            if self.llm_output_queue:
+                self.llm_output_queue.task_done()
+
+        
     async def run_worker(self):
         if self.logger:
-            self.logger.info(f"{self.__class__.__name__} worker running with concurrent TTS processing.")
+            self.logger.info(f"{self.__class__.__name__} worker running for {self.TTS_SERVICE.__class__.__name__}.")
+        # Initialize semaphore for queue-based services -- RealTimeTTS does not utilize semaphore
+        if not isinstance(self.TTS_SERVICE, RealTimeTTS):
+            semaphore = asyncio.Semaphore(self.tts_concurrency)
         
-        tts_concurrency = self.shared_resources.get("tts_concurrency", 2) # Default to 2 concurrent tasks
-        semaphore = asyncio.Semaphore(tts_concurrency)
+        # Semaphore is used to control concurrency for queue-based services
         active_tts_tasks = []
 
         try:
             while True:
-                # Clean up completed tasks
                 active_tts_tasks = [task for task in active_tts_tasks if not task.done()]
-
-                if self.terminate_current_dialogue_event.is_set() and not self.llm_output_queue.empty() and not active_tts_tasks:
-                    while not self.llm_output_queue.empty():
-                        try:
-                            item = self.llm_output_queue.get_nowait()
-                            self.llm_output_queue.task_done()
-                            self.logger.debug(f"Discarded LLM output from queue due to termination.")
-                        except asyncio.QueueEmpty:
-                            break
-                    if self.logger:
-                        self.logger.info("TTS Service: Terminate current dialogue event set. Cancelling active TTS tasks...")
-                    for task in active_tts_tasks:
-                        if not task.done(): # Only cancel if not already done
-                            task.cancel()
-                    await asyncio.sleep(0.1) # Wait if queue is empty
-                    # self.terminate_current_dialogue_event.clear()
-                    continue
-                    # asyncio.gather(*active_tts_tasks, return_exceptions=True) # Wait for tasks to finish cancellation
-
-                if self.llm_output_queue and not self.llm_output_queue.empty():
-                    # Only fetch new item if semaphore allows and we have less than max concurrent tasks active
-                    # This check helps prevent overwhelming with too many scheduled tasks if semaphore is busy
-                    if len(active_tts_tasks) < tts_concurrency * 2: # Allow some tasks to be queued up waiting for semaphore
-                        try:
-                            tts_params_from_queue = await asyncio.wait_for(self.llm_output_queue.get(), timeout=0.1) 
-                        except asyncio.TimeoutError:
-                            await asyncio.sleep(0.05) # Short sleep if queue was empty during check
-                            continue
-                        except AttributeError: # Handle if queue is None
-                            if self.logger:
-                                self.logger.error("TTS Service: llm_output_queue is None.")
-                            await asyncio.sleep(1)
-                            continue
-
+                
+                #terminate current dialogue when needed -- speech detected or terminate button smashed
+                if self.terminate_current_dialogue_event.is_set():
+                    # Termination logic remains the same
+                    if not self.llm_output_queue.empty() or active_tts_tasks:
                         if self.logger:
-                            self.logger.debug(f"TTS Service received params: {str(tts_params_from_queue)[:100]}...")
-                        
-                        if not all(k in tts_params_from_queue for k in ['text', 'text_lang', 'ref_audio_path', 'prompt_lang']):
-                            if self.logger:
-                                self.logger.error(f"TTS Service: Missing required parameters: {tts_params_from_queue}")
-                            self.llm_output_queue.task_done()
-                            continue
-                        
-                        # Create a new task to process this TTS item
-                        task = asyncio.create_task(self._process_tts_item(tts_params_from_queue, semaphore))
-                        active_tts_tasks.append(task)
-                    else:
-                        # Max tasks scheduled, wait for some to complete
-                        await asyncio.sleep(0.1)
+                            self.logger.info("TTS Service: Terminating current dialogue. Clearing queue and cancelling tasks...")
+                        while not self.llm_output_queue.empty():
+                            try:
+                                self.llm_output_queue.get_nowait()
+                                self.llm_output_queue.task_done()
+                            except asyncio.QueueEmpty:
+                                break
+                        for task in active_tts_tasks:
+                            task.cancel()
+                        await asyncio.gather(*active_tts_tasks, return_exceptions=True)
+                        active_tts_tasks.clear()
+                        llm_message = None
+                    self.terminate_current_dialogue_event.clear()
+                    self.is_audio_streaming_event.clear()
+                    await asyncio.sleep(0.05)
+                    continue
+                print("PRE LLM MESSAGE"*10)
+                llm_message = await self.llm_output_queue.get()
+                print("LLM MESSAGE", llm_message)
+                if self.logger:
+                    self.logger.debug(f"TTS Service received message: {str(llm_message)[:100]}...")
+                
+                tts_params = self.prepare_tts_params(llm_message, self.min_sentence_len)
+
+                
+                task = None
+                if isinstance(self.TTS_SERVICE, RealTimeTTS):
+                    # RealTimeTTS manages its own concurrency, so we don't use our semaphore.
+                    # task = asyncio.create_task(self._process_item_realtime(tts_params))
+                    await self._process_item_realtime(tts_params)
                 else:
-                    await asyncio.sleep(0.1) # Wait if queue is empty
+                    # For queue-based services, wait for a free processing slot.
+                    # This is the correct way to handle concurrency and maintain order.
+                    # The loop will pause here if all slots are busy.
+                    await semaphore.acquire()
+                    
+                    # Once a slot is acquired, create the task.
+                    # The task is now responsible for releasing the semaphore.
+                    task = asyncio.create_task(self._process_item_queued(tts_params, semaphore))
+                
+                if task:
+                    active_tts_tasks.append(task)
 
         except asyncio.CancelledError:
             if self.logger:
-                self.logger.info(f"{self.__class__.__name__} worker cancelled. Waiting for active TTS tasks to complete...")
+                self.logger.info(f"{self.__class__.__name__} worker cancelled. Cleaning up...")
             for task in active_tts_tasks:
                 task.cancel()
-            await asyncio.gather(*active_tts_tasks, return_exceptions=True) # Wait for tasks to finish cancellation
-            if self.logger:
-                self.logger.info(f"{self.__class__.__name__} active TTS tasks cancelled.")
+            await asyncio.gather(*active_tts_tasks, return_exceptions=True)
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Error in {self.__class__.__name__} worker: {e}", exc_info=True)

@@ -4,14 +4,13 @@ import time
 from datetime import datetime, timezone
 from curl_cffi import requests
 from general_utils import get_env_var
-from livechat_utils import append_livechat_message
 import dotenv
 
 def hex_to_rgb(val: str) -> tuple[int, int, int]:
     return (int(val[i : i + 2], 16) for i in (1, 3, 5))
 
 class KickClient:
-    def __init__(self, *, username: str, kick_chat_msgs):
+    def __init__(self, *, username: str, kick_chat_msgs: list):
         self.username = username
         self.kick_chat_msgs = kick_chat_msgs
         self.channel_id = self.get_channel_id()
@@ -29,7 +28,7 @@ class KickClient:
         return data["id"]
 
     #returns all messages and their data, also no need to fetch all
-    def fetch_raw_messages(self, num_to_fetch=10):
+    async def fetch_raw_messages(self, num_to_fetch=10):
         """
         Fetches all messages and their respective data (timestamp, user, message, color, etc.)
 
@@ -45,7 +44,7 @@ class KickClient:
         return data["messages"][:num_to_fetch]
 
     #used alongside listen, writes message to console, appends to running list
-    def process_message(self, message):
+    async def process_message(self, message):
         """
         Used when using listen() method
 
@@ -66,7 +65,7 @@ class KickClient:
         print(user_msg)
 
     #basically intented for polling -- fetch_raw_messages -> process_messages
-    def process_messages(self, messages):
+    async def process_messages(self, messages):
         """
         Used as a standalone
 
@@ -75,13 +74,13 @@ class KickClient:
         if messages:
             #get only username and message -- (<username>, <message>)
             new_clean_messages = [
-                (msg["sender"]["username"], msg['content']) for msg in messages 
+                f"{msg['sender']['username']}: {msg['content']}" for msg in messages 
                 if datetime.fromisoformat(msg["created_at"].replace("Z", "+00:00")) > self.last_message_time
             ]
 
             #add newest messages to kick live chat list
-            for user_message in new_clean_messages:
-                append_livechat_message(self.kick_chat_msgs, user_message)
+
+            self.kick_chat_msgs.extend(new_clean_messages)
             
             #most recent message is always first, set last fetch time to it
             recent_message_time = messages[0]["created_at"]

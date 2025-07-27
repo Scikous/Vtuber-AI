@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/canopyai/Orpheus-TTS.git
+	branch = main
+	commit = 835ac7cd1870fa1fa5e342e14260c2d68cabb2e7
+	parent = b2dabe0113062844e9292bc17e743176aa1feabc
+	method = merge
+	cmdver = 0.4.9

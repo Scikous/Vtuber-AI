@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Streaming Audio Playback</title>
+</head>
+<body>
+  <h1>Streaming Audio Playback</h1>
+  <form id="promptForm">
+    <label for="promptInput">Enter Prompt:</label><br>
+    <textarea id="promptInput" rows="4" cols="50" placeholder="Type your prompt here" required></textarea><br>
+    <button type="submit">Play Audio</button>
+  </form>
+  <audio id="audioPlayer" controls autoplay></audio>
+  <script>
+    const base_url = `https://<enter-hostname-here>`;
+
+    document.getElementById("promptForm").addEventListener("submit", function(event) {
+      event.preventDefault();
+      const prompt = document.getElementById("promptInput").value;
+      const encodedPrompt = encodeURIComponent(prompt);
+      const audioUrl = `${base_url}/tts?prompt=` + encodedPrompt;
+      
+      // Set the audio element's src to your endpoint to stream and play the audio data
+      const audioPlayer = document.getElementById("audioPlayer");
+      audioPlayer.src = audioUrl;
+      audioPlayer.load();
+      audioPlayer.play().catch(err => console.error("Playback error:", err));
+    });
+  </script>
+</body>
+</html>

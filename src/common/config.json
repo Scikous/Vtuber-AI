@@ -1,13 +1,71 @@
 {
-    "llm_class_name": "VtuberExllamav2",
-    "llm_model_path": "./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ",
-    "short_term_memory_maxlen": 6,
-    "speaker_name": "LMFAO",
-    "character_info_json": "LLM_Wizard/characters/character.json",
-    "stt_energy_threshold": 0.01,
+    "llm_settings":
+    {
+        "llm_class_name": "VtuberExllamav2",
+        "llm_model_path": "turboderp/Qwen2.5-VL-7B-Instruct-exl2",
+        "tokenizer_model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+        "llm_model_revision": "8.0bpw",
+        "short_term_memory_maxlen": 12,
+        "max_tokens": 30,
+        "wait_for_tts": 0.2,
+        "character_info_json": "LLM_Wizard/characters/character.json"
+    },
 
-    "format": "pyaudio.paInt16",
-    "channels": 1,
-    "rate": 32000,
-    "chunk_size": 1024
+    "context_llm_settings":
+    {
+        "context_llm_class_name": "VtuberExllamav2",
+        "context_llm_model_path": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "context_llm_model_revision": "main",
+        "context_llm_tokenizer_model_path": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "context_llm_max_tokens": 10,
+        "context_llm_is_vision_model": false,
+        "context_llm_instructions": "You are a context analysis AI. Does the New Phrase significantly change the core meaning or intent of the Original Phrase? Respond with only 'Yes' or 'No'."
+    },
+
+    "stt_settings":
+    {
+        "speaker_name": "LMFAO",
+        
+        "MODEL_SIZE": "distil-large-v3",
+        "LANGUAGE": "en",
+        "BEAM_SIZE": 1,
+        "DEVICE": "cuda",
+        "COMPUTE_TYPE": "int8_float16",
+        
+        "DEVICE_INDEX": 17,
+        "SAMPLE_RATE": 16000,
+        "CHANNELS": 1,
+        "AUDIO_DTYPE": "float32",
+        "FRAME_DURATION_MS": 10,
+        "VAD_AGGRESSIVENESS": 3,
+        
+        "AUDIO_WINDOW_S": 6,
+        "SILENCE_DURATION_S_FOR_FINALIZE": 0.1,
+        "ENERGY_THRESHOLD_DBFS": -31.0,
+        "PROACTIVE_PAUSE_S": 0.05,
+        "MIN_CHUNK_S_FOR_INTERIM": 0.1
+    },
+    
+    "tts_settings":{
+        "tts_concurrency": 2,
+        "tts_service_name": "RealTimeTTS",
+        "wait_for_audio": 0.4,
+        "tts_engine": "coqui"
+    },
+
+    "logging_enabled": true,
+    "min_sentence_len": 8,
+
+    "audio_backend_settings": {
+        "format": "paFloat32",
+        "channels": 1,
+        "rate": 24000,
+        "chunk_size": 512
+    },
+
+    "livechat_settings": {
+        "fetch_interval": 60
+
+    }
+
 }

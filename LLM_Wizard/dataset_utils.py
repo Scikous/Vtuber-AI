@@ -2,28 +2,37 @@ import sys
 import pandas as pd
 from datasets import load_dataset, DatasetDict, Dataset
 from transformers import AutoTokenizer
-import json # For LLMUtils placeholder
-from model_utils import LLMUtils # character_loader
+import json # For model_utils placeholder
+from model_utils import load_character, prompt_wrapper
+import os
+from PIL import Image
+
 # --- Configuration & Setup ---
 # MODEL_PATH = "NousResearch/Meta-Llama-3-8B" # Using a more common model for example
 # If you have a local model:
-MODEL_PATH = "LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"
 # MODEL_PATH = "unsloth/Meta-Llama-3.1-8B"
 # MODEL_PATH = 'LLM/Meta-Llama-3.1-8B/'
 
-TOKENIZER = AutoTokenizer.from_pretrained(MODEL_PATH)
+MODEL_PATH = "Qwen/Qwen2.5-VL-7B-Instruct"#"LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ"
+try:
+    TOKENIZER = AutoTokenizer.from_pretrained(MODEL_PATH)
+except:
+    # This is a placeholder for environments where snapshot_download might be used
+    # from huggingface_hub import snapshot_download
+    # hf_model_path = snapshot_download(repo_id=MODEL_PATH)
+    # TOKENIZER = AutoTokenizer.from_pretrained(hf_model_path)
+    print(f"Could not load tokenizer for {MODEL_PATH}. Ensure you are logged in or the model is available.")
+    sys.exit(1)
 
+# Define paths (consider making these configurable, e.g., via argparse)
+BASE_PATH = "LLM_Wizard/dataset/"
+CSV_PATH = BASE_PATH + "John_Smith_Base.csv" # Your input CSV    
 # Load character details (globally or pass as needed)
-# Ensure 'LLM_Wizard/characters/character.json' exists or adjust path
-# Create a dummy character.json if it doesn't exist for the script to run
-# Example dummy character.json:
-# {
-#   "instructions": "You are Capybara, a friendly and knowledgeable assistant. You are talking to {user_name}.",
-#   "user_name": "Explorer",
-#   "character_name": "Capybara"
-# }
 CHARACTER_JSON_PATH = 'LLM_Wizard/characters/character.json'
-INSTRUCTIONS, USER_NAME, CHARACTER_NAME = LLMUtils.load_character(CHARACTER_JSON_PATH)
+# Dummy character loading will be handled in main() if file doesn't exist
+INSTRUCTIONS, USER_NAME, CHARACTER_NAME = "", "", ""
+# --- NEW: Configuration for max conversation turns ---
+MAX_TURNS = 12 # Set the limit. Use None for no limit.
 
 
 # --- Core Functions ---
@@ -56,19 +65,101 @@ def prepare_finetuning_input_parquet(csv_path: str, output_parquet_path: str):
     except Exception as e:
         print(f"An unexpected error occurred in prepare_finetuning_input_parquet: {e}")
 
-def _build_conversation_messages(conversation_data: list, instructions: str):
+
+
+
+
+def _build_language_messages(conversation_data: list, instructions: str):
     """
-    Helper function to build messages array from conversation data.
-    conversation_data: List of dictionaries with 'user', 'character', 'context' keys, ordered by conversation flow.
+    Builds a message list for a text-only language model.
+
+    Args:
+        conversation_data: A list of conversation turns.
+        instructions: The system prompt/instructions.
+
+    Returns:
+        A list of messages formatted for a standard chat template.
     """
     messages = [{"role": "system", "content": instructions}]
     
     for turn in conversation_data:
-        prompt = LLMUtils.prompt_wrapper(turn["user"], turn["context"])
+        # Assumes 'prompt_wrapper' combines user and context into a single string
+        prompt = prompt_wrapper(turn["user"], turn["context"])
         messages.append({"role": "user", "content": prompt.strip()})
         messages.append({"role": "assistant", "content": turn["character"]})
     
     return messages
+
+def _build_vision_messages(conversation_data: list, instructions: str):
+    """
+    Builds a message list for a vision-language model (like Qwen-VL).
+
+    Args:
+        conversation_data: A list of conversation turns, where each turn includes an image.
+        instructions: The system prompt/instructions.
+
+    Returns:
+        A list of messages with interleaved text and image content.
+    """
+    # For vision models, the system prompt is also part of the content list
+    messages = [{"role": "system", "content": [{"type": "text", "text": instructions}]}]
+
+    for turn in conversation_data:
+        prompt = prompt_wrapper(turn["user"], turn["context"])
+        messages.append({"role": "user", "content": [{"type": "text", "text" : prompt.strip()},
+                                                    {"type": "image", "image" : Image.open(turn["image"])}]})
+        messages.append({"role": "assistant", "content": [{"type": "text", "text": turn["character"]}]})
+
+    return messages
+
+
+
+def _apply_chat_template_func(
+    example: dict, 
+    instructions: str, 
+    tokenizer: AutoTokenizer, 
+    is_vision_dataset: bool = False
+):
+    """
+    Applies the appropriate chat template to a conversation example.
+
+    This function can switch between creating a text-only dataset and a 
+    vision-language dataset based on the `is_vision_dataset` flag.
+
+    Args:
+        example: A dataset sample, expected to have a 'conversation' key.
+        instructions: The system prompt.
+        tokenizer: The tokenizer to use for applying the template.
+        is_vision_dataset: If True, formats for vision; otherwise, formats for text.
+
+    Returns:
+        A dictionary with a "text" key containing the fully formatted prompt string.
+    """
+    if is_vision_dataset:
+        # We need to handle images. Let's add the image to the example for the template.
+        # The Qwen-VL template expects the image to be available in the conversation dict.
+        messages = _build_vision_messages(example["conversation"], instructions)
+
+        # to correctly place the <|image|> token.
+        # images = [turn["image"] for turn in example["conversation"]]
+        return {"messages": messages}
+        # text = tokenizer.apply_chat_template(
+        #     messages,
+        #     tokenize=False,
+        #     add_generation_prompt=False,
+        #     images=images, # Pass images here
+        # )
+    else:
+        # Standard text-only processing
+        messages = _build_language_messages(example["conversation"], instructions)
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=False
+        )
+    return {"text": text}
+
+
 
 def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: str):
     """
@@ -79,16 +170,15 @@ def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: st
         df = pd.read_csv(csv_path)
         df = df.fillna('') # Handle potential missing values
 
-        if 'user' not in df.columns:
+        if 'character' not in df.columns:
             raise ValueError(f"CSV file {csv_path} is missing the required 'user' column.")
 
-        # It's good practice to search for this information if unsure.
-        # Searching "ExLlamaV2 calibration dataset format" confirms it typically
-        # expects a Parquet file with a single column named "text".
-        df_calibration = df[['user']].rename(columns={'user': 'text'})
+        df_calibration = df[['character']].rename(columns={'character': 'text'})
         df_calibration.to_parquet(output_parquet_path, engine="pyarrow")
         print(f"Successfully saved ExLlamaV2 calibration data to {output_parquet_path}")
         if not df_calibration.empty:
+            # with pd.option_context('display.max_rows', None):
+            #     print(df_calibration)
             print("First few rows of calibration data ('text' column):")
             print(df_calibration.head())
     except FileNotFoundError:
@@ -98,60 +188,85 @@ def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: st
     except Exception as e:
         print(f"An unexpected error occurred in prepare_exllamav2_calibration_parquet: {e}")
 
-
-def _apply_chat_template_func(example: dict, instructions: str, tokenizer: AutoTokenizer):
+def _group_conversations_by_id(dataset, max_turns: int = None):
     """
-    Helper function to apply chat template to a conversation example.
-    'example' is expected to have a 'conversation' key containing a list of turns.
+    Groups dataset rows by conversation_id. If a conversation exceeds `max_turns`,
+    it generates multiple overlapping "sliding window" examples.
+    Returns a new dataset where each row is a valid training conversation.
     """
-    messages = _build_conversation_messages(example["conversation"], instructions)
-    
-    formatted_chat = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=False
-    )
-    return {"formatted_chat": formatted_chat}
-
-
-def _group_conversations_by_id(dataset):
-    """
-    Groups dataset rows by conversation_id and creates conversation objects.
-    Returns a new dataset where each row represents a complete conversation.
-    """
-    # Convert to pandas for easier grouping
     df = dataset.to_pandas()
-    
-    conversations = []
+    all_generated_conversations = []
+
     for conv_id, group in df.groupby('conversation_id'):
-        # Sort by index to maintain conversation order (assuming data is pre-ordered)
+        # --- FIX: Ensure all conversation IDs are strings to prevent type errors ---
+        conv_id = str(conv_id)
+        # --- END FIX ---
+
         group = group.sort_index()
-        
-        conversation_turns = []
-        for _, row in group.iterrows():
-            conversation_turns.append({
-                'user': row['user'],
-                'character': row['character'],
-                'context': row['context']
+        num_turns = len(group)
+
+        # If the conversation is longer than max_turns, create sliding windows
+        if max_turns and num_turns > max_turns:
+            num_windows = num_turns - max_turns + 1
+            print(f"Conversation '{conv_id}' has {num_turns} turns. Generating {num_windows} sliding window examples of max size {max_turns}.")
+            
+            for i in range(num_windows):
+                window_df = group.iloc[i : i + max_turns]
+                
+                conversation_turns = []
+                for _, row in window_df.iterrows():
+                    conversation_turns.append({
+                        'user': row['user'],
+                        'character': row['character'],
+                        'context': row['context']
+                    })
+                
+                # Create a new, unique ID for each generated window
+                new_conv_id = f"{conv_id}_window_{i+1}"
+                all_generated_conversations.append({
+                    'conversation_id': new_conv_id,
+                    'conversation': conversation_turns
+                })
+        else:
+            # If conversation is within the limit, process it as a single block
+            conversation_turns = []
+            for _, row in group.iterrows():
+                conversation_turns.append({
+                    'user': row['user'],
+                    'character': row['character'],
+                    'context': row['context']
+                })
+            
+            # Now `conv_id` is guaranteed to be a string here as well
+            all_generated_conversations.append({
+                'conversation_id': conv_id,
+                'conversation': conversation_turns
             })
-        
-        conversations.append({
-            'conversation_id': conv_id,
-            'conversation': conversation_turns
-        })
-    
-    # Convert back to Dataset
-    return Dataset.from_list(conversations)
+
+    return Dataset.from_list(all_generated_conversations)
+
+
 
 def load_and_apply_chat_template(
     raw_finetuning_parquet_path: str,
     instructions: str,
     tokenizer: AutoTokenizer,
-    split: str = "train"
+    split: str = "train",
+    max_turns: int = None,
+    is_vision_dataset: bool = False,
 ) -> Dataset:
     """
     Loads a Parquet file containing conversation data, groups by conversation_id,
     applies the chat template, and returns the processed Hugging Face Dataset.
+
+    Args:
+        raw_finetuning_parquet_path (str): Path to the input Parquet file.
+        instructions (str): The system prompt for the character.
+        tokenizer (AutoTokenizer): The tokenizer for applying the chat template.
+        split (str): The dataset split to process (e.g., "train").
+        max_turns (int, optional): The maximum number of turns to keep in a conversation.
+                                   If a conversation exceeds this, the oldest turns are dropped.
+                                   Defaults to None (no limit).
     """
     try:
         # Load the dataset
@@ -170,13 +285,13 @@ def load_and_apply_chat_template(
                 f"for chat templating: {required_cols}. Found: {raw_dataset.column_names}"
             )
 
-        # Group conversations by ID
-        conversation_dataset = _group_conversations_by_id(raw_dataset)
+        # Group conversations by ID, applying the turn limit
+        conversation_dataset = _group_conversations_by_id(raw_dataset, max_turns=max_turns)
         
         # Apply chat template to each conversation
         formatted_dataset = conversation_dataset.map(
             _apply_chat_template_func,
-            fn_kwargs={'instructions': instructions, 'tokenizer': tokenizer}
+            fn_kwargs={'instructions': instructions, 'tokenizer': tokenizer, 'is_vision_dataset': is_vision_dataset}
         )
         
         print(f"Successfully applied chat template to {len(formatted_dataset)} conversations from {raw_finetuning_parquet_path}")
@@ -193,48 +308,22 @@ def load_and_apply_chat_template(
 
 # --- Main Execution ---
 def main():
-    # Define paths (consider making these configurable, e.g., via argparse)
-    base_path = "LLM_Wizard/dataset/"
-    csv_path = base_path + "test.csv" # Your input CSV
+    # --- END NEW ---
     
     # Create dummy CSV and character.json if they don't exist for the script to run
-    import os
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    os.makedirs(os.path.dirname(CSV_PATH), exist_ok=True)
     os.makedirs(os.path.dirname(CHARACTER_JSON_PATH), exist_ok=True)
 
-    if not os.path.exists(csv_path):
-        print(f"Creating dummy CSV at {csv_path}")
+    if not os.path.exists(CSV_PATH):
+        print(f"Creating dummy CSV at {CSV_PATH}")
+        # Add more data to test the trimming logic
         dummy_data = {
-            'user': [
-                "Hello, who are you?", 
-                "That's interesting, tell me more about yourself.",
-                "What is the capital of France?", 
-                "Tell me a joke about capybaras.",
-                "That was funny! Do you know any facts about capybaras?"
-            ],
-            'character': [
-                "I am Capybara, your assistant.", 
-                "I'm an AI designed to help with various tasks and provide information about wildlife, especially South American animals.",
-                "The capital of France is Paris.", 
-                "Why did the capybara cross the road? To get to the other tide!",
-                "Yes! Capybaras are the world's largest rodents and are excellent swimmers. They're native to South America."
-            ],
-            'context': [
-                "General introduction question.", 
-                "Follow-up about assistant capabilities.",
-                "This is a geography question.", 
-                "This is a humor request.",
-                "Follow-up question about capybara facts."
-            ],
-            'conversation_id': [
-                "conv_1", 
-                "conv_1",
-                "conv_2", 
-                "conv_3",
-                "conv_3"
-            ]
+            'user': [f"Turn {i}" for i in range(1, 18)] + ["Hi", "Hello again"],
+            'character': [f"Response {i}" for i in range(1, 18)] + ["I am here.", "Yes?"],
+            'context': [f"Context for turn {i}" for i in range(1, 18)] + ["Greeting", "Follow-up"],
+            'conversation_id': ["long_conv"] * 17 + ["short_conv"] * 2
         }
-        pd.DataFrame(dummy_data).to_csv(csv_path, index=False)
+        pd.DataFrame(dummy_data).to_csv(CSV_PATH, index=False)
 
     if not os.path.exists(CHARACTER_JSON_PATH):
         print(f"Creating dummy character JSON at {CHARACTER_JSON_PATH}")
@@ -245,16 +334,15 @@ def main():
         }
         with open(CHARACTER_JSON_PATH, 'w') as f:
             json.dump(dummy_char_info, f, indent=2)
-        # Reload instructions if dummy was created
-        global INSTRUCTIONS, USER_NAME, CHARACTER_NAME
-        INSTRUCTIONS, USER_NAME, CHARACTER_NAME = LLMUtils.load_character(CHARACTER_JSON_PATH)
+    
+    # Reload instructions now that we're sure the file exists
+    global INSTRUCTIONS, USER_NAME, CHARACTER_NAME
+    INSTRUCTIONS, USER_NAME, CHARACTER_NAME = load_character(CHARACTER_JSON_PATH)
 
 
-    raw_finetuning_parquet_path = base_path + "finetuning_input.parquet"
-    calibration_parquet_path = base_path + "exllama_calibration.parquet"
-    # This will be the final dataset with chat templates applied, ready for training.
-    # We can save it to disk if needed, or use it directly.
-    final_templated_parquet_path = base_path + "final_templated_finetuning_data.parquet"
+    raw_finetuning_parquet_path = BASE_PATH + "finetuning_input.parquet"
+    calibration_parquet_path = BASE_PATH + "exllama_calibration.parquet"
+    final_templated_parquet_path = BASE_PATH + "final_templated_finetuning_data.parquet"
 
 
     print(f"Using tokenizer: {MODEL_PATH}")
@@ -262,34 +350,63 @@ def main():
     print(f"System Instructions (loaded from {CHARACTER_JSON_PATH}):\n{INSTRUCTIONS}\n")
 
     # 1. Prepare the raw input Parquet for fine-tuning (user, character, context columns)
-    prepare_finetuning_input_parquet(csv_path, raw_finetuning_parquet_path)
+    prepare_finetuning_input_parquet(CSV_PATH, raw_finetuning_parquet_path)
 
     # 2. Prepare the Parquet for ExLlamaV2 calibration (text column)
-    prepare_exllamav2_calibration_parquet(csv_path, calibration_parquet_path)
+    prepare_exllamav2_calibration_parquet(CSV_PATH, calibration_parquet_path)
 
-    # 3. Load the raw fine-tuning data and apply the chat template
-    # This function can be called from your fine-tuning script
-    templated_dataset = load_and_apply_chat_template(
-        raw_finetuning_parquet_path,
-        INSTRUCTIONS,
-        TOKENIZER
-    )
+    dataset_dict = load_dataset("parquet", data_files={"train": calibration_parquet_path})
+    print("WHEHEE"*10,'\n',dataset_dict["text"])
 
-    if templated_dataset:
-        print(f"\n--- Example of templated data (from {raw_finetuning_parquet_path}) ---")
-        if len(templated_dataset) > 0:
-            print(templated_dataset[0]['formatted_chat'])
-            # Optionally, save the fully processed dataset
-            # For Hugging Face datasets, you can save in various formats, including Parquet
-            try:
-                templated_dataset.to_parquet(final_templated_parquet_path)
-                print(f"\nSuccessfully saved final templated dataset to {final_templated_parquet_path}")
-            except Exception as e:
-                print(f"Error saving final templated dataset: {e}")
-        else:
-            print("Templated dataset is empty.")
-    else:
-        print("Failed to generate templated dataset.")
+    # # 3. Load the raw fine-tuning data and apply the chat template
+    # print(f"\nApplying chat template with a max turn limit of: {MAX_TURNS}")
+    # templated_dataset = load_and_apply_chat_template(
+    #     raw_finetuning_parquet_path,
+    #     INSTRUCTIONS,
+    #     TOKENIZER,
+    #     max_turns=MAX_TURNS
+    # )
+    # templated_dataset.to_parquet(final_templated_parquet_path)
+
+    # if templated_dataset:
+    #     print(f"\n--- Example of templated data (from {raw_finetuning_parquet_path}) ---")
+    #     if len(templated_dataset) > 0:
+    #         # Find and print the long conversation to verify trimming
+    #         for example in templated_dataset:
+    #             if example['conversation_id'] == 'long_conv':
+    #                 print("\n--- Trimmed 'long_conv' example ---")
+    #                 print(example['text'])
+    #                 break
+    #         else: # If loop finishes without break, print the first one
+    #             print("\n--- First available example ---")
+    #             print(templated_dataset[28]['text'])
+
+    #         try:
+    #             templated_dataset.to_parquet(final_templated_parquet_path)
+    #             print(f"\nSuccessfully saved final templated dataset to {final_templated_parquet_path}")
+    #         except Exception as e:
+    #             print(f"Error saving final templated dataset: {e}")
+    #     else:
+    #         print("Templated dataset is empty.")
+    # else:
+    #     print("Failed to generate templated dataset.")
 
 if __name__ == "__main__":
+    # Added a simple check for placeholder functions to allow standalone execution
+    if 'model_utils' not in sys.modules:
+        print("Creating dummy model_utils functions to run script.")
+        def load_character(path):
+            with open(path, 'r') as f:
+                data = json.load(f)
+            return data.get("instructions", ""), data.get("user_name", ""), data.get("character_name", "")
+        def prompt_wrapper(user_prompt, context):
+            return f"{user_prompt}\n[Context: {context}]"
+        
+        # Inject them into the global scope so the script can find them
+        sys.modules['model_utils'] = type('module', (object,), {
+            'load_character': load_character,
+            'prompt_wrapper': prompt_wrapper
+        })()
+        from model_utils import load_character, prompt_wrapper
+
     main()

@@ -189,47 +189,35 @@ unnamedSIUEA
 
 #ignore test files
 .env
+client_secret_YT.json
+token.pickle
 tt.py
+t.py
 LLM.py
 model_losses.txt
 audio_response/*
-LLM/dataset/*
-LLM/offload/*
-!LLM/offload/.gitignore
+LLM_Wizard/exl2_out/
+LLM_Wizard/gentest.py
+LLM_Wizard/qwen2.5-vl-finetune-merged2/
+LLM_Wizard/qwen2.5-vl-finetune/
+LLM_Wizard/qwen2.5-vl-finetuned/
+TTS_Wizard/GPT_SoVITS/tts_exp.py
+TTS_Wizard/GPT_SoVITS_Win/
+TTS_Wizard/output.wav
+srp.sh
+test_multiprocess_performance.py
+unsloth_compiled_cache/
+venv7/
+src/services/tts_service_legacy.py
+.git-rewrite/
+MULTIPROCESSING_README.md
 
-voiceAI/dataset/*
-!voiceAI/dataset/inference_testing
-LLM/characters/*
-!.gitignore
-!LLM/characters/character.json
-!LLM/dataset/template.csv
-
-#ignore dataset related files and weight files
-voiceAI/GPT-SoVITS-beta0217/
-# voiceAI/GPT-SoVITS-beta0217/output/uvr5_opt/*
-# voiceAI/GPT-SoVITS-beta0217/output/asr_opt/*
-# voiceAI/GPT-SoVITS-beta0217/output/slicer_opt/*
-# voiceAI/GPT-SoVITS-beta0217/SoVITS_weights/*
-# voiceAI/GPT-SoVITS-beta0217/GPT_weights/*
-# voiceAI/GPT-SoVITS-beta0217/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT-SoVITS-beta0217/logs/*
-# voiceAI/GPT-SoVITS-beta0217/TEMP/*
-# voiceAI/GPT-SoVITS-beta0217/ffmpeg.exe
-# voiceAI/GPT-SoVITS-beta0217/ffprobe.exe
-
-
-# #ignore from fast inference
-# voiceAI/GPT-SoVITS-fast_inference/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT-SoVITS-fast_inference/venv
-# voiceAI/GPT-SoVITS-fast_inference/ffmpeg.exe
-# voiceAI/GPT-SoVITS-fast_inference/ffprobe.exe
-
-# voiceAI/GPT_Test/GPT_SoVITS/pretrained_models/*
-# voiceAI/GPT_Test/ffmpeg.exe
-# voiceAI/GPT_Test/ffprobe.exe
-# voiceAI/GPT_Test/venv
-
-# livechatAPI/credentials/*
-# !livechatAPI/credentials/.gitignore
-# livechatAPI/data/*
-# !livechatAPI/data/.gitignore
+.srp.sh.swp
+STT_Wizard/optimized_stt.py
+TTS_Wizard/Orpheus_TTS/output.wav
+TTS_Wizard/Orpheus_TTS/test.py
+TTS_Wizard/temp/
+TTS_Wizard/tts_client2.py
+models/
+output.wav
+venvRun/

@@ -1,0 +1,21 @@
+{
+    "MODEL_SIZE": "distil-large-v3",
+    "LANGUAGE": "en",
+    "BEAM_SIZE": 1,
+    "DEVICE": "cuda",
+    "COMPUTE_TYPE": "int8_float16",
+
+    "DEVICE_INDEX": 1,
+    "SAMPLE_RATE": 16000,
+    "CHANNELS": 1,
+    "AUDIO_DTYPE": "float32",
+    "FRAME_DURATION_MS": 10,
+    "VAD_AGGRESSIVENESS": 3,
+    
+    "AUDIO_WINDOW_S": 6,
+    "SILENCE_DURATION_S_FOR_FINALIZE": 0.5,
+    "ENERGY_THRESHOLD_DBFS": -31.0,
+    "PROACTIVE_PAUSE_S": 0.05,
+    "MIN_CHUNK_S_FOR_INTERIM": 0.1
+    
+}

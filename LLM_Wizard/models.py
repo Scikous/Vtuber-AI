@@ -1,239 +1,369 @@
-from abc import ABC, abstractmethod
-from model_utils import LLMUtils
-import torch
-import gc
 import asyncio
+import gc
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import torch
+from model_utils import apply_chat_template, get_image
+
+# Configure a logger for this module
+log = logging.getLogger(__name__)
+
+
+# --- Configuration & Resource Objects ---
+
+@dataclass
+class LLMModelConfig:
+    """Configuration for loading an Exllamav2 model."""
+    main_model: str
+    tokenizer_model: str
+    revision: str = "8.0bpw"
+    is_vision_model: bool = True
+    max_seq_len: int = 65536
+    character_name: str = 'assistant'
+    instructions: str = ""
+
+@dataclass
+class Exllamav2Resources:
+    """A container for all loaded Exllamav2 resources."""
+    model: Any
+    cache: Any
+    exll2tokenizer: Any
+    generator: Any
+    gen_settings: Any
+    tokenizer: Any  # Transformers tokenizer
+    vision_model: Optional[Any] = None
+
+
+# --- Base Class ---
+
 
 class VtuberLLMBase(ABC):
     """Abstract base class for Vtuber LLM models."""
-    def __init__(self, character_name, instructions):
+    def __init__(self, character_name: str, instructions: str):
         self.character_name = character_name
         self.instructions = instructions
+        self.current_async_job = None
 
+    @classmethod
     @abstractmethod
-    def load_model(cls, *args, **kwargs):
+    async def load_model(cls, *args, **kwargs):
+        """Loads all necessary model resources and returns an instance of the class."""
         pass
 
     @abstractmethod
-    async def dialogue_generator(self, prompt, **kwargs):
-        pass
-
-    @abstractmethod
-    def cancel_dialogue_generation(self):
+    async def warmup(self):
         """
-        Requests the cancellation of the currently ongoing dialogue generation,
-        if one exists and is cancellable.
+        Loads the model weights and performs any necessary warmup operations.
+        This method should be called before the model is ready to generate text.
         """
         pass
 
+    
+
     @abstractmethod
-    def cleanup(self):
+    async def dialogue_generator(self, prompt: str, **kwargs):
+        """Generates a response to a prompt."""
         pass
 
-    # Context manager methods -- used with "with" statement
-    def __enter__(self):
+    @abstractmethod
+    async def cancel_dialogue_generation(self):
+        """Requests cancellation of the ongoing dialogue generation."""
+        pass
+
+    @abstractmethod
+    async def cleanup(self):
+        """Cleans up all resources held by the model."""
+        pass
+
+    # Async context manager for robust, async-aware cleanup
+    async def __aenter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
-        # Optionally, return False to propagate exceptions, True to suppress them
-        return False
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.cleanup()
+        return False # Propagate exceptions
 
-#current, lowest latency
+
+
+
+#######
 class VtuberExllamav2(VtuberLLMBase):
     """
-    Holds and handles all of the ExllamaV2 based tools
+    Implementation of VtuberLLMBase using the ExllamaV2 library.
     """
-
-    def __init__(self, generator, gen_settings, tokenizer, character_name, instructions):
-        super().__init__(character_name, instructions)
-        self.generator = generator
-        self.gen_settings = gen_settings
-        self.tokenizer = tokenizer
-        self.current_async_job = None # Moved to VtuberLLMBase
+    def __init__(self, config: LLMModelConfig, resources: Exllamav2Resources):
+        super().__init__(config.character_name, config.instructions)
+        self.config = config
+        self.resources = resources
 
     @classmethod
-    def load_model(cls, model="./LLM_Wizard/CapybaraHermes-2.5-Mistral-7B-GPTQ", character_name='assistant', instructions=""):
+    async def load_model(cls, config: LLMModelConfig):
         """
-        Loads an ExLlamaV2 compatible model
-
-        Returns:
-        
-            generator (ExLlamaV2DynamicGenerator): to be used for text generation
-
-            gen_settings (ExLlamaV2Sampler.Settings): default text generation settings -- reasonably unique responses
-            
-            tokenizer (ExLlamaV2Tokenizer): the initialized tokenizer -- given to the "model" in models.py
+        Loads an ExLlamaV2 model based on the provided configuration.
         """
-        from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Cache, ExLlamaV2Tokenizer
-        from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2DynamicGeneratorAsync, ExLlamaV2Sampler
-        from transformers import AutoTokenizer
+        from exllamav2 import (ExLlamaV2, ExLlamaV2Cache, ExLlamaV2Config,
+                               ExLlamaV2Tokenizer, ExLlamaV2VisionTower)
+        from exllamav2.generator import (ExLlamaV2DynamicGeneratorAsync, ExLlamaV2Sampler)
         from huggingface_hub import snapshot_download
-        
-        
-        #transformers tokenizer, not exllamav2's tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(model) # for applying chat template
+        from transformers import AutoTokenizer
 
-        #load exllamav2 model
+        # 1. Load Transformers Tokenizer (for chat template)
+        hf_tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_model)
+
+        # 2. Load Exllamav2 Model Config
         try:
-            config = ExLlamaV2Config(model)
+            exl2_config = ExLlamaV2Config(config.main_model)
         except:
-            hf_model = snapshot_download(repo_id=model)
-            config = ExLlamaV2Config(hf_model)
+            log.info(f"Local model not found. Downloading from Hugging Face Hub: {config.main_model}")
+            hf_model_path = snapshot_download(repo_id=config.main_model, revision=config.revision)
+            exl2_config = ExLlamaV2Config(hf_model_path)
+        
+        # 3. Load Vision Model (if applicable)
+        vision_model = None
+        if config.is_vision_model:
+            log.info("Loading vision tower...")
+            vision_model = ExLlamaV2VisionTower(exl2_config)
+            vision_model.load(progress=True)
 
-        model = ExLlamaV2(config)
-        cache = ExLlamaV2Cache(model, max_seq_len = 65536, lazy = True)
-        model.load_autosplit(cache, progress = True)
-
-        generator_async = ExLlamaV2DynamicGeneratorAsync(
-            model = model,
-            cache = cache,
-            tokenizer = ExLlamaV2Tokenizer(config),
-        )
-        #default text generation settings, can be overridden
+        # 4. Load Core Model & Tokenizer
+        log.info("Loading main model...")
+        model = ExLlamaV2(exl2_config)
+        cache = ExLlamaV2Cache(model, max_seq_len=config.max_seq_len, lazy=True)
+        model.load_autosplit(cache, progress=True)
+        exll2_tokenizer = ExLlamaV2Tokenizer(exl2_config)
+        
+        # 5. Initialize Generator and Sampler Settings
+        generator = ExLlamaV2DynamicGeneratorAsync(model=model, cache=cache, tokenizer=exll2_tokenizer)
         gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = 1.47, 
-            top_p = 0.95,
-            min_p=0.05,
-            token_repetition_penalty = 1.035
+            temperature=1.8, top_p=0.95, min_p=0.08, top_k=50, token_repetition_penalty=1.05
         )
 
-        return cls(generator_async, gen_settings, tokenizer, character_name, instructions)
+        # 6. Group resources and instantiate the class
+        loaded_resources = Exllamav2Resources(
+            model=model, cache=cache, exll2tokenizer=exll2_tokenizer, 
+            generator=generator, gen_settings=gen_settings, 
+            tokenizer=hf_tokenizer, vision_model=vision_model
+        )
 
-    def cleanup(self):
-        # Manual cleanup
-        if self.current_async_job:
-            print("Attempting to cancel ongoing async_job during cleanup...")
-            self.cancel_dialogue_generation() # Calls the new cancel method
-            self.current_async_job = None
-        if hasattr(self, 'generator') and self.generator:
-            del self.generator
-            self.generator = None
-        if hasattr(self, 'gen_settings') and self.gen_settings:
-            del self.gen_settings
-            self.gen_settings = None
-        if hasattr(self, 'tokenizer') and self.tokenizer:
-            del self.tokenizer
-            self.tokenizer = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # If using CUDA
-        gc.collect()
-        print("Cleaned up and garbage collected ExllamaV2 Model resources!")
+        instance = cls(config, loaded_resources)
 
-    # Context manager methods -- used with "with" statement
-    def __enter__(self):
-        return self
+        # 7. Perform warmup on the new instance
+        await instance.warmup()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
-        # Optionally, return False to propagate exceptions, True to suppress them
-        return False
+        return instance
 
+    async def _prepare_prompt_and_embeddings(self, prompt: str, conversation_history: Optional[List[str]], images: Optional[List[Dict]],
+                                            add_generation_prompt: bool = True, continue_final_message: bool = False):
+        """Handles image embedding and chat template application."""
+        image_embeddings = None
+        placeholders = ""
 
-    async def dialogue_generator(self, prompt, conversation_history=None, max_tokens=200):
+        if self.resources.vision_model and images:
+            # Concurrently fetch and embed all images
+            image_tasks = [get_image(**img_args) for img_args in images]
+            loaded_images = await asyncio.gather(*image_tasks)
+            
+            image_embeddings = [
+                self.resources.vision_model.get_image_embeddings(
+                    model=self.resources.model,
+                    tokenizer=self.resources.exll2tokenizer,
+                    image=img
+                )
+                for img in loaded_images
+            ]
+            placeholders = "\n".join([ie.text_alias for ie in image_embeddings]) + "\n"
+
+        full_prompt = placeholders + prompt
+        formatted_prompt = apply_chat_template(
+            instructions=self.instructions,
+            prompt=full_prompt,
+            conversation_history=conversation_history,
+            tokenizer=self.resources.tokenizer,
+            tokenize=False,
+            add_generation_prompt=add_generation_prompt,
+            continue_final_message=continue_final_message,
+        )
+        
+        input_ids = self.resources.exll2tokenizer.encode(
+            formatted_prompt, add_bos=True, encode_special_tokens=True, embeddings=image_embeddings
+        )
+        
+        return input_ids, image_embeddings
+
+    async def dialogue_generator(self, prompt: str, conversation_history: Optional[List[str]] = None, images: Optional[List[Dict]] = None, max_tokens: int = 200, add_generation_prompt: bool = True, continue_final_message: bool = False):
         """
-        Generates character's response to a given input (Message)
-
-        For text length variety's sake, randomly selects token length to appear more natural
+        Generates character's response asynchronously.
+        
+        Args:
+            prompt: Current user message string
+            conversation_history: List of previous messages in order [user_msg1, assistant_msg1, user_msg2, assistant_msg2, ...]
+            images: List of image dictionaries for vision model
+            max_tokens: Maximum number of tokens to generate
+            add_generation_prompt: Whether to add a generation prompt to the chat template
+            continue_final_message: Whether to treat the prompt as a continuation of the assistant's message
         """
         from exllamav2.generator import ExLlamaV2DynamicJobAsync
-        prompt = LLMUtils.apply_chat_template(instructions=self.instructions, prompt=prompt, conversation_history=conversation_history, tokenizer=self.tokenizer)
 
-        max_tokens = LLMUtils.get_rand_token_len(max_tokens=max_tokens)
+        input_ids, image_embeddings = await self._prepare_prompt_and_embeddings(
+            prompt, conversation_history, images, add_generation_prompt, continue_final_message
+        )
+        
         self.current_async_job = ExLlamaV2DynamicJobAsync(
-                        generator=self.generator,
-                        encode_special_tokens=False,
-                        decode_special_tokens=False,
-                        completion_only=True,
-                        input_ids=prompt,
-                        # input_ids=self.tokenizer.encode("foools"),
-                        max_new_tokens=max_tokens,
-                        #     stop_conditions = [self.tokenizer.eos_token_id],
-                        gen_settings=self.gen_settings,
-                        add_bos = False #if using apply_chat_template set to false -- only plain string should have True)
-                        #token_healing = False #True if output is weird, False if output is un-weird
-                        #return_logits = False #for analyzing model's probability distribution before sapling -- generally don't touch
-                        #return_probs = False #for understanding the model's confidence in its choices -- generally don't touch
-                        #filters = None #list[list[ExLlamaV2Filter]] | list[ExLlamaV2Filter] forcing/guiding text generation
-                        #identifier = None #object for tracking/associating metadata
-                        #banned_strings = None #list[str] for banning specific words/phrases
-                        #embeddings = None #list[ExLlamaV2MMEmbedding] can input images thathave been embedded into vectors
-
-                    )
-        return self.current_async_job    
+            generator=self.resources.generator,
+            input_ids=input_ids,
+            max_new_tokens=max_tokens,
+            gen_settings=self.resources.gen_settings,
+            completion_only=True,
+            add_bos=False,
+            stop_conditions=[self.resources.tokenizer.eos_token_id],
+            embeddings=image_embeddings
+        )
+        return self.current_async_job
 
     async def cancel_dialogue_generation(self):
-        """
-        Cancels the currently ongoing ExLlamaV2DynamicJobAsync.
-        """
-        if self.current_async_job:
-            if hasattr(self.current_async_job, 'cancel') and callable(self.current_async_job.cancel):
-                print("VtuberExllamav2: Cancelling current dialogue generation job.")
-                try:
-                    await self.current_async_job.cancel()
-                except Exception as e:
-                    print(f"VtuberExllamav2: Error trying to cancel async_job: {e}")
-            else:
-                print("VtuberExllamav2: current_async_job does not have a callable 'cancel' method.")
+        """Cancels the currently ongoing ExLlamaV2DynamicJobAsync."""
+        if self.current_async_job and hasattr(self.current_async_job, 'cancel'):
+            log.info("Cancelling current dialogue generation job.")
+            try:
+                await self.current_async_job.cancel()
+            except Exception as e:
+                log.error(f"Error trying to cancel async_job: {e}")
         else:
-            print("VtuberExllamav2: No current dialogue generation job to cancel.")
+            log.warning("No cancellable dialogue generation job to cancel.")
+
+    async def warmup(self):
+        """
+        Warms up the model by running a short, dummy generation.
+        This pre-compiles CUDA kernels and initializes memory allocations,
+        reducing latency on the first real generation request.
+        """
+        log.info("Warming up the LLM... (This may take a moment)")
+        try:
+            # 1. Define a simple, short prompt. No need for history or images.
+            warmup_prompt = "Hello, world."
+            images = [
+                # {"file": "media/test_image_1.jpg"},
+                # {"file": "media/test_image_2.jpg"},
+                # {"url": "https://media.istockphoto.com/id/1212540739/photo/mom-cat-with-kitten.jpg?s=612x612&w=0&k=20&c=RwoWm5-6iY0np7FuKWn8FTSieWxIoO917FF47LfcBKE="},
+                {"url": "https://i.dailymail.co.uk/1s/2023/07/10/21/73050285-12283411-Which_way_should_I_go_One_lady_from_the_US_shared_this_incredibl-a-4_1689019614007.jpg"},
+                {"url": "https://images.fineartamerica.com/images-medium-large-5/metal-household-objects-trevor-clifford-photography.jpg"}
+            ]
+            dummy_memory =[
+                "Bob: The venerable oak tree, standing as an immutable sentinel through countless seasons, its gnarled branches reaching skyward like ancient, petrified arms, silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy, embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
+                "As the crimson sun dipped below the jagged horizon, casting long, ethereal shadows across the ancient, crumbling ruins, a lone figure, cloaked in worn, travel-stained fabric, paused to contemplate the vast, silent expanse of the desolate wasteland stretching endlessly before them, a chilling premonition of trials yet to come slowly solidifying in the depths of their weary soul.",
+                "Bob: Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
+                "Despite the overwhelming complexities",
+                "Bob: and numerous unforeseen obstacles encountered during the arduous",
+                "multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
+                "Bob: The venerable oak tree",
+                "standing as an immutable sentinel through countless seasons",
+                "Bob: its gnarled branches reaching skyward like ancient",
+                "petrified arms",
+                "Bob: silently bore witness to the fleeting dramas of human endeavor unfolding beneath its rustling canopy",
+                "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization.",
+                "Bob: and numerous unforeseen obstacles encountered during the arduous",
+                "multi-year development cycle, the dedicated team of engineers, fueled by an unyielding passion for innovation and an unwavering commitment to their ambitious vision, ultimately managed to revolutionize the nascent field of quantum computing with their groundbreaking, paradigm-shifting invention.",
+                "Bob: Scientists, meticulously analyzing the arcane data collected from the deepest recesses of the oceanic trenches, discovered astonishing, bioluminescent organisms exhibiting previously unknown adaptive mechanisms, providing tantalizing insights into the astonishing resilience of life in environments once deemed utterly inhospitable to any form of complex existence.",
+                "Despite the overwhelming complexities",
+                "Bob: and numerous unforeseen obstacles encountered during the arduous",
+                "embodying a timeless wisdom far exceeding the ephemeral lifespan of any transient civilization."
+            ]
 
 
+            warmup_job = await self.dialogue_generator(prompt=warmup_prompt, conversation_history=dummy_memory, images=images, max_tokens=512)
 
-#legacy model, high latency
-class VtuberLLM(VtuberLLMBase):
-    def __init__(self, model, tokenizer, character_name):
-        super().__init__(character_name)
-        self.model = model
-        self.tokenizer = tokenizer
+            # 4. Await the job's result to ensure it runs to completion.
+            # We don't care about the output, just that the computation happens.
+            async for _ in warmup_job:
+                pass
+                
 
-    @classmethod
-    def load_model(cls, base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name="", character_name='assistant'):
-        from peft import PeftModel, PeftConfig
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+            # 5. Clear the job reference to avoid confusion with real jobs.
+            # The dialogue_generator method will set self.current_async_job later.
+            self.current_async_job = None
+            
+            log.info("LLM warmup complete. Model is ready.")
+
+        except Exception as e:
+            # Log an error but don't prevent the application from starting.
+            log.error(f"An error occurred during LLM warmup: {e}")
+
+    async def cleanup(self):
+        """Asynchronously cleans up model resources."""
+        if self.current_async_job:
+            log.info("Attempting to cancel ongoing async_job during cleanup...")
+            await self.cancel_dialogue_generation()
+            self.current_async_job = None
+
+        # Release resources
+        self.resources = None
         
-        model = AutoModelForCausalLM.from_pretrained(base_model_name,
-                                                        device_map="auto",
-                                                        trust_remote_code=False,
-                                                        revision="main")
+        # Clear CUDA cache and run garbage collection
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        log.info("Cleaned up ExllamaV2 model resources.")
 
-        if custom_model_name:
-            print(custom_model_name)
-            config = PeftConfig.from_pretrained(custom_model_name)
-            model = PeftModel.from_pretrained(
-                model, custom_model_name, offload_folder="LLM/offload")
 
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
-        return cls(model, tokenizer, character_name)
 
-    async def dialogue_generator(self, prompt):
-        """
-        Generates character's response to a given input (Message)
-        """
-        def is_incomplete_sentence(text):
-            return text.strip()[-1] not in {'.', '!', '?'}
 
-        max_attempts = 7
-        comment_tokenized = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
-        print("HAAAAA:\n",comment_tokenized, self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
-        inputs = LLMUtils.apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+# #legacy model, high latency
+# class VtuberLLM(VtuberLLMBase):
+#     def __init__(self, model, tokenizer, character_name):
+#         super().__init__(character_name)
+#         self.model = model
+#         self.tokenizer = tokenizer
 
-        generated_text = ""
-        print(len(comment_tokenized["input_ids"][0]))
-        for attempt in range(max_attempts):
-            max_new_tokens = LLMUtils.get_rand_token_len(input_len=len(comment_tokenized["input_ids"][0]))
-            results = self.model.generate(input_ids=inputs["input_ids"].to("cuda"),
-                                          max_new_tokens=max_new_tokens,
-                                          top_p=0.8, top_k=50, temperature=1.1,
-                                          repetition_penalty=1.2, do_sample=True, num_return_sequences=10)
-            output = self.tokenizer.batch_decode(results, skip_special_tokens=True)[0]
-            # print(f"{'#' * 30}\n{output}\n{'#' * 30}")
-            output_clean = LLMUtils.character_reply_cleaner(output, self.character_name).lower()
-            # print(f"{'#' * 30}\n{output_clean}\n{'#' * 30}")
-            generated_text = output_clean
-            if not is_incomplete_sentence(generated_text) or attempt == max_attempts:
-                break
+#     @classmethod
+#     def load_model(cls, base_model_name="TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ", custom_model_name="", character_name='assistant'):
+#         from peft import PeftModel, PeftConfig
+#         from transformers import AutoModelForCausalLM, AutoTokenizer
+        
+#         model = AutoModelForCausalLM.from_pretrained(base_model_name,
+#                                                         device_map="auto",
+#                                                         trust_remote_code=False,
+#                                                         revision="main")
 
-        # print("Text generation finished")
-        return generated_text
+#         if custom_model_name:
+#             print(custom_model_name)
+#             config = PeftConfig.from_pretrained(custom_model_name)
+#             model = PeftModel.from_pretrained(
+#                 model, custom_model_name, offload_folder="LLM/offload")
+
+#         model.eval()
+#         tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True)
+#         return cls(model, tokenizer, character_name)
+
+#     async def dialogue_generator(self, prompt):
+#         """
+#         Generates character's response to a given input (Message)
+#         """
+#         def is_incomplete_sentence(text):
+#             return text.strip()[-1] not in {'.', '!', '?'}
+
+#         max_attempts = 7
+#         comment_tokenized = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+#         # print("HAAAAA:\n",comment_tokenized, self.tokenizer.bos_token, self.tokenizer.bos_token_id, self.tokenizer.eos_token, self.tokenizer.eos_token_id)
+#         inputs = apply_chat_template(instructions="", prompt=prompt,tokenizer=self.tokenizer)
+
+#         generated_text = ""
+#         # print(len(comment_tokenized["input_ids"][0]))
+#         for attempt in range(max_attempts):
+#             max_new_tokens = get_rand_token_len(input_len=len(comment_tokenized["input_ids"][0]))
+#             results = self.model.generate(input_ids=inputs["input_ids"].to("cuda"),
+#                                           max_new_tokens=max_new_tokens,
+#                                           top_p=0.8, top_k=50, temperature=1.1,
+#                                           repetition_penalty=1.2, do_sample=True, num_return_sequences=10)
+#             output = self.tokenizer.batch_decode(results, skip_special_tokens=True)[0]
+#             # print(f"{'#' * 30}\n{output}\n{'#' * 30}")
+#             output_clean = character_reply_cleaner(output, self.character_name).lower()
+#             # print(f"{'#' * 30}\n{output_clean}\n{'#' * 30}")
+#             generated_text = output_clean
+#             if not is_incomplete_sentence(generated_text) or attempt == max_attempts:
+#                 break
+
+#         # print("Text generation finished")
+#         return generated_text

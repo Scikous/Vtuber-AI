@@ -3,7 +3,6 @@ from flask import Flask, request, redirect
 from requests_oauthlib import OAuth2Session
 import multiprocessing
 from general_utils import get_env_var
-from livechat_utils import append_livechat_message
 import dotenv
 
 # manager = multiprocessing.Manager()
@@ -39,7 +38,7 @@ class TwitchAuth():
             # Only redirect to the authorization URL once
             if 'code' in request.args or 'state' in request.args:
                 token_info = oauth.fetch_token(self.TOKEN_URL, client_id=self.CLIENT_ID, client_secret=self.CLIENT_SECRET,include_client_id=True, authorization_response=request.url)
-                #print(f"Token received: {token}")
+                print(f"Token received: {token}")
                 
                 #sets process token to access token directly -- avoids having to call refresh method
                 token.value = bytes(token_info['access_token'],'utf-8')
@@ -119,18 +118,24 @@ class Bot(commands.Bot):
 
     #upon receiving a message, username and message are appended to a list for the LLM to pick from
     async def event_message(self, message):
-        # print(f'{message.author.name}: {message.content}')
+        print(f'{message.author.name}: {message.content}')
         if '!' in message.content:
             await self.handle_commands(message)
-        user_msg = (message.author.name, message.content)
-        append_livechat_message(self.twitch_chat_msgs, user_msg)
-            
-        # print("Twitch msg:", user_msg)
-        # append_livechat_message(twitch_chat_msgs, user_msg)
+
+        user_msg = f"{message.author.name}: {message.content}"
+        self.twitch_chat_msgs.append(user_msg)
+        print("Twitch msg:", user_msg)
 
     @commands.command(name='hello')
     async def hello(self, ctx):
         await ctx.send(f'Hello {ctx.author.name}!')
+
+    # @commands.command(name='disconnect')
+    # async def disconnect_cmd(self, ctx):
+    #     # Optional: Add permission check here
+    #     if ctx.author.name == 'your_username':  # Only allow specific users
+    #         await ctx.send("Disconnecting bot...")
+    #         await self.close()
     
 #For testing purposes
 if __name__ == "__main__":

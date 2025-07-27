@@ -1,6 +1,104 @@
 
+from .config import load_config
 import numpy as np
 import math
+import logging
+
+import asyncio
+import threading
+import numpy as np
+from abc import ABC, abstractmethod
+from typing import Callable, Awaitable, Any
+
+class STTBase(ABC):
+    """
+    Abstract Base Class for Speech-to-Text (STT) implementations.
+
+    This class defines the standard interface for all STT engines, ensuring they
+    can be used interchangeably. It handles model initialization and defines
+    the core transcription methods that subclasses must implement.
+    """
+
+    def __init__(self, model_path: str = None, language: str = None, device: str = None, compute_type: str = None, **stt_settings):
+        """
+        Initializes the STT engine.
+
+        Args:
+            model_path (str, optional): Path or identifier for the STT model.
+            language: Language code for transcription (e.g., 'en')
+            device (str, optional): The device to run the model on (e.g., 'cpu', 'cuda').
+            compute_type (str, optional): The computation type for the model (e.g., 'int8', 'float16').
+            **stt_settings: Additional keyword arguments for the specific implementation. Namely STT settings
+        """
+        self.model_path = model_path
+        self.device = device
+        self.compute_type = compute_type
+        # self._load_model() # Model loading is now explicit
+
+    @abstractmethod
+    def _load_model(self):
+        """
+        Loads the specific STT model into memory.
+
+        Subclasses must implement this method to handle the loading of their
+        respective models and prepare them for transcription. This method
+        is called automatically during initialization.
+        """
+        raise NotImplementedError("Subclasses must implement the _load_model method.")
+
+    @abstractmethod
+    async def transcribe_audio(self, audio_data: np.ndarray, **kwargs) -> str:
+        """
+        Transcribes a given audio segment.
+
+        This method takes a complete audio segment as a NumPy array and returns
+        the transcribed text.
+
+        Args:
+            audio_data (np.ndarray): The audio data to be transcribed.
+            **kwargs: Additional implementation-specific parameters for transcription.
+
+        Returns:
+            str: The resulting transcription text.
+        """
+        raise NotImplementedError("Subclasses must implement the transcribe_audio method.")
+
+    @abstractmethod #could be async as well -- mayhaps
+    def listen_and_transcribe(self, callback: Callable[[str, bool], Awaitable[None]], **kwargs):
+        """
+        Listens to an audio input stream and provides real-time transcriptions.
+
+        This method should handle capturing audio from a microphone, detecting speech,
+        and calling the provided callback function with transcription results.
+
+        Args:
+            callback: An awaitable callback function to be invoked with transcription results.
+                      It receives two arguments:
+                      - text (str): The transcribed text.
+                      - is_final (bool): True if the transcription segment is final.
+            **kwargs: Additional parameters, typically including:
+                      - stop_event (threading.Event): An event to signal when to stop listening.
+                      - loop (asyncio.AbstractEventLoop): The event loop to run the callback in.
+                      - device_index (int, optional): The index of the audio input device.
+        """
+        raise NotImplementedError("Subclasses must implement the listen_and_transcribe method.")
+
+    def list_available_input_devices(self) -> list:
+        """
+        Provides a list of available audio input devices.
+
+        This is a concrete utility method that can be used by any subclass.
+
+        Returns:
+            list: A list of available input devices, as provided by the helper function.
+        """
+        try:
+            return list_available_input_devices()
+        except Exception as e:
+            print(f"Could not list audio devices. Is 'sounddevice' installed and working? Error: {e}")
+            return []
+
+
 
 def calculate_audio_energy_rms(audio_chunk: np.ndarray) -> float:
     """
@@ -16,7 +114,7 @@ def calculate_audio_energy_rms(audio_chunk: np.ndarray) -> float:
     
     # Check for non-finite values which would cause issues
     if not np.all(np.isfinite(audio_chunk_float)) :
-        # print("Warning: Non-finite values detected in audio chunk for RMS calculation.")
+        print("Warning: Non-finite values detected in audio chunk for RMS calculation.")
         # One option is to replace non-finite with 0, or simply return 0 for the chunk
         # audio_chunk_float = np.nan_to_num(audio_chunk_float)
         return 0.0 # Or handle as appropriate
@@ -57,6 +155,44 @@ def count_words(text: str) -> int:
     if not text or not text.strip():
         return 0
     return len(text.split())
+
+def create_stt_callback(speech_queue, speaker_name="User", logger=None):
+    """Create a standardized STT callback function for multiprocessing workers.
+    
+    Args:
+        speech_queue: Queue to put recognized speech into
+        speaker_name: Name of the speaker (default: "User")
+        logger: Logger instance for debugging
+        
+    Returns:
+        Callback function that can be used with speech_to_text
+    """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+    
+    def stt_callback(speech):
+        """Callback function for STT results."""
+        try:
+            # Filter out the common false positive
+            if speech and speech.strip().lower() != "thank you.":
+                message = f"{speaker_name}: {speech.strip()}"
+                
+                # Put message in queue (non-blocking)
+                try:
+                    speech_queue.put_nowait(message)
+                    logger.debug(f"STT captured: {speech.strip()}")
+                except:
+                    # Queue is full, try to make space by removing oldest item
+                    try:
+                        speech_queue.get_nowait()  # Remove oldest
+                        speech_queue.put_nowait(message)  # Add new
+                        logger.debug(f"STT captured (queue was full): {speech.strip()}")
+                    except:
+                        logger.warning(f"STT queue full, dropped message: {speech.strip()}")
+        except Exception as e:
+            logger.error(f"Error in STT callback: {e}")
+    
+    return stt_callback
 
 # Example usage (can be removed or kept for testing):
 if __name__ == '__main__':
