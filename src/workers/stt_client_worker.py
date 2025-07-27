@@ -52,7 +52,7 @@ def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event:
 
     try:
         logger.info("Starting STT client worker.")
-        stt_handler.process_audio(
+        stt_handler.listen_and_transcribe(
             sentence_callback=sentence_callback,
             transcription_func=transcription_with_gpu,
             on_speech_start=on_speech_start,

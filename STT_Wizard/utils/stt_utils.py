@@ -93,7 +93,7 @@ class STTBase(ABC):
             list: A list of available input devices, as provided by the helper function.
         """
         try:
-            return list_available_input_devices()
+            return self.list_available_input_devices()
         except Exception as e:
             print(f"Could not list audio devices. Is 'sounddevice' installed and working? Error: {e}")
             return []
