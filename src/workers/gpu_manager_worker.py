@@ -12,7 +12,7 @@ def gpu_manager(request_queue, worker_events, max_slots):
         max_slots (int): Maximum number of concurrent GPU slots.
     """
     setup_project_root()
-    logger = app_logger.get_logger("STTClientWorker")
+    logger = app_logger.get_logger("GPUClientWorker")
 
     available_slots = max_slots
     waiting_queue = []  # Min-heap for (priority, worker_id) tuples

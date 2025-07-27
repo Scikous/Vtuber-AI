@@ -2,10 +2,8 @@ import multiprocessing as mp
 from src.utils.app_utils import setup_project_root
 from src.utils import logger as app_logger
 from src.common import config as app_config
-from src.utils.performance_utils import apply_system_optimizations, get_cuda_utilization
+from src.utils.performance_utils import apply_system_optimizations, sync_check_gpu_memory
 from STT_Wizard.STT import WhisperSTT
-import torch
-import time
 
 def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event: mp.Event, stt_stream_queue: mp.Queue, gpu_request_queue: mp.Queue, worker_event: mp.Event):
     setup_project_root()
@@ -21,10 +19,7 @@ def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event:
     gpu_request_queue.put({"type": "acquire", "priority": 5, "worker_id": worker_id})
     worker_event.wait()
     try:
-        if torch.cuda.is_available() and get_cuda_utilization() > 0.9:
-            logger.warning("GPU memory usage high, delaying STT model loading.")
-            while get_cuda_utilization() > 0.9:
-                time.sleep(1)
+        sync_check_gpu_memory(logger)
         stt_handler._load_model()
     finally:
         gpu_request_queue.put({"type": "release", "worker_id": worker_id})

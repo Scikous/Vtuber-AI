@@ -3,6 +3,7 @@ import torch
 import multiprocessing as mp
 import gc
 import asyncio
+import time
 
 def apply_system_optimizations(logger, use_cuda=True, num_threads=None):
     """Apply system-level optimizations for minimal latency."""
@@ -29,7 +30,7 @@ def apply_system_optimizations(logger, use_cuda=True, num_threads=None):
     
     logger.info("✅ System optimizations applied!")
 
-async def check_gpu_memory(logger):
+async def async_check_gpu_memory(logger):
     if torch.cuda.is_available():
         total = torch.cuda.get_device_properties(0).total_memory
         if total > 0:
@@ -39,17 +40,29 @@ async def check_gpu_memory(logger):
                     break
                 logger.warning("GPU memory usage high, waiting...")
                 await asyncio.sleep(1)
+                
+def sync_check_gpu_memory(logger):
+    if torch.cuda.is_available():
+        total = torch.cuda.get_device_properties(0).total_memory
+        if total > 0:
+            while True:
+                allocated = torch.cuda.memory_allocated()
+                if allocated / total <= 0.9:
+                    break
+                logger.warning("GPU memory usage high, waiting...")
+                time.sleep(1)
 
-def get_cuda_utilization():
-    if not torch.cuda.is_available():
-        return None # Or raise an error, or return 0.0 for no GPU
+#may be useful somewhere?
+# def get_cuda_utilization():
+#     if not torch.cuda.is_available():
+#         return None # Or raise an error, or return 0.0 for no GPU
 
-    allocated_mem = torch.cuda.memory_allocated()
-    max_allocated_mem = torch.cuda.max_memory_allocated()
+#     allocated_mem = torch.cuda.memory_allocated()
+#     max_allocated_mem = torch.cuda.max_memory_allocated()
 
-    if max_allocated_mem > 0:
-        return allocated_mem / max_allocated_mem
-    else:
-        # If max_allocated_mem is 0, it means no memory has been used yet,
-        # so utilization is effectively 0%.
-        return 0.0
+#     if max_allocated_mem > 0:
+#         return allocated_mem / max_allocated_mem
+#     else:
+#         # If max_allocated_mem is 0, it means no memory has been used yet,
+#         # so utilization is effectively 0%.
+#         return 0.0

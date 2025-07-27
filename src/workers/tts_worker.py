@@ -1,12 +1,10 @@
 import multiprocessing as mp
 import asyncio
-import sys
 from src.utils.app_utils import setup_project_root
 from src.utils import logger as app_logger
-from src.utils.performance_utils import apply_system_optimizations, check_gpu_memory
+from src.utils.performance_utils import apply_system_optimizations, async_check_gpu_memory
 from src.common import config as app_config
 from TTS_Wizard.realtimetts import RealTimeTTS, pipertts_engine, coquitts_engine
-import torch
 
 async def tts_runner(shutdown_event, llm_to_tts_queue, 
                      user_has_stopped_speaking_event, gpu_request_queue, worker_event, worker_id="TTS"):
@@ -16,7 +14,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
     
     tts_settings = config.get("tts_settings", {})
     tts_engine_name = tts_settings.get("tts_engine", "piper")
-    
+    TERMINATE_OUTPUT = config.get("TERMINATE_OUTPUT", "w1zt3r")
     # Model loading (low priority)
     gpu_request_queue.put({"type": "acquire", "priority": 5, "worker_id":  worker_id})
     worker_event.wait()
@@ -34,7 +32,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
     while not shutdown_event.is_set():
         try:
             sentence = await asyncio.to_thread(llm_to_tts_queue.get)
-            if sentence == "w1zt3r":
+            if sentence == TERMINATE_OUTPUT:
                 await tts_model.tts_request_clear()
                 continue
             if sentence:
@@ -45,7 +43,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
                 worker_event.wait()
                 logger.info(f"TTS Worker: Processing sentence: '{sentence}'")
                 try:
-                    await check_gpu_memory(logger)
+                    await async_check_gpu_memory(logger)
                     await tts_model.tts_request_async(sentence)
                 finally:
                     gpu_request_queue.put({"type": "release", "worker_id": worker_id})
