@@ -59,7 +59,9 @@
     "tts_settings":{
         "tts_service_name": "RealTimeTTS",
         "tts_engine": "coqui",
-        "min_sentence_len": 8
+        "min_sentence_len": 8,
+        "voice_to_clone_file": null
+
     },
 
     

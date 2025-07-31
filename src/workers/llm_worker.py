@@ -9,7 +9,7 @@ from src.common import config as app_config
 from LLM_Wizard.models import LLMModelConfig, VtuberExllamav2
 from LLM_Wizard.model_utils import load_character, contains_sentence_terminator
 
-async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id="LLM"):
+async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id="LLM", llm_output_display_queue=None):
     logger = app_logger.get_logger("LLMWorker")
     config = app_config.load_config()
     apply_system_optimizations(logger, use_cuda=True)
@@ -90,6 +90,8 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                                 token = result.get("text", "")
                                 if token:
                                     full_sentence += token
+                                    if llm_output_display_queue:
+                                        llm_output_display_queue.put(token)
                                 else:
                                     continue
 
@@ -131,13 +133,13 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
     
     logger.info("LLM worker has shut down.")
 
-def llm_worker(shutdown_event: mp.Event, llm_control_queue: mp.Queue, llm_to_tts_queue: mp.Queue, gpu_ready_event: mp.Event, gpu_request_queue: mp.Queue, worker_event: mp.Event):
+def llm_worker(shutdown_event: mp.Event, llm_control_queue: mp.Queue, llm_to_tts_queue: mp.Queue, gpu_ready_event: mp.Event, gpu_request_queue: mp.Queue, worker_event: mp.Event, llm_output_display_queue: mp.Queue):
     setup_project_root()
     worker_id = "LLM"
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id))
+        loop.run_until_complete(llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id, llm_output_display_queue))
     except KeyboardInterrupt:
         pass
     finally:
