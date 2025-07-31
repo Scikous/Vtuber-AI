@@ -32,7 +32,7 @@ async def exllamav2_test():
     # Character = VtuberExllamav2.load_model(config=model_config)#(generator, gen_settings, tokenizer, character_name)
 
     async with await VtuberExllamav2.load_model(config=model_config) as Character:
-            
+        await asyncio.sleep(1)
         images = [
         # {"file": "media/test_image_1.jpg"},
         # {"file": "media/test_image_2.jpg"},
