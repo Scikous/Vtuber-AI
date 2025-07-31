@@ -32,6 +32,11 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
 
     while not shutdown_event.is_set():
         try:
+            #control panel or keyboard can mute
+            if tts_mute_event.is_set():
+                await tts_model.tts_request_clear()
+                continue
+
             sentence = await asyncio.to_thread(llm_to_tts_queue.get, timeout=0.1)
             if sentence == TERMINATE_OUTPUT:
                 await tts_model.tts_request_clear()
@@ -47,6 +52,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
                     await async_check_gpu_memory(logger)
                     if not tts_mute_event.is_set():
                         await tts_model.tts_request_async(sentence)
+
                 finally:
                     gpu_request_queue.put({"type": "release", "worker_id": worker_id})
         except mp.queues.Empty:
