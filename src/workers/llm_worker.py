@@ -53,10 +53,10 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                     # Queue is still full, wait a moment and let other processes run.
                     await asyncio.sleep(0.05)
         finally:
-            # VERY IMPORTANT: Re-acquire the semaphore to resume generation.
+            # VERY IMPORTANT: Re-acquire the GPU to resume generation.
             gpu_request_queue.put({"type": "acquire", "priority": 3, "worker_id":  worker_id})
             worker_event.wait()
-            logger.info("LLM Worker: Re-acquiring GPU semaphore to continue generation.")
+            logger.info("LLM Worker: Re-acquiring GPU access to continue generation.")
     
     async with await VtuberExllamav2.load_model(config=model_config) as llm_model:
         logger.info("✅ Main LLM model loaded.")
@@ -71,19 +71,23 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                     action = control_message.get("action")
                     if action == "start":
                         continue_final_message = control_message.get("continue_final_message", False)
+                        add_generation_prompt=control_message.get("add_generation_prompt")
                         stt_message = control_message.get("prompt")
-                        if continue_final_message:
+                        if conversation_history and continue_final_message:
                             prompt = conversation_history.pop()
                             conversation_history[-1] = stt_message
                         else:
                             prompt = stt_message
+                            #just to be sure that they're correctly set
+                            continue_final_message = False
+                            add_generation_prompt = True
 
                         logger.info(f"LLM Worker: Starting generation for prompt: '{prompt}'")
                         try:
                             gpu_request_queue.put({"type": "acquire", "priority": 2, "worker_id":  worker_id})
                             worker_event.wait()
                             await async_check_gpu_memory(logger)
-                            async_job = await llm_model.dialogue_generator(prompt, conversation_history=conversation_history, max_tokens=max_tokens, add_generation_prompt=control_message.get("add_generation_prompt"), continue_final_message=continue_final_message)
+                            async_job = await llm_model.dialogue_generator(prompt, conversation_history=conversation_history, max_tokens=max_tokens, add_generation_prompt=add_generation_prompt, continue_final_message=continue_final_message)
                             full_sentence = ""
                             full_response = ""
                             async for result in async_job:
@@ -94,7 +98,6 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                                         llm_output_display_queue.put(token)
                                 else:
                                     continue
-
                                 
                                 if contains_sentence_terminator(full_sentence) and len(full_sentence) > 10:
                                     logger.info(f"LLM Worker: Queueing sentence: '{full_sentence.strip()}'")
@@ -123,8 +126,8 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                                     conversation_history.append(prompt)
                                 conversation_history.append(full_response)
                         finally:
-                            # Ensure the semaphore is ALWAYS released, even if errors occur.
-                            logger.info("LLM Worker: Generation finished. Releasing GPU semaphore.")
+                            # Ensure the GPU is ALWAYS released, even if errors occur.
+                            logger.info("LLM Worker: Generation finished. Releasing GPU access.")
                             gpu_request_queue.put({"type": "release", "worker_id": worker_id})
                             await asyncio.sleep(0.01)
             except Exception as e:
