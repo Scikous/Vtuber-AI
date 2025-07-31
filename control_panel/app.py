@@ -1,91 +1,3 @@
-# # control_panel/app.py
-
-# import gradio as gr
-# import sys
-# import os
-
-# # Add the project root to the Python path to allow importing from 'src'
-# # This is a common practice when running scripts in subdirectories
-# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-# if project_root not in sys.path:
-#     sys.path.insert(0, project_root)
-
-# # Now you can import your workers
-# # Assuming you have functions like process_stt, process_llm, process_tts in your workers
-# # from src.worker.stt_worker import process_stt
-# # from src.worker.llm_worker import process_llm
-# # from src.worker.tts_worker import process_tts
-
-# # --- Mock functions for demonstration ---
-# # Replace these with your actual worker functions
-# def mock_process_stt(audio_file_path):
-#     """Mock STT worker that returns transcribed text."""
-#     print(f"STT processing: {audio_file_path}")
-#     return "This is a test transcription."
-
-# def mock_process_llm(text_input):
-#     """Mock LLM worker that returns a generated response."""
-#     print(f"LLM processing: {text_input}")
-#     return f"The LLM received: '{text_input}' and is generating a response."
-
-# def mock_process_tts(text_input):
-#     """Mock TTS worker that returns a path to an audio file."""
-#     print(f"TTS processing: {text_input}")
-#     # In a real scenario, this would generate an audio file and return its path
-#     # For this example, we'll return a placeholder path
-#     return "path/to/generated_speech.wav"
-# # -----------------------------------------
-
-# def stt_llm_tts_pipeline(audio_input):
-#     """
-#     The main function to connect the pipeline components for the Gradio interface.
-#     """
-#     transcribed_text = mock_process_stt(audio_input)
-#     llm_response = mock_process_llm(transcribed_text)
-#     output_audio_path = mock_process_tts(llm_response)
-    
-#     return transcribed_text, llm_response, output_audio_path
-
-# # --- Create the Gradio Interface ---
-# with gr.Blocks() as demo:
-#     gr.Markdown("# STT -> LLM -> TTS Control Panel")
-    
-#     with gr.Row():
-#         with gr.Column():
-#             audio_input = gr.Audio(type="filepath", label="Speak Here")
-#             submit_button = gr.Button("Process Audio")
-        
-#         with gr.Column():
-#             transcribed_output = gr.Textbox(label="Transcribed Text (STT)")
-#             llm_output = gr.Textbox(label="LLM Response")
-#             tts_output = gr.Audio(label="Spoken Response (TTS)")
-            
-#     submit_button.click(
-#         fn=stt_llm_tts_pipeline,
-#         inputs=audio_input,
-#         outputs=[transcribed_output, llm_output, tts_output]
-#     )
-
-#     gr.Markdown("## Examples")
-#     gr.Examples(
-#         examples=[
-#             # Provide paths to example audio files if you have them
-#             # "path/to/example1.wav",
-#         ],
-#         inputs=audio_input,
-#         outputs=[transcribed_output, llm_output, tts_output],
-#         fn=stt_llm_tts_pipeline,
-#         cache_examples=True
-#     )
-
-
-# # --- Launch the App ---
-# if __name__ == "__main__":
-#     # The launch() method starts a simple web server. [4]
-#     # server_name="0.0.0.0" makes it accessible on your local network
-#     demo.launch(server_name="0.0.0.0", server_port=8888) 
-
-
 # control_panel/app.py
 
 import gradio as gr
@@ -109,7 +21,6 @@ from src.process_orchestrator import ProcessOrchestrator
 from src.common import config as app_config
 
 CONFIG_PATH = os.path.join(project_root, 'src/common/config.json')
-print("WHWHWHWHW", CONFIG_PATH)
 class AppManager:
     """A singleton class to manage the lifecycle of the ProcessOrchestrator and its workers."""
     _instance = None
@@ -133,6 +44,9 @@ class AppManager:
         self.tts_mute_event = mp.Event()
         self.stt_mute_event = mp.Event()
         
+        self.full_text = ""
+        self.last_text_received_time = None # For detecting pauses between outputs
+
         self.initialized = True
         print("AppManager Initialized.")
 
@@ -209,13 +123,37 @@ class AppManager:
         if not self.is_running():
             return ""
         
-        full_text = ""
+        if self.llm_output_display_queue.empty():
+            return self.full_text
+
+        now = time.time()
+        if self.full_text and self.last_text_received_time and (now - self.last_text_received_time > 1.5):
+            self.full_text += f"\n\n{'='*40}\n\n"
+
         try:
             while not self.llm_output_display_queue.empty():
-                full_text += self.llm_output_display_queue.get_nowait()
+                self.full_text += self.llm_output_display_queue.get_nowait()
         except Empty:
             pass
-        return full_text
+
+        self.last_text_received_time = now
+        return self.full_text
+
+    def clear_llm_output(self):
+            """Clears the displayed LLM output text and resets the component state."""
+            print("Clearing LLM output display.")
+            self.full_text = ""
+            self.last_text_received_time = None
+            
+            # Drain the queue to prevent old, unprocessed text from reappearing
+            while not self.llm_output_display_queue.empty():
+                try:
+                    self.llm_output_display_queue.get_nowait()
+                except Empty:
+                    break
+                    
+            return "" # Return empty string to update the Gradio textbox
+
 
 # --- Instantiate the Manager ---
 manager = AppManager()
@@ -239,15 +177,18 @@ def create_gradio_ui():
                     tts_mute_button = gr.Checkbox(label="🔊 Mute Speaker (TTS)", value=False)
                 
                 terminate_job_button = gr.Button("🗑️ Terminate Current LLM/TTS Job")
-                
+                clear_output_button = gr.Button("🧹 Clear Output")
+
                 llm_output_box = gr.Textbox(
                     label="LLM Live Output", 
                     interactive=False, 
                     lines=15,
                     autoscroll=True
                 )
+
                 # This will periodically update the output box
-                demo.load(manager.poll_llm_output, None, llm_output_box, show_progress=False)
+                timer = gr.Timer(0.2) 
+                timer.tick(manager.poll_llm_output, None, llm_output_box, show_progress=False)
 
             # --- Settings Tabs ---
             with gr.TabItem("⚙️ System Settings"):
@@ -320,6 +261,7 @@ def create_gradio_ui():
         start_button.click(manager.start_workers, None, None)
         stop_button.click(manager.stop_workers, None, None)
         terminate_job_button.click(manager.terminate_current_job, None, None)
+        clear_output_button.click(manager.clear_llm_output, None, llm_output_box)
         
         # Connect mute checkboxes
         stt_mute_button.change(lambda x: manager.stt_mute_event.set() if x else manager.stt_mute_event.clear(), inputs=[stt_mute_button], outputs=None)
