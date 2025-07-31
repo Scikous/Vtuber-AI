@@ -48,10 +48,12 @@ def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event:
     try:
         logger.info("Starting STT client worker.")
         stt_handler.listen_and_transcribe(
+            shutdown_event=shutdown_event,
             sentence_callback=sentence_callback,
             transcription_func=transcription_with_gpu,
             on_speech_start=on_speech_start,
-            on_speech_end=on_speech_end
+            on_speech_end=on_speech_end,
+            mute_event=stt_mute_event
         )
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received in STT client worker.")
