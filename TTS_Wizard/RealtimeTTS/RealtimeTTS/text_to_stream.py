@@ -721,7 +721,7 @@ class TextToAudioStream:
         Returns:
             Boolean indicating if the stream is playing.
         """
-        return self.stream_running and not self.is_playing_flag
+        return self.stream_running and self.is_playing_flag
 
     def _on_audio_stream_start(self):
         """

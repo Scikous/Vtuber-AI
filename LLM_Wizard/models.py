@@ -298,6 +298,8 @@ class VtuberExllamav2(VtuberLLMBase):
             await self.cancel_dialogue_generation()
             self.current_async_job = None
 
+        # Close the generator -- handles closing all pending tasks
+        await self.resources.generator.close()
         # Release resources
         self.resources = None
         

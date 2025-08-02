@@ -5,7 +5,7 @@ from src.common import config as app_config
 from src.utils.performance_utils import apply_system_optimizations, sync_check_gpu_memory
 from STT_Wizard.STT import WhisperSTT
 
-def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event: mp.Event, stt_stream_queue: mp.Queue, gpu_request_queue: mp.Queue, worker_event: mp.Event):
+def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event: mp.Event, stt_stream_queue: mp.Queue, gpu_request_queue: mp.Queue, worker_event: mp.Event, stt_mute_event: mp.Event):
     setup_project_root()
     logger = app_logger.get_logger("STTClientWorker")
     config = app_config.load_config()
@@ -48,10 +48,12 @@ def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event:
     try:
         logger.info("Starting STT client worker.")
         stt_handler.listen_and_transcribe(
+            shutdown_event=shutdown_event,
             sentence_callback=sentence_callback,
             transcription_func=transcription_with_gpu,
             on_speech_start=on_speech_start,
-            on_speech_end=on_speech_end
+            on_speech_end=on_speech_end,
+            mute_event=stt_mute_event
         )
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received in STT client worker.")

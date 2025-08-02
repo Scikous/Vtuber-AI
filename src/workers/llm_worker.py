@@ -9,7 +9,7 @@ from src.common import config as app_config
 from LLM_Wizard.models import LLMModelConfig, VtuberExllamav2
 from LLM_Wizard.model_utils import load_character, contains_sentence_terminator
 
-async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id="LLM"):
+async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id="LLM", llm_output_display_queue=None):
     logger = app_logger.get_logger("LLMWorker")
     config = app_config.load_config()
     apply_system_optimizations(logger, use_cuda=True)
@@ -53,10 +53,10 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                     # Queue is still full, wait a moment and let other processes run.
                     await asyncio.sleep(0.05)
         finally:
-            # VERY IMPORTANT: Re-acquire the semaphore to resume generation.
+            # VERY IMPORTANT: Re-acquire the GPU to resume generation.
             gpu_request_queue.put({"type": "acquire", "priority": 3, "worker_id":  worker_id})
             worker_event.wait()
-            logger.info("LLM Worker: Re-acquiring GPU semaphore to continue generation.")
+            logger.info("LLM Worker: Re-acquiring GPU access to continue generation.")
     
     async with await VtuberExllamav2.load_model(config=model_config) as llm_model:
         logger.info("✅ Main LLM model loaded.")
@@ -71,28 +71,33 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                     action = control_message.get("action")
                     if action == "start":
                         continue_final_message = control_message.get("continue_final_message", False)
+                        add_generation_prompt=control_message.get("add_generation_prompt")
                         stt_message = control_message.get("prompt")
-                        if continue_final_message:
+                        if conversation_history and continue_final_message:
                             prompt = conversation_history.pop()
                             conversation_history[-1] = stt_message
                         else:
                             prompt = stt_message
+                            #just to be sure that they're correctly set
+                            continue_final_message = False
+                            add_generation_prompt = True
 
                         logger.info(f"LLM Worker: Starting generation for prompt: '{prompt}'")
                         try:
                             gpu_request_queue.put({"type": "acquire", "priority": 2, "worker_id":  worker_id})
                             worker_event.wait()
                             await async_check_gpu_memory(logger)
-                            async_job = await llm_model.dialogue_generator(prompt, conversation_history=conversation_history, max_tokens=max_tokens, add_generation_prompt=control_message.get("add_generation_prompt"), continue_final_message=continue_final_message)
+                            async_job = await llm_model.dialogue_generator(prompt, conversation_history=conversation_history, max_tokens=max_tokens, add_generation_prompt=add_generation_prompt, continue_final_message=continue_final_message)
                             full_sentence = ""
                             full_response = ""
                             async for result in async_job:
                                 token = result.get("text", "")
                                 if token:
                                     full_sentence += token
+                                    if llm_output_display_queue:
+                                        llm_output_display_queue.put(token)
                                 else:
                                     continue
-
                                 
                                 if contains_sentence_terminator(full_sentence) and len(full_sentence) > 10:
                                     logger.info(f"LLM Worker: Queueing sentence: '{full_sentence.strip()}'")
@@ -121,8 +126,8 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                                     conversation_history.append(prompt)
                                 conversation_history.append(full_response)
                         finally:
-                            # Ensure the semaphore is ALWAYS released, even if errors occur.
-                            logger.info("LLM Worker: Generation finished. Releasing GPU semaphore.")
+                            # Ensure the GPU is ALWAYS released, even if errors occur.
+                            logger.info("LLM Worker: Generation finished. Releasing GPU access.")
                             gpu_request_queue.put({"type": "release", "worker_id": worker_id})
                             await asyncio.sleep(0.01)
             except Exception as e:
@@ -131,13 +136,13 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
     
     logger.info("LLM worker has shut down.")
 
-def llm_worker(shutdown_event: mp.Event, llm_control_queue: mp.Queue, llm_to_tts_queue: mp.Queue, gpu_ready_event: mp.Event, gpu_request_queue: mp.Queue, worker_event: mp.Event):
+def llm_worker(shutdown_event: mp.Event, llm_control_queue: mp.Queue, llm_to_tts_queue: mp.Queue, gpu_ready_event: mp.Event, gpu_request_queue: mp.Queue, worker_event: mp.Event, llm_output_display_queue: mp.Queue):
     setup_project_root()
     worker_id = "LLM"
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id))
+        loop.run_until_complete(llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id, llm_output_display_queue))
     except KeyboardInterrupt:
         pass
     finally:

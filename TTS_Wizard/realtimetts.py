@@ -90,7 +90,8 @@ class RealTimeTTS():
         print("Audio stream stopped.")
 
     async def tts_request_clear(self):
-        self.stream.stop()
+        if self.stream.is_playing():
+            self.stream.stop()
 
 
     async def tts_request_async(self, text, min_sentence_len=8, **kwargs):

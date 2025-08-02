@@ -15,7 +15,6 @@ except ImportError as e:
     print(f"Error importing necessary libraries for STT: {e}")
     print("Please ensure 'faster-whisper', 'sounddevice', 'numpy', 'webrtcvad-wheels' (or 'webrtcvad') are installed.")
     # Fallback or raise error if critical components are missing
-    # For now, we'll let it proceed and fail later if these are used without being imported.
     WhisperModel = None # Placeholder to avoid immediate crash if script is imported but not run
 
 class WhisperSTT(STTBase):
@@ -121,7 +120,7 @@ class WhisperSTT(STTBase):
         """Synchronous wrapper for transcribe_audio."""
         return asyncio.run(self.transcribe_audio(audio_data, **kwargs))
     
-    def listen_and_transcribe(self, sentence_callback, transcription_func=None, on_speech_start=None, on_speech_end=None, device_index: int = None):
+    def listen_and_transcribe(self, shutdown_event, sentence_callback, transcription_func=None, on_speech_start=None, on_speech_end=None, device_index: int = None, mute_event=None):
         vad = webrtcvad.Vad(self.vad_aggressiveness)
         audio_buffer = deque()
         is_speaking = False
@@ -130,6 +129,8 @@ class WhisperSTT(STTBase):
         def audio_callback(indata: np.ndarray, frames: int, time_info, status):
             nonlocal is_speaking
             try:
+                if mute_event and mute_event.is_set():
+                    return
                 is_speech = vad.is_speech((indata * 32767).astype(np.int16).tobytes(), self.sample_rate)
                 if is_speech:
                     if not is_speaking:
@@ -153,7 +154,7 @@ class WhisperSTT(STTBase):
                                 blocksize=self.frame_size, callback=audio_callback, device=device_index):
                 last_transcript = ""
                 final_audio_buffer_len = 0
-                while True:  # Assuming external termination via process shutdown
+                while not shutdown_event.is_set():  # Assuming external termination via process shutdown
                     time.sleep(0.1)  # Polling rate
                     if is_speaking:
                         # Interim transcription
@@ -178,6 +179,74 @@ class WhisperSTT(STTBase):
                         final_audio_buffer_len = 0
         except Exception as e:
             print(f"Error in listen_and_transcribe: {e}")
+
+    # def listen_and_transcribe(self, sentence_callback, transcription_func=None, on_speech_start=None, on_speech_end=None, device_index: int = None, shutdown_event=None, mute_event=None):
+    #     vad = webrtcvad.Vad(self.vad_aggressiveness)
+    #     audio_buffer = deque()
+    #     is_speaking = False
+    #     transcription_func = transcription_func or self.transcribe_audio_sync
+    #     # ADDED: State to handle clearing buffer once when mute is activated
+    #     was_muted = False
+
+    #     def audio_callback(indata: np.ndarray, frames: int, time_info, status):
+    #         nonlocal is_speaking, was_muted
+    #         if mute_event and mute_event.is_set():
+    #             if not was_muted:
+    #                 audio_buffer.clear() # Clear buffer on first detection of mute
+    #                 was_muted = True
+    #             return
+    #         was_muted = False # Reset flag if not muted
+    #         try:
+    #             is_speech = vad.is_speech((indata * 32767).astype(np.int16).tobytes(), self.sample_rate)
+    #             if is_speech:
+    #                 if not is_speaking:
+    #                     is_speaking = True
+    #                     if on_speech_start:
+    #                         on_speech_start()
+    #                     print("Speech detected.")
+    #                 audio_buffer.extend(indata.flatten().tolist())
+    #             else:
+    #                 if is_speaking:
+    #                     is_speaking = False
+    #                     if on_speech_end:
+    #                         on_speech_end()
+    #                     print("End of speech detected.")
+    #         except Exception as e:
+    #             print(f"Error in audio callback: {e}")
+
+    #     print("STT is listening for sentences...")
+    #     try:
+    #         with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype=self.audio_dtype,
+    #                             blocksize=self.frame_size, callback=audio_callback, device=device_index):
+    #             last_transcript = ""
+    #             final_audio_buffer_len = 0
+    #             while shutdown_event.is_set():
+    #                 time.sleep(0.1)  # Polling rate
+    #                 if is_speaking:
+    #                     # Interim transcription
+    #                     if len(audio_buffer) > self.sample_rate * 1.5:  # 1.5-second buffer
+    #                         audio_np = np.array(list(audio_buffer), dtype=np.float32)
+    #                         current_transcript = transcription_func(audio_np, beam_size=1, temperature=0.5)
+    #                         if current_transcript and len(current_transcript) > len(last_transcript):
+    #                             new_text = current_transcript[len(last_transcript):]
+    #                             if '.' in new_text or '?' in new_text or '!' in new_text:
+    #                                 last_transcript = current_transcript
+    #                                 sentence_callback(current_transcript)
+    #                                 final_audio_buffer_len = len(audio_buffer)
+    #                 else:
+    #                     # Final transcription when speech ends
+    #                     if len(audio_buffer) > 0 and len(audio_buffer) > final_audio_buffer_len:
+    #                         final_audio_np = np.array(list(audio_buffer), dtype=np.float32)
+    #                         final_transcript = transcription_func(final_audio_np, beam_size=5, temperature=0.0)
+    #                         if final_transcript:
+    #                             sentence_callback(final_transcript)
+    #                     audio_buffer.clear()
+    #                     last_transcript = ""
+    #                     final_audio_buffer_len = 0
+    #     except Exception as e:
+    #         # Don't log exceptions if it's part of a clean shutdown
+    #         if not (shutdown_event and shutdown_event.is_set()):
+    #             print(f"Error in listen_and_transcribe: {e}")
 
     def list_available_input_devices(self):
         """List available audio input devices."""
