@@ -182,36 +182,10 @@ The environment variable **LAST_NEXT_PAGE_TOKEN** is handled by the program itse
 ## Twitch API (Optional)
 :information_source: The twitchio bot automatically renews your token using the your twitch application client id and client secret
 
-Precursory steps:
-1. Set **TW_CHANNEL=<your twitch username>** and **TW_BOT_NICK=<any name for the bot>**
-2. You will first need to create an application. Navigate to the developer console: https://dev.twitch.tv/console/
-3. Click on **Register Your Application** -- right side
-4. Set the following:
-**Name**: the application name can be anything
-**OAuth Redirect URLs**: you can use your desired HTTPS URI, in Optional Path 1 the following is used:
-```
-https://localhost:8080
-```
-**Category**: Chat Bot -- could use others probably
-**Client Type**: Confidential -- could be Public if need be
-5. Back at the console page, click on **Manage**
-6. Copy the **Client ID** and **Client Secret** to the **.env** file's variables **TW_CLIENT_ID=<Client ID here>** and **TW_CLIENT_SECRET=<Client Secret here>**
 
-Optional Path 1:
-Basic steps:
-1. Run `run.py` OR `twitch.py` (may need to uncomment some code) -- assumes you have all the requirements installed
-2. A locally hosted HTTPS web server should be running and a web page should open on your default browser -- MOST LIKELY THE BROWSER WILL WARN ABOUT THE CONNECTION, JUST ALLOW IT... or don't (see optional path 2)
-3. Authorize yourself to generate your own tokens
-4. You're done! For the foreseeable future, the refresh token will handle everything automatically, no need for steps 2 and 3
+:information_source: Once step 3 `Run and start the bot from the code below.` is reached in the guide, run the `twitch.py` file in `Livechat_Wizard`. This will automatically handle setting up the **TW_OWNER_ID** and **TW_BOT_ID** for the `.env`. Once running, continue with the guide.
 
-Optional Path 2:
-1. Navigate to and generate a token: https://twitchtokengenerator.com/
-2. Set **TW_THIRD_PARTY_TOKEN=** to `True` -- case sensitive
-3. Done!
-
-In Optional Path 1, the TW_ACCESS_TOKEN is technically the refresh token, only self.TOKEN in TwitchAuth class is an actual access token. This is ONLY a technicality and does not affect anything.
-
-The twitchio bot should presumably automatically renew your token upon expiration. This requires at least **Client Secret** and maybe **Client ID** -- UNTESTED.
+The official guide: https://twitchio.dev/en/stable/getting-started/quickstart.html
 
 # Large Language Model (LLM) Fine-tuning
 >:information_source: HEAVY WIP
