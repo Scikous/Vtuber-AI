@@ -1,169 +1,161 @@
-import requests, webbrowser
-from flask import Flask, request, redirect
-from requests_oauthlib import OAuth2Session
-import multiprocessing
 from general_utils import get_env_var
 import dotenv
 
-# manager = multiprocessing.Manager()
-# twitch_chat_msgs = managkr.list()
+# Load environment variables
+dotenv.load_dotenv()
+CHANNEL = get_env_var("TW_CHANNEL", var_type=str)
+BOT_NAME = get_env_var("TW_BOT_NAME", var_type=str)
+CLIENT_ID = get_env_var("TW_CLIENT_ID", var_type=str)
+CLIENT_SECRET = get_env_var("TW_CLIENT_SECRET", var_type=str)
+BOT_ID = get_env_var("TW_BOT_ID", var_type=str)
+OWNER_ID = get_env_var("TW_OWNER_ID", var_type=str)
 
-# multiprocessing.
-class TwitchAuth():
-    def __init__(self) -> None:
-        self.CHANNEL, self.BOT_NICK, self.CLIENT_ID, self.CLIENT_SECRET, self.ACCESS_TOKEN, self.USE_THIRD_PARTY_TOKEN = self.twitch_auth_loader()
-        self.TOKEN_URL = 'https://id.twitch.tv/oauth2/token'  # Refresh token endpoint
-
-    #load in necessary twitch credentials from .env
-    def twitch_auth_loader(self):
-        CHANNEL, BOT_NICK = get_env_var("TW_CHANNEL"), get_env_var("TW_BOT_NICK")
-        CLIENT_ID, CLIENT_SECRET = get_env_var("TW_CLIENT_ID"), get_env_var("TW_CLIENT_SECRET")
-        ACCESS_TOKEN = get_env_var("TW_ACCESS_TOKEN") #technically the refresh token if LOCAL GENERATION = True, but don't worry about it
-        USE_THIRD_PARTY_TOKEN = get_env_var("TW_USE_THIRD_PARTY_TOKEN") == 'True' #if not locally generating token, handle access token differently 
-        return CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN
-
-    #turn off the flask server when done with it -- may or may not be working
-    def stop_flask(self, process_stop_event):
-        print("Flask server shutdown signal sent")
-        process_stop_event.set()
-
-    #create a temporary HTTPS flask server which can be used to generate tokens
-    def run_flask(self, token, process_stop_event):
-        REDIRECT_URI = 'https://localhost:8080'
-        AUTHORIZATION_BASE_URL = 'https://id.twitch.tv/oauth2/authorize'
-        app = Flask(__name__)
-        oauth = OAuth2Session(self.CLIENT_ID, redirect_uri=REDIRECT_URI, scope=["chat:read", "chat:edit"])
-        @app.route('/')
-        def index():
-            # Only redirect to the authorization URL once
-            if 'code' in request.args or 'state' in request.args:
-                token_info = oauth.fetch_token(self.TOKEN_URL, client_id=self.CLIENT_ID, client_secret=self.CLIENT_SECRET,include_client_id=True, authorization_response=request.url)
-                print(f"Token received: {token}")
-                
-                #sets process token to access token directly -- avoids having to call refresh method
-                token.value = bytes(token_info['access_token'],'utf-8')
-
-                #Save the token to a file or environment variable
-                dotenv.set_key(dotenv_path=dotenv.find_dotenv(),key_to_set="TW_ACCESS_TOKEN",value_to_set=token_info["refresh_token"])
-                # with open('w') as token_file:
-                    # json.dump(token, token_file)
-                self.stop_flask(process_stop_event)
-                return 'Authorization successful! You can close this window.'
-            else:
-                authorization_url, state = oauth.authorization_url(AUTHORIZATION_BASE_URL)
-                return redirect(authorization_url)
-        app.run(port=8080, ssl_context='adhoc')#requires an HTTPS server to work
-
-    #a generator for tokens
-    def access_token_generator(self):
-        """
-        OAuth2 requires authorization, so a web browser is needed, and a web page will be opened.
-        The web page is "insecure" and requires manual authorization.
-        """
-        try: 
-            process_stop_event = multiprocessing.Event()
-            #create an empty character array of 30 bytes -- processes can't by default share memory
-            token = multiprocessing.Array('c', 30)
-            
-            #create a temporary process to handle flask server
-            flask_process = multiprocessing.Process(target=self.run_flask, args=(token, process_stop_event),daemon=True)
-            flask_process.start()
-
-            # Open the authorization URL in the browser
-            webbrowser.open(f'https://localhost:8080')
-            
-            # Wait for the Flask server to handle the authorization redirect, save the token and shutdown the flask server
-            process_stop_event.wait()
-            flask_process.terminate()
-            flask_process.join()
-            print("flask server exited")
-            return token.value.decode('utf-8') #decode bytes -> str
-        except Exception as e:
-            print(f'HTTPError: {e}')
-
-    #once the first token has been generated, the refresh token can be used to generate new ones
-    def refresh_access_token(self):
-    # Prepare the request data
-        data = {
-            'grant_type': 'refresh_token',
-            'client_id': self.CLIENT_ID,
-            'client_secret': self.CLIENT_SECRET,
-            'refresh_token': self.ACCESS_TOKEN
-        }
-
-        # Send a POST request to the refresh token endpoint
-        response = requests.post(self.TOKEN_URL, data=data)
-
-        # Check for successful response
-        if response.status_code == 200:
-            # Parse the JSON response
-            response_data = response.json()
-            return response_data.get('access_token')  # Extract the new access token
-        else:
-            # Handle error
-            print(f'Error refreshing access token: {response.status_code}')
-            return None
-
+import asyncio
+import json
+import logging
+import random
+from typing import Any
+import twitchio
+from twitchio import authentication, eventsub
 from twitchio.ext import commands
+
+
+# NOTE: Consider reading through the Conduit examples
+# Store and retrieve these from a .env or similar, but for example showcase you can just full out the below:
+
+LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
 class Bot(commands.Bot):
-    """
-    A twitchio bot which is used to primarily retrieve and "forward" messages to the LLM.
-    """
-    def __init__(self, CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs):
-        super().__init__(token=TOKEN, client_id=CLIENT_ID, client_secret=CLIENT_SECRET, nick=BOT_NICK, prefix='!', initial_channels=[CHANNEL])
-        self.twitch_chat_msgs = twitch_chat_msgs
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
 
-    async def event_ready(self):
-        print(f'Ready | {self.nick}')
+    async def setup_hook(self) -> None:
+        # Add our General Commands Component...
+        await self.add_component(GeneralCommands())
 
-    #upon receiving a message, username and message are appended to a list for the LLM to pick from
-    async def event_message(self, message):
-        print(f'{message.author.name}: {message.content}')
-        if '!' in message.content:
-            await self.handle_commands(message)
+        with open(".tio.tokens.json", "rb") as fp:
+            tokens = json.load(fp)
 
-        user_msg = f"{message.author.name}: {message.content}"
-        self.twitch_chat_msgs.append(user_msg)
-        print("Twitch msg:", user_msg)
+        for user_id in tokens:
+            if user_id == BOT_ID:
+                continue
 
-    @commands.command(name='hello')
-    async def hello(self, ctx):
-        await ctx.send(f'Hello {ctx.author.name}!')
+            # Subscribe to chat for everyone we have a token...
+            chat = eventsub.ChatMessageSubscription(broadcaster_user_id=user_id, user_id=BOT_ID)
+            await self.subscribe_websocket(chat)
 
-    # @commands.command(name='disconnect')
-    # async def disconnect_cmd(self, ctx):
-    #     # Optional: Add permission check here
-    #     if ctx.author.name == 'your_username':  # Only allow specific users
-    #         await ctx.send("Disconnecting bot...")
-    #         await self.close()
-    
-#For testing purposes
-if __name__ == "__main__":
-    # Replace with your Twitch token and channel
-    dotenv.load_dotenv()
-    manager = multiprocessing.Manager()
-    twitch_chat_msgs = manager.list()
-    import twitchio
-    TW_Auth = TwitchAuth()
-    CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.USE_THIRD_PARTY_TOKEN
-    if USE_THIRD_PARTY_TOKEN:
-        TOKEN = ACCESS_TOKEN
-    elif not ACCESS_TOKEN:
-        TOKEN = TW_Auth.access_token_generator()
-    else:
-        TOKEN = TW_Auth.refresh_access_token()
+    async def event_ready(self) -> None:
+        LOGGER.info("Logged in as: %s", self.user)
+
+    async def event_oauth_authorized(self, payload: authentication.UserTokenPayload) -> None:
+        # Stores tokens in .tio.tokens.json by default; can be overriden to use a DB for example
+        # Adds the token to our Client to make requests and subscribe to EventSub...
+        await self.add_token(payload.access_token, payload.refresh_token)
+
+        if payload.user_id == BOT_ID:
+            return
+        
+
+        # Subscribe to chat for new authorizations...
+        chat = eventsub.ChatMessageSubscription(broadcaster_user_id=payload.user_id, user_id=BOT_ID)
+        await self.subscribe_websocket(chat)
+
+
+class GeneralCommands(commands.Component):
+    @commands.command()
+    async def hi(self, ctx: commands.Context) -> None:
+        """Command that replys to the invoker with Hi <name>!
+
+        !hi
+        """
+        await ctx.reply(f"Hi {ctx.chatter}!")
+
+    @commands.command()
+    async def say(self, ctx: commands.Context, *, message: str) -> None:
+        """Command which repeats what the invoker sends.
+
+        !say <message>
+        """
+        await ctx.send(message)
+
+    @commands.command()
+    async def add(self, ctx: commands.Context, left: int, right: int) -> None:
+        """Command which adds to integers together.
+
+        !add <number> <number>
+        """
+        await ctx.reply(f"{left} + {right} = {left + right}")
+
+    @commands.command()
+    async def choice(self, ctx: commands.Context, *choices: str) -> None:
+        """Command which takes in an arbitrary amount of choices and randomly chooses one.
+
+        !choice <choice_1> <choice_2> <choice_3> ...
+        """
+        await ctx.reply(f"You provided {len(choices)} choices, I choose: {random.choice(choices)}")
+
+    @commands.command(aliases=["thanks", "thank"])
+    async def give(self, ctx: commands.Context, user: twitchio.User, amount: int, *, message: str | None = None) -> None:
+        """A more advanced example of a command which has makes use of the powerful argument parsing, argument converters and
+        aliases.
+
+        The first argument will be attempted to be converted to a User.
+        The second argument will be converted to an integer if possible.
+        The third argument is optional and will consume the reast of the message.
+
+        !give <@user|user_name> <number> [message]
+        !thank <@user|user_name> <number> [message]
+        !thanks <@user|user_name> <number> [message]
+        """
+        msg = f"with message: {message}" if message else ""
+        await ctx.send(f"{ctx.chatter.mention} gave {amount} thanks to {user.mention} {msg}")
+
+
+
+async def update_owner_bot_id() -> None:
+    global OWNER_ID, BOT_ID
+    async with twitchio.Client(client_id=CLIENT_ID, client_secret=CLIENT_SECRET) as client:
+        await client.login()
+        user = await client.fetch_users(logins=[CHANNEL, BOT_NAME])
+        
+        OWNER_ID = user[0].id
+        dotenv.set_key(
+            dotenv_path=dotenv.find_dotenv(),
+            key_to_set="TW_OWNER_ID",
+            value_to_set=OWNER_ID
+        )
+
+        BOT_ID = user[1].id
+        dotenv.set_key(
+                    dotenv_path=dotenv.find_dotenv(),
+                    key_to_set="TW_BOT_ID",
+                    value_to_set=BOT_ID
+                )
+
+
+def main() -> None:
+    #use INFO when setting up, otherwise use CRITICAL to avoid accidental leaks
+    twitchio.utils.setup_logging(level=logging.CRITICAL)
+
+    async def runner() -> None:
+        if not OWNER_ID or not BOT_ID:
+            await update_owner_bot_id()
+        async with Bot(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            bot_id=BOT_ID,
+            owner_id=OWNER_ID,
+            prefix="!",
+            logger=None
+        ) as bot:
+            await bot.start()
 
     try:
-        bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs)
-        bot.run()
-    except twitchio.AuthenticationError as e:
-        print("TOKEN EXPIRED LAMO", e)
-        TOKEN = TW_Auth.refresh_access_token()
-        bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN)
-        bot.run()
-    except KeyError as e:
-        print("TOKEN EXPIRED with KeyERROR, LMAO", e)    
-    except ValueError as e:
-        print("TOKEN EXPIRED with ValueERROR, LMAO", e)    
-    except Exception as e:
-        print("TOKEN EXPIRED with Exception, LMAO", e)
+        asyncio.run(runner())
+    except KeyboardInterrupt:
+        LOGGER.warning("Shutting down due to KeyboardInterrupt")
+
+
+if __name__ == "__main__":
+    main()
