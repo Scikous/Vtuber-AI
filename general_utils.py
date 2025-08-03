@@ -40,35 +40,24 @@ async def read_messages_csv(file_path, num_messages=10):
     return [tuple(row) for row in messages]
 
 #get ENV variables for livechat API related needs
-def get_env_var(env_var):
+def get_env_var(env_var, var_type=str):
     """
     Fetches information from .env file.
 
     Args:
         env_var (str): Any environment variable in .env file.
     Returns:
-        bool | str: True/False if the key is a boolean type, otherwise returns the key value itself.
+        Uses type specified in var_type to convert the value of the environment variable, or None if not found.
     """
     env_key = dotenv.get_key(dotenv_path=dotenv.find_dotenv(), key_to_get=env_var)
 
     try:
         if not env_key:
             return None
-        return int(env_key)
-    except (TypeError, ValueError):
-        try:
-            return float(env_key)
-        except (TypeError, ValueError):
-                    # Attempt to parse as datetime
-            try:
-                return parse(env_key)
-            except ValueError:
-                if env_key.lower() == "true":
-                    return True
-                elif env_key.lower() == "false":
-                    return False
-                else:
-                    return env_key
+        if var_type:
+            return var_type(env_key)
+    except TypeError:
+        print(f"Error: {env_var} is not of type {var_type}")
             
 @contextmanager
 def change_dir(new_dir):
