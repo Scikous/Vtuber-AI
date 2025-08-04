@@ -1,14 +1,16 @@
 import multiprocessing as mp
 import asyncio
-from src.utils.app_utils import setup_project_root
+from src.utils.env_utils import setup_project_root
 from src.utils import logger as app_logger
 from src.utils.performance_utils import apply_system_optimizations, async_check_gpu_memory
 from src.common import config as app_config
 from TTS_Wizard.realtimetts import RealTimeTTS, pipertts_engine, coquitts_engine
 
+app_logger.setup_logging()
+logger = app_logger.get_logger("TTSWorker")
+
 async def tts_runner(shutdown_event, llm_to_tts_queue, 
                      user_has_stopped_speaking_event, gpu_request_queue, worker_event, worker_id="TTS", tts_mute_event=None):
-    logger = app_logger.get_logger("TTSWorker")
     config = app_config.load_config()
     apply_system_optimizations(logger, use_cuda=config.get("tts_settings", {}).get("use_cuda", True))
     

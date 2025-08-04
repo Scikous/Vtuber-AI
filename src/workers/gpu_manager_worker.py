@@ -1,7 +1,9 @@
 import multiprocessing as mp
 import heapq
 from src.utils import logger as app_logger
-from src.utils.app_utils import setup_project_root
+from src.utils.env_utils import setup_project_root
+app_logger.setup_logging()
+logger = app_logger.get_logger("GPUClientWorker")
 
 def gpu_manager(request_queue, worker_events, max_slots):
     """
@@ -12,7 +14,6 @@ def gpu_manager(request_queue, worker_events, max_slots):
         max_slots (int): Maximum number of concurrent GPU slots.
     """
     setup_project_root()
-    logger = app_logger.get_logger("GPUClientWorker")
 
     available_slots = max_slots
     waiting_queue = []  # Min-heap for (priority, worker_id) tuples

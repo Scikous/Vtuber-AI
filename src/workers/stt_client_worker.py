@@ -1,13 +1,15 @@
 import multiprocessing as mp
-from src.utils.app_utils import setup_project_root
+from src.utils.env_utils import setup_project_root
 from src.utils import logger as app_logger
 from src.common import config as app_config
 from src.utils.performance_utils import apply_system_optimizations, sync_check_gpu_memory
 from STT_Wizard.STT import WhisperSTT
+    
+app_logger.setup_logging()
+logger = app_logger.get_logger("STTClientWorker")
 
 def stt_client_worker(shutdown_event: mp.Event, user_has_stopped_speaking_event: mp.Event, stt_stream_queue: mp.Queue, gpu_request_queue: mp.Queue, worker_event: mp.Event, stt_mute_event: mp.Event):
     setup_project_root()
-    logger = app_logger.get_logger("STTClientWorker")
     config = app_config.load_config()
     stt_settings = config.get("stt_settings", {})
     

@@ -2,15 +2,17 @@ import multiprocessing as mp
 import os
 import asyncio
 from collections import deque
-from src.utils.app_utils import setup_project_root
+from src.utils.env_utils import setup_project_root
 from src.utils import logger as app_logger
 from src.utils.performance_utils import apply_system_optimizations, async_check_gpu_memory
 from src.common import config as app_config
 from LLM_Wizard.models import LLMModelConfig, VtuberExllamav2
 from LLM_Wizard.model_utils import load_character, contains_sentence_terminator
 
+app_logger.setup_logging()
+logger = app_logger.get_logger("LLMWorker")
+
 async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_ready_event, gpu_request_queue, worker_event, worker_id="LLM", llm_output_display_queue=None):
-    logger = app_logger.get_logger("LLMWorker")
     config = app_config.load_config()
     apply_system_optimizations(logger, use_cuda=True)
     

@@ -3,6 +3,7 @@ Environment Variable Utility for Vtuber-AI
 Provides functions for fetching environment variables.
 """
 import dotenv
+import sys, os
 from dateutil.parser import parse
 
 def get_env_var(env_var):
@@ -38,3 +39,9 @@ def get_env_var(env_var):
                     return False
                 else:
                     return env_key
+
+def setup_project_root():
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if project_root not in sys.path:
+        sys.path.append(project_root)
+    return project_root
