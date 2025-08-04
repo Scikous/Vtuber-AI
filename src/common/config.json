@@ -4,10 +4,11 @@
 
     "queue_settings":
     {
-        "stt_stream_queue_size": 3,
-        "llm_control_queue_size": 3,
-        "llm_to_tts_queue_size": 3,
-        "gpu_request_queue_size": 0
+        "stt_stream_queue_maxsize": 3,
+        "llm_control_queue_maxsize": 3,
+        "llm_to_tts_queue_maxsize": 3,
+        "livechat_output_queue_maxsize": 15,
+        "gpu_request_queue_maxsize": 0
     },
 
     "llm_settings":
@@ -73,7 +74,7 @@
     },
     
     "livechat_settings": {
-        "fetch_interval": 60
+        "fetch_interval_s": 15,
+        "moderation_prompt": "You are a strict content moderator. Analyze the following user message. Your only job is to determine if the message is safe to be read aloud on a stream. Respond with only the word 'safe' if it is appropriate (e.g., questions, friendly comments) or 'unsafe' if it is inappropriate (e.g. hate speech or spam). Do not add any other commentary or explanation. The message from user '{username}' is: {content}"
     }
-
 }
