@@ -221,3 +221,4 @@ TTS_Wizard/tts_client2.py
 models/
 output.wav
 venvRun/
+.tio.tokens.json

@@ -6,19 +6,21 @@ import threading
 import time
 import json
 import os
-import sys
 from queue import Empty
+from dotenv import load_dotenv
+from src.utils import logger as app_logger
+from src.utils.env_utils import setup_project_root
+
 
 # --- Setup Project Path ---
 # This ensures we can import from the 'src' directory
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
+project_root = setup_project_root()
+app_logger.setup_logging()
+dotenv_path = os.path.join(project_root, '.env')
+load_dotenv(dotenv_path=dotenv_path)
 # --- Import Your Existing Modules ---
 # We need to import the orchestrator and the config loader
 from src.process_orchestrator import ProcessOrchestrator
-from src.common import config as app_config
 
 CONFIG_PATH = os.path.join(project_root, 'src/common/config.json')
 class AppManager:
@@ -43,7 +45,8 @@ class AppManager:
         self.llm_output_display_queue = mp.Queue()
         self.tts_mute_event = mp.Event()
         self.stt_mute_event = mp.Event()
-        
+        self.livechat_toggle_event = mp.Event()
+
         self.full_text = ""
         self.last_text_received_time = None # For detecting pauses between outputs
 
@@ -74,6 +77,7 @@ class AppManager:
             llm_output_display_queue=self.llm_output_display_queue,
             tts_mute_event=self.tts_mute_event,
             stt_mute_event=self.stt_mute_event,
+            livechat_toggle_event=self.livechat_toggle_event,
             is_managed=True
         )
         self.orchestrator_thread = threading.Thread(target=self.orchestrator.run, daemon=True)
@@ -175,6 +179,7 @@ def create_gradio_ui():
                 with gr.Row():
                     stt_mute_button = gr.Checkbox(label="🎤 Mute Microphone (STT)", value=False)
                     tts_mute_button = gr.Checkbox(label="🔊 Mute Speaker (TTS)", value=False)
+                    livechat_toggle_button = gr.Checkbox(label="💬 Enable Live Chat Fetching", value=False)
                 
                 terminate_job_button = gr.Button("🗑️ Terminate Current LLM/TTS Job")
                 clear_output_button = gr.Button("🧹 Clear Output")
@@ -266,7 +271,7 @@ def create_gradio_ui():
         # Connect mute checkboxes
         stt_mute_button.change(lambda x: manager.stt_mute_event.set() if x else manager.stt_mute_event.clear(), inputs=[stt_mute_button], outputs=None)
         tts_mute_button.change(lambda x: manager.tts_mute_event.set() if x else manager.tts_mute_event.clear(), inputs=[tts_mute_button], outputs=None)
-
+        livechat_toggle_button.change(lambda x: manager.livechat_toggle_event.set() if x else manager.livechat_toggle_event.clear(), inputs=[livechat_toggle_button], outputs=None)
     return demo
 
 

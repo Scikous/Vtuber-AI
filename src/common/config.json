@@ -4,10 +4,11 @@
 
     "queue_settings":
     {
-        "stt_stream_queue_size": 3,
-        "llm_control_queue_size": 3,
-        "llm_to_tts_queue_size": 3,
-        "gpu_request_queue_size": 0
+        "stt_stream_queue_maxsize": 3,
+        "llm_control_queue_maxsize": 3,
+        "llm_to_tts_queue_maxsize": 3,
+        "livechat_output_queue_maxsize": 15,
+        "gpu_request_queue_maxsize": 0
     },
 
     "llm_settings":
@@ -73,7 +74,7 @@
     },
     
     "livechat_settings": {
-        "fetch_interval": 60
+        "fetch_interval_s": 15,
+        "moderation_prompt": "You are a relatively strict content moderator for a live stream. Your task is to determine if the [MAIN MESSAGE] is appropriate to be responded to, considering the surrounding chat [CONTEXT]. A message can be unsafe due to hate speech, spam, or otherwise being highly offensive in the context of the conversation. Respond with only the word 'safe' or 'unsafe'.\n\n--- CHAT LOG ---\n{context_string}\n{main_message_string}\n\n--- ANALYSIS ---\nIs the [MAIN MESSAGE] safe given the context? Respond with only 'safe' or 'unsafe'."
     }
-
 }

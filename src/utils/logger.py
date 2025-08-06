@@ -1,73 +1,80 @@
 """
 Logger Utility for Vtuber-AI
-Provides a centralized logger for the application.
+Provides a centralized, process-safe logger for the application.
 """
 import logging
 import sys
 import os
+from logging.handlers import RotatingFileHandler
 
-# Global flag to control logging
-_logging_enabled = None
+# --- Configuration ---
+# Use an absolute path to the project root to ensure files are always found
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+CONFIG_PATH = os.path.join(PROJECT_ROOT, 'src', 'common', 'config.json')
+LOG_DIR = os.path.join(PROJECT_ROOT, 'logs')
 
-def _check_logging_enabled():
-    """Check if logging is enabled from config or environment variable."""
-    global _logging_enabled
-    if _logging_enabled is None:
-        # Try to load from config first
-        try:
-            from common import config as app_config
-            config = app_config.load_config()
-            _logging_enabled = config.get('logging_enabled', False)
-        except:
-            # Fallback to environment variable
-            _logging_enabled = os.environ.get('LOGGING_ENABLED', 'false').lower() == 'true'
-    return _logging_enabled
+def setup_logging():
+    """
+    Configures the root logger for a single process.
+    This function is idempotent and safe to call multiple times.
+    It reads the configuration to decide whether to enable logging.
+    """
+    root_logger = logging.getLogger()
+    
+    # If handlers are already configured, another part of the process did it. Don't add more.
+    if root_logger.hasHandlers():
+        return
 
-def get_logger(name):
-    logger = logging.getLogger(name)
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(name)s: %(message)s')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-    
-    # Override logger methods to check logging enabled flag
-    original_info = logger.info
-    original_debug = logger.debug
-    original_warning = logger.warning
-    original_error = logger.error
-    original_critical = logger.critical
-    
-    def conditional_info(msg, *args, **kwargs):
-        if _check_logging_enabled():
-            original_info(msg, *args, **kwargs)
-    
-    def conditional_debug(msg, *args, **kwargs):
-        if _check_logging_enabled():
-            original_debug(msg, *args, **kwargs)
-    
-    def conditional_warning(msg, *args, **kwargs):
-        if _check_logging_enabled():
-            original_warning(msg, *args, **kwargs)
-    
-    def conditional_error(msg, *args, **kwargs):
-        if _check_logging_enabled():
-            original_error(msg, *args, **kwargs)
-    
-    def conditional_critical(msg, *args, **kwargs):
-        if _check_logging_enabled():
-            original_critical(msg, *args, **kwargs)
-    
-    logger.info = conditional_info
-    logger.debug = conditional_debug
-    logger.warning = conditional_warning
-    logger.error = conditional_error
-    logger.critical = conditional_critical
-    
-    return logger
+    # --- Determine if logging should be enabled ---
+    logging_enabled = False
+    try:
+        import json
+        with open(CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+        logging_enabled = config.get('logging_enabled', False)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        # Fallback for situations where config is not available
+        print(f"[PRE-LOGGING WARNING] Could not load config to check logging status: {e}", file=sys.stderr)
+        logging_enabled = os.environ.get('LOGGING_ENABLED', 'false').lower() == 'true'
 
-def conditional_print(*args, **kwargs):
-    """Print function that only prints when logging is enabled."""
-    if _check_logging_enabled():
-        print(*args, **kwargs)
+    # --- Set the master level for the root logger ---
+    # If disabled, we set the level so high that nothing gets through.
+    # If enabled, we set it to DEBUG to capture everything, and let handlers filter.
+    log_level = logging.DEBUG if logging_enabled else logging.CRITICAL + 1
+    root_logger.setLevel(log_level)
+
+    # --- Create Formatter ---
+    # Include process info, which is crucial for debugging multiprocessing apps
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - [%(name)s] (%(processName)s:%(process)d) - %(message)s'
+    )
+
+    # --- Configure Handlers (only if logging is enabled) ---
+    if logging_enabled:
+        # Console Handler
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(formatter)
+        stream_handler.setLevel(logging.INFO) # Console shows INFO and above
+        root_logger.addHandler(stream_handler)
+
+        # File Handler (with rotation)
+        os.makedirs(LOG_DIR, exist_ok=True)
+        log_file_path = os.path.join(LOG_DIR, 'app.log')
+        
+        # Rotates logs after 5MB, keeping 3 backup files.
+        file_handler = RotatingFileHandler(log_file_path, maxBytes=5*1024*1024, backupCount=3)
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.DEBUG) # Log file captures everything (DEBUG and above)
+        root_logger.addHandler(file_handler)
+        
+        root_logger.info(f"Logging configured for process {os.getpid()}. Level: {logging.getLevelName(log_level)}. Log file: {log_file_path}")
+    else:
+        # Add a NullHandler to prevent "No handlers could be found" warnings
+        root_logger.addHandler(logging.NullHandler())
+
+
+def get_logger(name: str) -> logging.Logger:
+    """
+    Retrieves a logger instance. It will inherit the root configuration.
+    """
+    return logging.getLogger(name)

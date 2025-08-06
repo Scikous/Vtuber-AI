@@ -1,223 +1,226 @@
-import threading
-from general_utils import get_env_var
-from youtube import YTLive
-from twitch import TwitchAuth, Bot
-from kick import KickClient
-import time
-import multiprocessing
-import random
+# livechat.py
+import asyncio
 import logging
+import random
+from datetime import datetime, timezone
+from collections import deque
+
+from curl_cffi.requests import AsyncSession
+
+# Import our refactored clients and data model
+from data_models import UnifiedMessage
+from general_utils import get_env_var
+from youtube import YTLive, YouTubeApiError
+from twitch import Bot as TwitchBot, update_owner_bot_ids, CLIENT_ID, CLIENT_SECRET, BOT_ID, OWNER_ID
+from kick import KickClient, KickApiError
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [%(name)s] %(message)s')
 
 class LiveChatController:
-    def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False, logger=None):
-        self.youtube = None
-        self.twitch_bot = None
-        self.KICK_CLIENT = None
-        self.HIGH_CHAT_VOLUME = get_env_var("HIGH_CHAT_VOLUME") #high volume chats will create an enormous list of messages very quickly
-
-        self._all_messages = []
-
-        self.twitch_bot = None
-        self.youtube = None
-        self.kick = None
-
-        if fetch_youtube:
-            self.setup_youtube()
+    """
+    An asyncio-based controller to manage and fetch messages from multiple live chat platforms.
+    """
+    def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False):
+        self.logger = logging.getLogger(self.__class__.__name__)
         
-        if fetch_twitch:
-            manager = multiprocessing.Manager()
-            self.twitch_chat_msgs = manager.list()
-            self.setup_twitch()
+        self._fetch_youtube = fetch_youtube
+        self._fetch_twitch = fetch_twitch
+        self._fetch_kick = fetch_kick
 
-        if fetch_kick:
-            self.setup_kick()
+        # Central pool for randomly selecting a message
+        self._all_messages = []
+        # Dedicated dequeue for the Twitch bot to push messages to
+        twitch_max_messages = get_env_var("TWITCH_MAX_MESSAGES", var_type=int)
+        self.twitch_messages: deque[UnifiedMessage] = deque(maxlen=twitch_max_messages)
 
-        self.logger = logger if logger else logging.getLogger(__name__)
-        self.logger.info("LiveChatController initialized.")
+        # Asynchronous clients
+        self.http_session: AsyncSession | None = None
+        self.youtube: YTLive | None = None
+        self.kick: KickClient | None = None
+        self.twitch_bot: TwitchBot | None = None
+        self.twitch_task: asyncio.Task | None = None
 
+        # State management for polling clients
+        self.yt_next_page_token: str | None = get_env_var("LAST_NEXT_PAGE_TOKEN", var_type=str)
+        self.kick_last_timestamp = datetime.now(timezone.utc)
+
+        self.logger.info(f"Controller initialized with settings: YouTube={fetch_youtube}, Twitch={fetch_twitch}, Kick={fetch_kick}")
 
     @classmethod
     def create(cls):
-        fetch_youtube = get_env_var("YT_FETCH")
-        fetch_twitch = get_env_var("TW_FETCH")
-        fetch_kick = get_env_var("KI_FETCH")
+        """Factory method to create a controller based on environment variables."""
+        fetch_youtube = get_env_var("YT_FETCH", var_type=bool)
+        fetch_twitch = get_env_var("TW_FETCH", var_type=bool)
+        fetch_kick = get_env_var("KI_FETCH", var_type=bool)
 
-        # Return None if all fetch variables are False
         if not any([fetch_youtube, fetch_twitch, fetch_kick]):
+            logging.warning("No fetch variables are set. LiveChatController will not fetch from any platform.")
             return None
 
         return cls(fetch_youtube=fetch_youtube, fetch_twitch=fetch_twitch, fetch_kick=fetch_kick)
 
-    #get token and prepare for fetching youtube livechat messages
-    def setup_youtube(self):
-        self.youtube = YTLive(self._all_messages)
-        self.next_page_token = get_env_var("LAST_NEXT_PAGE_TOKEN") 
+    async def setup_clients(self):
+        """Initializes and prepares all enabled clients for operation."""
+        self.logger.info("Setting up clients...")
+        self.http_session = AsyncSession()
 
-    #get token and start twitch bot on a separate thread for livechat messages
-    # @staticmethod
-    def _twitch_process(self, CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs):
-        self.twitch_bot = Bot(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, twitch_chat_msgs)
-        self.twitch_bot.run()
+        if self._fetch_youtube:
+            try:
+                self.youtube = YTLive()
+                await self.youtube.setup()
+            except (YouTubeApiError, ValueError, FileNotFoundError) as e:
+                self.logger.error(f"Failed to setup YouTube client: {e}")
+                self.youtube = None # Disable on failure
 
-    def setup_twitch(self):
-        TW_Auth = TwitchAuth()
-        CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN, USE_THIRD_PARTY_TOKEN = TW_Auth.CHANNEL, TW_Auth.BOT_NICK, TW_Auth.CLIENT_ID, TW_Auth.CLIENT_SECRET, TW_Auth.ACCESS_TOKEN, TW_Auth.USE_THIRD_PARTY_TOKEN
-        if USE_THIRD_PARTY_TOKEN:
-            TOKEN = ACCESS_TOKEN
-        elif not ACCESS_TOKEN:
-            TOKEN = TW_Auth.access_token_generator()
-        else:
-            TOKEN = TW_Auth.refresh_access_token()
-        twitch_bot_process = multiprocessing.Process(target=self._twitch_process, args=(CHANNEL, BOT_NICK, CLIENT_ID, CLIENT_SECRET, TOKEN, self.twitch_chat_msgs), daemon=True)
-        twitch_bot_process.start()
-    
-    #WIP
-    def setup_kick(self):
-        kick_channel = get_env_var("KI_CHANNEL")
-        self.kick = KickClient(username=kick_channel, kick_chat_msgs=self._all_messages)
-        # KICK_CLIENT.listen() #uncomment for retrieving messages as they come in*
-    
-    #fetch a random message from 
-    async def fetch_chat_message(self):
+        if self._fetch_kick:
+            kick_channel = get_env_var("KI_CHANNEL")
+            if kick_channel and self.http_session:
+                self.kick = KickClient(username=kick_channel, session=self.http_session)
+            else:
+                self.logger.error("KI_CHANNEL not set, cannot initialize Kick client.")
+                self.kick = None
+
+        if self._fetch_twitch:
+            try:
+                owner_id, bot_id = await update_owner_bot_ids()
+                self.twitch_bot = TwitchBot(
+                    message_list=self.twitch_messages,
+                    client_id=CLIENT_ID,
+                    client_secret=CLIENT_SECRET,
+                    bot_id=bot_id,
+                    owner_id=owner_id,
+                    prefix="!",
+                    logger=None
+                )
+            except Exception as e:
+                self.logger.error(f"Failed to setup Twitch bot: {e}")
+                self.twitch_bot = None
+
+    async def start_services(self):
+        """Starts any background services, like the Twitch bot."""
+        if self.twitch_bot:
+            self.logger.info("Starting Twitch bot background service...")
+            self.twitch_task = asyncio.create_task(self.twitch_bot.start())
+
+    async def stop_services(self):
+        """Gracefully stops all background services and closes sessions."""
+        self.logger.info("Stopping services...")
+        if self.twitch_task and not self.twitch_task.done():
+            self.twitch_task.cancel()
+        if self.twitch_bot:
+            await self.twitch_bot.close()
+        if self.http_session:
+            await self.http_session.close()
+        self.logger.info("All services stopped.")
+
+    async def fetch_chat_message(self) -> UnifiedMessage | None:
+        """
+        Performs a single, on-demand fetch from all active platforms,
+        pools the messages, and returns one at random.
+        """
         self._all_messages.clear()
-        if self.HIGH_CHAT_VOLUME: self._all_messages.clear()
-        #fetch raw youtube messages and process them automatically -- adds automatically to yt_messages
-        if self.youtube:
-            self.next_page_token = await self.youtube.get_live_chat_messages(next_page_token=self.next_page_token)
-        
-        #fetch raw kick messages and process them automatically -- adds automatically to kick_messages
-        if self.kick:
-            raw_messages = await self.kick.fetch_raw_messages(num_to_fetch=10)
-            await self.kick.process_messages(raw_messages)
 
-        #take messages in order
-        self._all_messages.extend(self.twitch_chat_msgs)
-        self.twitch_chat_msgs[:] = []
+        # 1. Drain the message list from the continuously-running Twitch bot
+        if self.twitch_bot:
+            self._all_messages.extend(self.twitch_messages)
+            self.twitch_messages.clear()
+
+        # 2. Create concurrent fetching tasks for poll-based clients (YouTube, Kick)
+        fetch_tasks = []
+        if self.youtube:
+            fetch_tasks.append(self.youtube.get_live_chat_messages(self.yt_next_page_token))
+        if self.kick:
+            fetch_tasks.append(self.kick.fetch_new_messages(self.kick_last_timestamp))
+
+        if fetch_tasks:
+            results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+            
+            # 3. Process results from the concurrent fetches
+            # YouTube result will be at index 0 if enabled
+            yt_idx = 0 if self.youtube else -1
+            if self.youtube and yt_idx < len(results):
+                yt_result = results[yt_idx]
+                if isinstance(yt_result, Exception):
+                    self.logger.error(f"Error fetching from YouTube: {yt_result}")
+                else:
+                    raw_messages, self.yt_next_page_token = yt_result
+                    for msg in raw_messages:
+                        unified = UnifiedMessage(
+                            platform='YouTube',
+                            username=msg['authorDetails']['displayName'],
+                            content=msg['snippet']['displayMessage'],
+                            timestamp=datetime.now(timezone.utc) # Note: YT API doesn't provide a reliable timestamp per message
+                        )
+                        self._all_messages.append(unified)
+
+            # Kick result will be at the next index
+            kick_idx = (yt_idx + 1) if self.kick else -1
+            if self.kick and kick_idx < len(results):
+                kick_result = results[kick_idx]
+                if isinstance(kick_result, Exception):
+                    self.logger.error(f"Error fetching from Kick: {kick_result}")
+                else:
+                    kick_messages = kick_result
+                    if kick_messages:
+                        self.kick_last_timestamp = kick_messages[-1].timestamp
+                        for msg in kick_messages:
+                            unified = UnifiedMessage(
+                                platform='Kick',
+                                username=msg.user.username,
+                                content=msg.content,
+                                timestamp=msg.timestamp,
+                                color=msg.user.color
+                            )
+                            self._all_messages.append(unified)
+
+        # 4. Select a random message from the aggregated pool
         if self._all_messages:
             message = random.choice(self._all_messages)
-            self._all_messages.remove(message)
-            self.logger.info(f"PICKED MESSAGE: {message}, Remaining Messages: {self._all_messages}")
+            self._all_messages.remove(message) # Prevent re-picking in the same batch
+            self.logger.info(f"PICKED MESSAGE: {message}")
+            self.logger.info(f"{len(self._all_messages)} messages remaining in this batch.")
             return message, self._all_messages
-        return None, None
+        
+        self.logger.info("No new messages found in this fetch cycle.")
+        return None
 
-    def is_connected(self):
-        """Check if LiveChat connections are active.
-        
-        Returns:
-            bool: True if at least one connection is active, False otherwise
-        """
-        connections_active = False
-        
-        # Check YouTube connection
-        if self.youtube:
-            try:
-                # YouTube connection is considered active if we have a valid next_page_token
-                # or if the youtube object exists and is properly initialized
-                connections_active = True
-            except Exception:
-                self.logger.warning(f"YouTube LiveChat NOT connected")
-
-        
-        # Check Twitch connection
-        if self.twitch_bot:
-            try:
-                # Twitch connection is active if the process is running
-                # This is a simplified check - in practice you might want to
-                # implement a more sophisticated health check
-                connections_active = True
-            except Exception:
-                self.logger.warning(f"Twitch LiveChat NOT connected")                
-        
-        # Check Kick connection
-        if self.kick:
-            try:
-                # Kick connection check
-                connections_active = True
-            except Exception:
-                self.logger.warning(f"Kick LiveChat NOT connected")                
-        
-        return connections_active
-    
-    def reconnect(self):
-        """Attempt to reconnect all LiveChat services."""
-        try:
-            # Reconnect YouTube if it was enabled
-            if self.youtube:
-                try:
-                    self.setup_youtube()
-                    self.logger.info(f"YouTube LiveChat reconnected")
-                except Exception as e:
-                    self.logger.warning(f"Failed to reconnect YouTube LiveChat: {e}")
-            
-            # Reconnect Twitch if it was enabled
-            if self.twitch_bot:
-                try:
-                    self.twitch_bot.run()
-                    self.logger.info(f"Twitch LiveChat reconnected")
-                except Exception as e:
-                    self.logger.warning(f"Failed to reconnect Twitch LiveChat: {e}")
-
-            # Reconnect Kick if it was enabled
-            if self.KICK_CLIENT:
-                try:
-                    self.setup_kick()
-                    self.logger.info(f"Kick LiveChat reconnected")
-                except Exception as e:
-                    self.logger.warning(f"Failed to reconnect Kick LiveChat: {e}")
-                    
-        except Exception as e:
-            print(f"Error during LiveChat reconnection: {e}")
-    
-    def disconnect(self):
-        """Disconnect all LiveChat services and clean up resources."""
-        try:
-            # Disconnect YouTube
-            if self.youtube:
-                try:
-                    # YouTube doesn't need explicit disconnection, just clear the reference
-                    self.youtube = None
-                    self.logger.info(f"YouTube LiveChat disconnected")
-                except Exception as e:
-                    self.logger.warning(f"Error disconnecting YouTube LiveChat: {e}")
-            
-            # Disconnect Twitch
-            if self.twitch_bot:
-                try:
-                    # Clear the shared list
-                    if hasattr(self, 'twitch_chat_msgs'):
-                        self.twitch_chat_msgs[:] = []
-                    self.twitch_bot.close()
-                    self.logger.info(f"Twitch LiveChat disconnected")
-                except Exception as e:
-                    self.logger.warning(f"Error disconnecting Twitch LiveChat: {e}")
-            
-            # Disconnect Kick
-            if self.KICK_CLIENT:
-                try:
-                    # Kick client cleanup
-                    self.KICK_CLIENT = None
-                    self.logger.info(f"Kick LiveChat disconnected")
-                except Exception as e:
-                    self.logger.warning(f"Error disconnecting Kick LiveChat: {e}")
-            
-            # Clear all messages
-            self._all_messages.clear()
-            
-        except Exception as e:
-            self.logger.warning(f"Error during LiveChat disconnection: {e}")
-
-# Example usage:
-if __name__ == "__main__":
-    import asyncio
+### The section below demonstrates how to use the controller.
+async def main():
+    """Main execution function."""
     from dotenv import load_dotenv
+    import time
     load_dotenv()
 
-    fetch_youtube = get_env_var("YT_FETCH") 
-    fetch_twitch = get_env_var("TW_FETCH")
-    fetch_kick = get_env_var("KI_FETCH")
-    live_chat_setup = LiveChatController.create()#(fetch_twitch=fetch_twitch, fetch_youtube=fetch_youtube, fetch_kick=fetch_kick)
+    print("--- Live Chat Controller ---")
+    controller = LiveChatController.create()
+    if not controller:
+        print("Controller could not be created. Check your .env configuration. Exiting.")
+        return
 
-    while True:
-        print("attempting_fetch")
-        asyncio.run(live_chat_setup.fetch_chat_message())
-        time.sleep(5.5)  # Adjust the interval as needed
+    await controller.setup_clients()
+    await controller.start_services()
+
+    try:
+        # Example loop to fetch a message every 15 seconds
+        for i in range(10): # Run 10 times for this example
+            print(f"\n--- Fetch Cycle {i+1} ---")
+            message = await controller.fetch_chat_message()
+            if message:
+                print(f"--> Winner: [{message.platform}] {message.username}: {message.content}")
+            else:
+                print("--> No message was selected.")
+            
+            print("Sleeping for 15 seconds...")
+            await asyncio.sleep(15)
+    except asyncio.CancelledError:
+        print("Main task cancelled.")
+    finally:
+        print("Shutting down services...")
+        await controller.stop_services()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nInterrupted by user. Shutting down.")

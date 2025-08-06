@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) #only temp, for testing
 from typing import Dict
-from src.utils.app_utils import setup_project_root
+from src.utils.env_utils import setup_project_root
 from src.utils import logger as app_logger
 from src.common import config as app_config
 from src.workers.gpu_manager_worker import gpu_manager
@@ -14,18 +14,27 @@ from src.workers.context_llm_worker import context_llm_worker
 from src.workers.stt_client_worker import stt_client_worker
 from src.workers.llm_worker import llm_worker
 from src.workers.tts_worker import tts_worker
-
+from src.workers.livechat_worker import livechat_worker
 
 class ProcessOrchestrator:
-    def __init__(self, llm_output_display_queue: mp.Queue=None, tts_mute_event: mp.Event=mp.Event(), stt_mute_event: mp.Event=mp.Event(), is_managed=False):
-        setup_project_root()
+    def __init__(self,
+                llm_output_display_queue: mp.Queue=None,
+                tts_mute_event: mp.Event=mp.Event(),
+                stt_mute_event: mp.Event=mp.Event(),
+                livechat_toggle_event: mp.Event=mp.Event(),
+                is_managed=False):
+
+        app_logger.setup_logging()
         self.logger = app_logger.get_logger("ProcessOrchestrator")
+        setup_project_root()
+        # self.logger = app_logger.get_logger("ProcessOrchestrator")
         self.config = app_config.load_config()
         self.shutdown_event = mp.Event()
          # --- Passed from AppManager ---
         self.llm_output_display_queue = llm_output_display_queue
         self.tts_mute_event = tts_mute_event
         self.stt_mute_event = stt_mute_event
+        self.livechat_toggle_event = livechat_toggle_event
         self.is_managed = is_managed
         # ----------------------------
         self.user_has_stopped_speaking_event = mp.Event()
@@ -38,12 +47,14 @@ class ProcessOrchestrator:
                 "LLM": mp.Event(),
                 "TTS": mp.Event()
             }
+        
         # Inter-Process Communication Queues with limits -- helps further avoid GPU saturation
         queue_settings = self.config.get("queue_settings", {})
         self.queues = {
             "stt_stream_queue": mp.Queue(maxsize=queue_settings.get("stt_stream_queue_maxsize", 3)),
             "llm_control_queue": mp.Queue(maxsize=queue_settings.get("llm_control_queue_maxsize", 3)),
             "llm_to_tts_queue": mp.Queue(maxsize=queue_settings.get("llm_to_tts_queue_maxsize", 3)),
+            "livechat_output_queue": mp.Queue(maxsize=queue_settings.get("livechat_output_queue_maxsize", 15)),
             "gpu_request_queue": mp.Queue(maxsize=queue_settings.get("gpu_request_queue_maxsize", 0)),
         }
 
@@ -63,12 +74,17 @@ class ProcessOrchestrator:
                 self.queues["gpu_request_queue"],
                 self.worker_events["STT"],
                 self.stt_mute_event,
-
+            ]),
+            "livechat": (livechat_worker, [
+                self.shutdown_event,
+                self.livechat_toggle_event,
+                self.queues["livechat_output_queue"],
             ]),
             "context_llm": (context_llm_worker, [
                 self.shutdown_event,
                 self.queues["stt_stream_queue"],
                 self.queues["llm_control_queue"],
+                self.queues["livechat_output_queue"],
                 self.user_has_stopped_speaking_event,
                 self.gpu_ready_event,
                 self.queues["gpu_request_queue"],
@@ -98,25 +114,33 @@ class ProcessOrchestrator:
 
     def start_workers(self):
         self.logger.info("Starting worker processes...")
-        for name, (target, args) in self.worker_definitions.items():
-            process = mp.Process(target=target, args=tuple(args), name=name)
-            self.workers[name] = process
-            process.start()
-            self.logger.info(f"Started {name} worker with PID: {process.pid}")
+        worker_startup_order = ["gpu_manager", "stt_client", "livechat", "context_llm", "llm", "tts"]
+        for name in worker_startup_order:
+            if name in self.worker_definitions:
+                target, args = self.worker_definitions[name]
+                process = mp.Process(target=target, args=tuple(args), name=name)
+                self.workers[name] = process
+                process.start()
+                self.logger.info(f"Started {name} worker with PID: {process.pid}")
 
     def stop_workers(self):
         self.logger.info("Stopping all worker processes...")
         self.shutdown_event.set()
-        for name, process in self.workers.items():
+        # Stop in reverse order of startup
+        worker_shutdown_order = reversed(list(self.workers.keys()))
+        for name in worker_shutdown_order:
+            process = self.workers[name]
             process.join(timeout=10)
             if process.is_alive():
                 self.logger.warning(f"{name} worker (PID: {process.pid}) did not terminate gracefully. Forcing shutdown.")
                 process.kill()
             else:
                 self.logger.info(f"{name} worker (PID: {process.pid}) terminated with exit code {process.exitcode}.")
-
     def run(self):
         if not self.is_managed:
+            from dotenv import load_dotenv 
+            load_dotenv()
+
             self.logger.info("Running in standalone mode. Registering signal handlers.")
             signal.signal(signal.SIGINT, self._handle_signal)
             signal.signal(signal.SIGTERM, self._handle_signal)
@@ -127,6 +151,9 @@ class ProcessOrchestrator:
             while not self.shutdown_event.is_set():
                 for name, process in self.workers.items():
                     if not process.is_alive():
+                        if self.shutdown_event.is_set():
+                            # If shutdown is already in progress, this is expected
+                            break
                         self.logger.error(f"Worker '{name}' terminated unexpectedly with exit code {process.exitcode}. Shutting down.")
                         self.shutdown_event.set()
                         break
