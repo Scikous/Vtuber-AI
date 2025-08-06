@@ -180,7 +180,7 @@ class LiveChatController:
             self._all_messages.remove(message) # Prevent re-picking in the same batch
             self.logger.info(f"PICKED MESSAGE: {message}")
             self.logger.info(f"{len(self._all_messages)} messages remaining in this batch.")
-            return message
+            return message, self._all_messages
         
         self.logger.info("No new messages found in this fetch cycle.")
         return None
