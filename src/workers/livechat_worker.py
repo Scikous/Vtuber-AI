@@ -47,12 +47,18 @@ async def runner(shutdown_event: mp.Event, toggle_event: mp.Event, output_queue:
 
             try:
                 logger.debug("Fetching new chat message...")
-                message: UnifiedMessage | None = await controller.fetch_chat_message()
+                winner_message, context_messages = await controller.fetch_chat_message()
                 
-                if message:
-                    logger.info(f"Got a message from {message.platform}. Placing in queue.")
-                    # Put the UnifiedMessage object into the multiprocessing queue
-                    output_queue.put(message)
+
+                if winner_message:
+                    logger.info(f"Got a winning message from {winner_message.platform} with {len(context_messages)} context messages. Placing in queue.")
+                    
+                    #extra messages may be helpful, especially for LLM to avoid false positives during appropriateness check
+                    payload = {
+                        "winner": winner_message,
+                        "context": context_messages
+                    }
+                    output_queue.put(payload)
                 
             except Exception as e:
                 logger.error(f"An error occurred during the fetch cycle: {e}", exc_info=True)

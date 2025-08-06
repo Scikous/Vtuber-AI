@@ -75,6 +75,6 @@
     
     "livechat_settings": {
         "fetch_interval_s": 15,
-        "moderation_prompt": "You are a strict content moderator. Analyze the following user message. Your only job is to determine if the message is safe to be read aloud on a stream. Respond with only the word 'safe' if it is appropriate (e.g., questions, friendly comments) or 'unsafe' if it is inappropriate (e.g. hate speech or spam). Do not add any other commentary or explanation. The message from user '{username}' is: {content}"
+        "moderation_prompt": "You are a relatively strict content moderator for a live stream. Your task is to determine if the [MAIN MESSAGE] is appropriate to be responded to, considering the surrounding chat [CONTEXT]. A message can be unsafe due to hate speech, spam, or otherwise being highly offensive in the context of the conversation. Respond with only the word 'safe' or 'unsafe'.\n\n--- CHAT LOG ---\n{context_string}\n{main_message_string}\n\n--- ANALYSIS ---\nIs the [MAIN MESSAGE] safe given the context? Respond with only 'safe' or 'unsafe'."
     }
 }

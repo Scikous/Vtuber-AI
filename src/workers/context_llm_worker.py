@@ -41,13 +41,13 @@ async def context_runner(shutdown_event, stt_stream_queue, llm_control_queue, li
             try:
                 if initial_prompt is None and not livechat_output_queue.empty():
                     try:
-                        message = livechat_output_queue.get_nowait()
+                        message_bundle = livechat_output_queue.get_nowait()
                         #TTS will not play until event is set -- set it here, dirty way of doing it but it works
                         tts_playback_approved = True
                         user_has_stopped_speaking_event.set()
                         # Create a background task to process the message without blocking the main loop
                         asyncio.create_task(process_chat_message(
-                            message, context_model, moderation_prompt, llm_control_queue,
+                            message_bundle, context_model, moderation_prompt, llm_control_queue,
                             gpu_request_queue, worker_event, worker_id
                         ))
                     except mp.queues.Empty:
@@ -107,20 +107,34 @@ async def context_runner(shutdown_event, stt_stream_queue, llm_control_queue, li
 
 
 async def process_chat_message(
-    message: UnifiedMessage,
+    payload: dict, # Expects {"winner": UnifiedMessage, "context": list[UnifiedMessage]}
     context_model: VtuberExllamav2,
-    moderation_prompt: str,
+    moderation_prompt_template: str,
     llm_control_queue: mp.Queue,
     gpu_request_queue: mp.Queue,
     worker_event: mp.Event,
     worker_id: str
 ):
-    """Handles the moderation and potential forwarding of a single chat message."""
-    logger.info(f"Processing chat message from '{message.username}': '{message.content}'")
-    
-    # 1. Construct the moderation prompt
-    prompt = moderation_prompt.format(username=message.username, content=message.content)
-    
+    """Handles the moderation of a message using its surrounding chat context."""
+    winner_message = payload.get("winner")
+    context_messages = payload.get("context", [])
+
+    if not winner_message:
+        logger.error("Chat payload received without a 'winner' message. Cannot process.")
+        return
+
+    logger.info(f"Processing chat message from '{winner_message.username}' with {len(context_messages)} context messages.")
+
+    # 1. Format the context and main message strings
+    context_string = "\n".join([f"[CONTEXT] {msg.username}: {msg.content}" for msg in context_messages])
+    main_message_string = f"[MAIN MESSAGE] {winner_message.username}: {winner_message.content}"
+
+    # 2. Construct the full moderation prompt from the template
+    prompt = moderation_prompt_template.format(
+        context_string=context_string,
+        main_message_string=main_message_string
+    )
+
     verdict = "unsafe" # Default to unsafe
     try:
         # 2. Request GPU access with priority 2 (lower than STT)
@@ -146,20 +160,17 @@ async def process_chat_message(
 
     # 5. Act on the verdict
     if verdict == "safe":
-        logger.info(f"Message from '{message.username}' deemed SAFE. Forwarding to main LLM.")
+        logger.info(f"Message from '{winner_message.username}' deemed SAFE. Forwarding to main LLM.")
         # Format the prompt for the main LLM to respond to
-        final_prompt = f"A user in the live chat named '{message.username}' said: '{message.content}'"
-        try:
-            llm_control_queue.put({
-                "action": "start", 
-                "prompt": final_prompt, 
-                "add_generation_prompt": True, 
-                "continue_final_message": False
-            })
-        except mp.queues.Full:
-            logger.warning("LLM control queue was full. Dropping safe chat message.")
+        final_prompt = f"A user in the live chat ({winner_message.platform}) named '{winner_message.username}' said: '{winner_message.content}'"
+        llm_control_queue.put({
+            "action": "start", 
+            "prompt": final_prompt, 
+            "add_generation_prompt": True, 
+            "continue_final_message": False
+        })
     else:
-        logger.warning(f"Message from '{message.username}' deemed UNSAFE. Discarding.")
+        logger.warning(f"Message from '{winner_message.username}' deemed UNSAFE. Discarding.")
 
 
 def context_llm_worker(shutdown_event: mp.Event, stt_stream_queue: mp.Queue, llm_control_queue: mp.Queue, livechat_output_queue: mp.Queue,
