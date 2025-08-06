@@ -39,6 +39,10 @@ async def context_runner(shutdown_event, stt_stream_queue, llm_control_queue, li
 
         while not shutdown_event.is_set():
             try:
+                #used to terminate current job if TTS is playing and user begins to speak again.
+                if tts_playback_approved and not user_has_stopped_speaking_event.is_set():
+                    llm_control_queue.put({"action": "interrupt"})
+
                 if initial_prompt is None and not livechat_output_queue.empty():
                     try:
                         message_bundle = livechat_output_queue.get_nowait()
