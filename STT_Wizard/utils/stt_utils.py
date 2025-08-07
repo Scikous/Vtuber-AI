@@ -19,7 +19,7 @@ class STTBase(ABC):
     the core transcription methods that subclasses must implement.
     """
 
-    def __init__(self, model_path: str = None, language: str = None, device: str = None, compute_type: str = None, **stt_settings):
+    def __init__(self, model_path: str = None, language: str = None, device: str = None, compute_type: str = None, logger: logging.Logger = None, **stt_settings):
         """
         Initializes the STT engine.
 
@@ -31,9 +31,27 @@ class STTBase(ABC):
             **stt_settings: Additional keyword arguments for the specific implementation. Namely STT settings
         """
         self.model_path = model_path
-        self.device = device
-        self.compute_type = compute_type
-        # self._load_model() # Model loading is now explicit
+        self.logger = logger or logging.getLogger(self.__class__.__name__)
+        if device is None or compute_type is None:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    self.device = device or "cuda"
+                    self.compute_type = compute_type or "int8_float16"
+                    self.logger.info(f"PyTorch found. Using device: {self.device} with compute type: {self.compute_type}")
+                else:
+                    self.device = device or "cpu"
+                    self.compute_type = compute_type or "int8"
+                    self.logger.warning(f"CUDA not available. Using device: {self.device} with compute type: {self.compute_type}")
+            except ImportError:
+                self.device = "cpu"
+                self.compute_type = compute_type or "int8"
+                self.logger.warning("PyTorch not found. Defaulting to CPU for faster-whisper.")
+        else:
+            self.device = device
+            self.compute_type = compute_type
+        
+        self.config = stt_settings if stt_settings else load_config()
 
     @abstractmethod
     def _load_model(self):
@@ -95,11 +113,11 @@ class STTBase(ABC):
         try:
             return self.list_available_input_devices()
         except Exception as e:
-            print(f"Could not list audio devices. Is 'sounddevice' installed and working? Error: {e}")
+            self.logger.error(f"Could not list audio devices. Is 'sounddevice' installed and working? Error: {e}")
             return []
 
 
-
+#coming back to this system
 def calculate_audio_energy_rms(audio_chunk: np.ndarray) -> float:
     """
     Calculates the Root Mean Square (RMS) energy of an audio chunk.
