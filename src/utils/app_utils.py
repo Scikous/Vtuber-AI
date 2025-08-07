@@ -8,17 +8,6 @@ import asyncio
 from functools import wraps
 from contextlib import contextmanager
 
-@contextmanager
-def change_dir(new_dir):
-    """Context manager to temporarily change the current working directory."""
-    old_dir = os.getcwd()
-    os.makedirs(new_dir, exist_ok=True) # Ensure the new directory exists
-    os.chdir(new_dir)
-    try:
-        yield
-    finally:
-        os.chdir(old_dir)
-
 def retry_with_backoff(max_retries=3, initial_delay=5, backoff_factor=2, exceptions=(Exception,)):
     """
     A decorator that retries the decorated function with exponential backoff.
