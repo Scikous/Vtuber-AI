@@ -1,4 +1,4 @@
-current_version = "0.5.5"
+current_version = "0.5.6"
 
 import setuptools
 
@@ -79,7 +79,7 @@ extras_require = {
     "elevenlabs": base_requirements + [requirements["elevenlabs"]],
     "openai": base_requirements + [requirements["openai"]],
     "gtts": base_requirements + [requirements["gtts"]],
-    "coqui": base_requirements + [requirements["coqui_tts"]] + [requirements["deepspeed"]],
+    "coqui": base_requirements + [requirements["coqui_tts"]],
     "edge": base_requirements + [requirements["edge-tts"]],
     "kokoro": base_requirements + [requirements["kokoro"]],
     "orpheus": base_requirements + [requirements["snac"]],

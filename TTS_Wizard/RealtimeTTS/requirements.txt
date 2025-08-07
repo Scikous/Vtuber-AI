@@ -2,19 +2,19 @@
 stream2sentence==0.3.1
 
 # azure-cognitiveservices-speech is for AzureEngine
-azure-cognitiveservices-speech==1.43.0
+azure-cognitiveservices-speech==1.45.0
 
 # coqui_tts is for CoquiEngine
-coqui_tts==0.26.0
+coqui_tts==0.27.0
 
 # elevenlabs is for ElevenlabsEngine
-elevenlabs==1.57.0
+elevenlabs==2.8.0
 
 # gtts is for GTTSEngine
 gtts==2.5.4
 
 # openai is for OpenAIEngine
-openai==1.77.0
+openai==1.97.0
 
 # pyttsx3 is for SystemEngine
 pyttsx3==2.98
@@ -48,6 +48,3 @@ pydub==0.25.1
 
 # resampy is used to resample from the tts to the target device sample rate 
 resampy==0.4.3
-
-# deepspeed is for CoquiTTS
-deepspeed==0.17.1
