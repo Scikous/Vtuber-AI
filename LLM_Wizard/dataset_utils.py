@@ -66,9 +66,6 @@ def prepare_finetuning_input_parquet(csv_path: str, output_parquet_path: str):
         print(f"An unexpected error occurred in prepare_finetuning_input_parquet: {e}")
 
 
-
-
-
 def _build_language_messages(conversation_data: list, instructions: str):
     """
     Builds a message list for a text-only language model.

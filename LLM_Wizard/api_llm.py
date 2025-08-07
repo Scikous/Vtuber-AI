@@ -7,9 +7,6 @@ import uvicorn
 from model_utils import load_character
 from models import VtuberExllamav2
 
-
-
-
 # Global variable to hold the VtuberExllamav2 instance
 vtuber_model = None
 

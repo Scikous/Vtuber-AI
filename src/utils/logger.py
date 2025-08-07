@@ -72,7 +72,6 @@ def setup_logging():
         # Add a NullHandler to prevent "No handlers could be found" warnings
         root_logger.addHandler(logging.NullHandler())
 
-
 def get_logger(name: str) -> logging.Logger:
     """
     Retrieves a logger instance. It will inherit the root configuration.

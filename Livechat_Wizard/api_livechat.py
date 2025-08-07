@@ -4,11 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 import uvicorn
-
 from livechat import LiveChatController
-
-
-
 
 # Global variable to hold the VtuberExllamav2 instance
 live_chat_controller = None
