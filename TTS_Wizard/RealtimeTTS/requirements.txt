@@ -6,7 +6,8 @@ azure-cognitiveservices-speech==1.45.0
 
 # coqui_tts is for CoquiEngine
 coqui_tts==0.27.0
-
+# deepspeed is for CoquiTTS
+deepspeed>=0.17.1
 # elevenlabs is for ElevenlabsEngine
 elevenlabs==2.8.0
 
