@@ -3,8 +3,9 @@ from huggingface_hub import snapshot_download
 from model_utils import load_character, prompt_wrapper, contains_sentence_terminator
 from time import perf_counter
 import asyncio
-
+import logging
 # from general_utils import read_messages_csv
+logging.basicConfig(level=logging.INFO)
 
 #get current character's information to use
 character_info_json = "LLM_Wizard/characters/character.json"
@@ -75,14 +76,3 @@ async def exllamav2_test():
         print(full_output)
 
 asyncio.run(exllamav2_test())
-# #test using the standard huggingface loader
-# def huggingface_test():
-    
-#     Character = VtuberLLM.load_model(character_name=character_name)#(generator, gen_settings, tokenizer, character_name)
-#     # print(Character.tokenizer.eos_token, Character.tokenizer.bos_token)
-#     # return
-#     msg = """You MUST have the following in your output EXACTLY as written: "hello", 'wow't'"""
-#     start = perf_counter()
-#     response = asyncio.run(Character.dialogue_generator(prompt=msg))#, max_tokens=400))
-#     end = perf_counter()
-#     print(f"Prompts: {msg}\nResponses:\n{response}\n\nTime Taken (Seconds): {end-start}")

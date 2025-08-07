@@ -2,7 +2,6 @@ import json
 import numpy as np
 import re
 
-
 import asyncio
 import io
 import logging
@@ -83,20 +82,6 @@ def prompt_wrapper(message, context=""):
     )
     return prompt
 
-def get_rand_token_len(min_tokens=15, max_tokens=100, input_len=0):
-    """
-    Given an input (Message), the potential response length should have a higher chance of being longer.
-    """
-    # Adjust max tokens based on input length to avoid cutting off mid-thought
-    adjusted_max_tokens = max(min_tokens, max_tokens - input_len)+1
-    # print(adjusted_max_tokens)
-    tokens = np.arange(min_tokens, adjusted_max_tokens)
-    token_weights = np.linspace(
-        start=1.0, stop=0.05, num=adjusted_max_tokens - min_tokens)
-    token_weights /= np.sum(token_weights)
-    token_len = np.random.choice(tokens, p=token_weights)
-    return token_len
-
 def load_character(character_info_json=""):
     """
     Returns:
@@ -130,32 +115,6 @@ def contains_sentence_terminator(chunk_text, sentence_terminators=['.', '!', '?'
             return True
     return False
 
-
-##deprecated -- legacy purposes only
-def sentence_reducer(output_clean):
-    """
-    Remove words after the last sentence stopper (., ?, !)
-    """
-    match = re.search(r'[.!?](?!.*[.!?])', output_clean)
-    if match:
-        pos = match.end()
-        output_clean = output_clean[:pos].strip()
-    return output_clean
-
-def character_reply_cleaner(reply, character_name):
-    """
-    Clean the character's reply by removing the character's name and truncating after the last sentence stopper.
-    """
-    character_name = character_name + '\n'
-    character_index = reply.find(character_name)
-
-    if character_index != -1:
-        reply = reply[character_index + len(character_name):]
-    else:
-        print("Womp womp", reply)
-        
-    reply = sentence_reducer(reply)
-    return reply
 
 def extract_name_message(input_string):
     """
