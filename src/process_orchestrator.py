@@ -63,6 +63,7 @@ class ProcessOrchestrator:
         # Update worker_definitions to pass gpu_request_queue
         self.worker_definitions = {
             "gpu_manager": (gpu_manager, [
+                self.shutdown_event,
                 self.queues["gpu_request_queue"],
                 self.worker_events,
                 self.max_gpu_slots

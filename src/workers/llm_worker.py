@@ -136,7 +136,6 @@ async def llm_runner(shutdown_event, llm_control_queue, llm_to_tts_queue, gpu_re
                 logger.error(f"Error in LLM runner loop: {e}", exc_info=True)
                 await asyncio.sleep(1)
     
-    logger.info("LLM worker has shut down.")
 
 def llm_worker(shutdown_event: mp.Event, llm_control_queue: mp.Queue, llm_to_tts_queue: mp.Queue, gpu_ready_event: mp.Event, gpu_request_queue: mp.Queue, worker_event: mp.Event, llm_output_display_queue: mp.Queue):
     setup_project_root()
@@ -149,3 +148,4 @@ def llm_worker(shutdown_event: mp.Event, llm_control_queue: mp.Queue, llm_to_tts
         pass
     finally:
         loop.close()
+        logger.info("LLM worker has shut down.")

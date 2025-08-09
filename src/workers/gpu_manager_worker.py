@@ -2,10 +2,12 @@ import multiprocessing as mp
 import heapq
 from src.utils import logger as app_logger
 from src.utils.env_utils import setup_project_root
+from typing import Dict
+
 app_logger.setup_logging()
 logger = app_logger.get_logger("GPUClientWorker")
 
-def gpu_manager(request_queue, worker_events, max_slots):
+def gpu_manager(shutdown_event: mp.Event, request_queue: mp.Queue, worker_events: Dict[str, mp.Event], max_slots: int):
     """
     Manages GPU access using a priority queue.
     
@@ -18,7 +20,7 @@ def gpu_manager(request_queue, worker_events, max_slots):
     available_slots = max_slots
     waiting_queue = []  # Min-heap for (priority, worker_id) tuples
 
-    while True:
+    while not shutdown_event.is_set():
         try:
             message = request_queue.get(timeout=0.1)
             
@@ -44,3 +46,17 @@ def gpu_manager(request_queue, worker_events, max_slots):
 
         except mp.queues.Empty:
             pass  # Wait for new messages
+
+    logger.info("Shutdown signal received. Cleaning up waiting workers...")
+    while waiting_queue:
+            _, worker_id = heapq.heappop(waiting_queue)
+            logger.warning(f"Notifying waiting worker {worker_id} about shutdown. Request cancelled.")
+            # Set the worker's event to unblock it. The worker-side logic
+            # should handle this by checking a global shutdown flag.
+            if worker_id in worker_events:
+                worker_events[worker_id].set()
+            else:
+                logger.error(f"Could not find event for worker {worker_id} during shutdown.")
+    request_queue.close()
+    request_queue.join_thread()
+    logger.info("GPU manager has shutdown.")

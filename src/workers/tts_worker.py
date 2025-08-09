@@ -62,7 +62,6 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
             logger.error(f"Error in TTS runner: {e}", exc_info=True)
     
     tts_model.shutdown()
-    logger.info("TTS worker has shut down.")
 
 def tts_worker(shutdown_event: mp.Event, llm_to_tts_queue: mp.Queue, user_has_stopped_speaking_event: mp.Event, gpu_request_queue: mp.Queue, worker_event: mp.Event, tts_mute_event: mp.Event):
     setup_project_root()
@@ -75,3 +74,4 @@ def tts_worker(shutdown_event: mp.Event, llm_to_tts_queue: mp.Queue, user_has_st
         pass
     finally:
         loop.close()
+        logger.info("TTS worker has shut down.")
