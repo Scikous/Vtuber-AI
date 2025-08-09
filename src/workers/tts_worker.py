@@ -26,7 +26,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
         else:
             tts_engine = coquitts_engine(use_deepspeed=tts_settings.get("use_deepspeed", True))
         voice_to_clone = tts_settings.get("voice_to_clone_file", None)#implement this dumbo
-        tts_model = RealTimeTTS(tts_engine, user_has_stopped_speaking_event=user_has_stopped_speaking_event)
+        tts_model = RealTimeTTS(tts_engine, tts_playback_approved_event=user_has_stopped_speaking_event, logger=logger)
         logger.info("✅ TTS model loaded.")
     finally:
         gpu_request_queue.put({"type": "release", "worker_id": worker_id})
@@ -41,7 +41,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
 
             sentence = await asyncio.to_thread(llm_to_tts_queue.get, timeout=0.1)
             if sentence == TERMINATE_OUTPUT:
-                await tts_model.tts_request_clear()
+                await tts_model.stop()
                 continue
             if sentence:
                 if user_has_stopped_speaking_event.is_set():
@@ -53,8 +53,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
                 try:
                     await async_check_gpu_memory(logger)
                     if not tts_mute_event.is_set():
-                        await tts_model.tts_request_async(sentence)
-
+                        await tts_model.speak(sentence)
                 finally:
                     gpu_request_queue.put({"type": "release", "worker_id": worker_id})
         except mp.queues.Empty:
@@ -62,7 +61,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
         except Exception as e:
             logger.error(f"Error in TTS runner: {e}", exc_info=True)
     
-    tts_model.cleanup()
+    tts_model.shutdown()
     logger.info("TTS worker has shut down.")
 
 def tts_worker(shutdown_event: mp.Event, llm_to_tts_queue: mp.Queue, user_has_stopped_speaking_event: mp.Event, gpu_request_queue: mp.Queue, worker_event: mp.Event, tts_mute_event: mp.Event):
