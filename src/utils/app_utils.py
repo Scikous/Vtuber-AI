@@ -1,59 +1,66 @@
-"""
-Application Utilities for Vtuber-AI
-Provides miscellaneous utility functions and decorators for the application.
-"""
-import os
-import time
-import asyncio
-from functools import wraps
-from contextlib import contextmanager
+# Livechat_Wizard/config_builder.py
+import logging
+from src.utils.env_utils import get_env_var
+from Livechat_Wizard.twitch import fetch_twitch_user_ids
 
-def retry_with_backoff(max_retries=3, initial_delay=5, backoff_factor=2, exceptions=(Exception,)):
+logger = logging.getLogger(__name__)
+
+async def build_livechat_controller_config() -> dict:
     """
-    A decorator that retries the decorated function with exponential backoff.
+    Loads all necessary settings from the environment, prepares them,
+    and returns a configuration dictionary suitable for LiveChatController.
 
-    :param max_retries: Maximum number of retries before giving up
-    :param initial_delay: Initial delay between retries in seconds
-    :param backoff_factor: Multiplier for delay after each retry
-    :param exceptions: Tuple of exceptions to catch and retry on
+    This function acts as the bridge between the environment/dotenv and the
+    decoupled controller. It also handles first-time setup logic like
+    fetching Twitch IDs.
     """
-    def decorator(func):
-        @wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            delay = initial_delay
-            for attempt in range(max_retries):
-                try:
-                    return await func(*args, **kwargs)
-                except exceptions as e:
-                    if attempt == max_retries - 1:
-                        # self.logger.error(f"Max retries reached for {func.__name__}. Last error: {e}") # Assuming logger is available
-                        print(f"Max retries reached for {func.__name__}. Last error: {e}")
-                        raise e
-                    # self.logger.warning(f"Attempt {attempt + 1} for {func.__name__} failed: {e}. Retrying in {delay} seconds...")
-                    print(f"Attempt {attempt + 1} for {func.__name__} failed: {e}. Retrying in {delay} seconds...")
-                    await asyncio.sleep(delay)
-                    delay *= backoff_factor
-        
-        @wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            delay = initial_delay
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as e:
-                    if attempt == max_retries - 1:
-                        # self.logger.error(f"Max retries reached for {func.__name__}. Last error: {e}")
-                        print(f"Max retries reached for {func.__name__}. Last error: {e}")
-                        raise e
-                    # self.logger.warning(f"Attempt {attempt + 1} for {func.__name__} failed: {e}. Retrying in {delay} seconds...")
-                    print(f"Attempt {attempt + 1} for {func.__name__} failed: {e}. Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                    delay *= backoff_factor
-        
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        else:
-            return sync_wrapper
-            
-    return decorator
+    logger.info("Building LiveChatController configuration...")
 
+    # Base configuration structure
+    config = {
+        "youtube": {
+            "enabled": get_env_var("YT_FETCH", bool, False),
+            "channel_id": get_env_var("YT_CHANNEL_ID", str),
+            "client_secret_file": get_env_var("YT_OAUTH2_JSON", str),
+            "initial_page_token": get_env_var("LAST_NEXT_PAGE_TOKEN", str)
+        },
+        "twitch": {
+            "enabled": get_env_var("TW_FETCH", bool, False),
+            "channel_name": get_env_var("TW_CHANNEL", str),
+            "bot_name": get_env_var("TW_BOT_NAME", str),
+            "client_id": get_env_var("TW_CLIENT_ID", str),
+            "client_secret": get_env_var("TW_CLIENT_SECRET", str),
+            "bot_id": get_env_var("TW_BOT_ID", str),
+            "owner_id": get_env_var("TW_OWNER_ID", str),
+            "prefix": "!",
+            "max_messages": get_env_var("TWITCH_MAX_MESSAGES", int, 100)
+        },
+        "kick": {
+            "enabled": get_env_var("KI_FETCH", bool, False),
+            "channel_name": get_env_var("KI_CHANNEL", str)
+        }
+    }
+
+    # Handle dynamic/first-run configuration for Twitch
+    twitch_config = config["twitch"]
+    if twitch_config["enabled"] and (not twitch_config["bot_id"] or not twitch_config["owner_id"]):
+        logger.warning("Twitch Bot ID or Owner ID not found in environment. Attempting to fetch them...")
+        try:
+            owner_id, bot_id = await fetch_twitch_user_ids(
+                client_id=twitch_config["client_id"],
+                client_secret=twitch_config["client_secret"],
+                channel_name=twitch_config["channel_name"],
+                bot_name=twitch_config["bot_name"]
+            )
+            # Update the config dictionary with the fetched values
+            twitch_config["owner_id"] = owner_id
+            twitch_config["bot_id"] = bot_id
+            logger.info(f"Successfully fetched Twitch IDs. Please add TW_OWNER_ID={owner_id} and TW_BOT_ID={bot_id} to your .env file to speed up future launches.")
+        except Exception as e:
+            logger.error(f"FATAL: Could not fetch Twitch IDs. Twitch support will be disabled. Error: {e}")
+            twitch_config["enabled"] = False
+
+    if not any(c.get('enabled') for c in config.values()):
+        logger.warning("All fetch services are disabled in the configuration. The controller will not fetch from any platform.")
+
+    return config
