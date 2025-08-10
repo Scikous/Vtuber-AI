@@ -42,6 +42,8 @@ async def context_runner(shutdown_event, stt_stream_queue, llm_control_queue, li
                 #used to terminate current job if TTS is playing and user begins to speak again.
                 if tts_playback_approved and not user_has_stopped_speaking_event.is_set():
                     llm_control_queue.put({"action": "interrupt"})
+                    tts_playback_approved = False
+                    logger.info("Context Worker: User speech detected, interrupting current job.")
 
                 if initial_prompt is None and not livechat_output_queue.empty():
                     try:
@@ -149,8 +151,9 @@ async def process_chat_message(
         await async_check_gpu_memory(logger)
         
         # 3. Run moderation check
-        async for result in await context_model.dialogue_generator(prompt, max_tokens=10):
+        async for result in await context_model.dialogue_generator(prompt, max_tokens=3):
             response_text = result.get("text", "").lower().strip()
+            
             if "safe" in response_text:
                 verdict = "safe"
                 break # We have our answer, no need to generate more

@@ -7,6 +7,7 @@ from src.utils.env_utils import setup_project_root
 setup_project_root()
 
 from src.utils import logger as app_logger
+from src.utils.app_utils import build_livechat_controller_config
 from src.common import config as app_config
 from Livechat_Wizard.livechat import LiveChatController
 from Livechat_Wizard.data_models import UnifiedMessage # Assuming data_models.py is accessible from the project root
@@ -23,12 +24,14 @@ async def runner(shutdown_event: mp.Event, toggle_event: mp.Event, output_queue:
     """
     
     # Load configuration to get the fetch interval
+    livechat_controller_config = await build_livechat_controller_config()
     config = app_config.load_config()
     fetch_interval_s = config.get("livechat_settings", {}).get("fetch_interval_s", 15)
     logger.info(f"Live chat fetch interval set to {fetch_interval_s} seconds.")
+    
 
     # Create the controller using the factory method which checks .env variables
-    controller = LiveChatController.create()
+    controller = LiveChatController(livechat_controller_config)
     if not controller:
         logger.error("LiveChatController could not be created. Check .env configuration (e.g., YT_FETCH). Worker will exit.")
         return
