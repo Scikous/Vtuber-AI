@@ -10,10 +10,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 
-from general_utils import get_env_var
+# from general_utils import get_env_var
 from livechat_utils import retry_with_backoff
 # Set up logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 class YouTubeApiError(Exception):
     """Custom exception for YouTube API-related errors."""
@@ -24,16 +24,27 @@ class YTLive:
     An async, on-demand client to fetch live chat messages from a YouTube livestream.
     This client is designed to be initialized, set up once, and then polled.
     """
-    def __init__(self):
-        self.channel_id = get_env_var("YT_CHANNEL_ID", var_type=str)
-        if not self.channel_id:
-            raise ValueError("YT_CHANNEL_ID environment variable is not set.")
+    def __init__(self, channel_id: str, client_secret_file: str):
+        """
+        channel_id (str): The YouTube channel ID.
+        client_secret_file (str): The path to the client secret JSON file. Usually downloaded from the YouTube developer console control panel.
+        """
+        # self.channel_id = get_env_var("YT_CHANNEL_ID", var_type=str)
+        # if not self.channel_id:
+        #     raise ValueError("YT_CHANNEL_ID environment variable is not set.")
+        if not channel_id:
+            raise ValueError("YouTube channel_id cannot be empty.")
+        if not client_secret_file:
+            raise ValueError("YouTube client_secret_file path cannot be empty.")
+            
+        self.channel_id = channel_id
+        self.client_secret_file = client_secret_file
         
         self._creds = self._load_credentials()
         self.youtube: Resource = build('youtube', 'v3', credentials=self._creds)
         
-        self.livestream_id: Optional[str] = None
-        self.live_chat_id: Optional[str] = None
+        self.livestream_id: str = None
+        self.live_chat_id: str = None
 
     def _load_credentials(self):
         """Loads or refreshes user credentials for OAuth2."""
@@ -50,11 +61,9 @@ class YTLive:
                 creds.refresh(Request())
             else:
                 logging.info("Fetching new YouTube credentials via OAuth flow.")
-                client_secret_file = get_env_var("YT_OAUTH2_JSON", var_type=str)
-                if not client_secret_file or not os.path.exists(client_secret_file):
-                    raise FileNotFoundError(f"YouTube client secret JSON not found at path: {client_secret_file}")
-                
-                flow = InstalledAppFlow.from_client_secrets_file(client_secret_file, SCOPES)
+                if not os.path.exists(self.client_secret_file):
+                    raise FileNotFoundError(f"YouTube client secret JSON not found at path: {self.client_secret_file}")
+                flow = InstalledAppFlow.from_client_secrets_file(self.client_secret_file, SCOPES)
                 creds = flow.run_local_server(port=0)
             
             with open('token.pickle', 'wb') as token:
@@ -155,17 +164,25 @@ class YTLive:
 async def _test_youtube_client():
     """Demonstrates the new on-demand, async usage of the YTLive client."""
     print("--- Running YTLive Standalone Test ---")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
     from dotenv import load_dotenv
+    load_dotenv()
+    from dotenv import load_dotenv
+    from general_utils import get_env_var
     load_dotenv()
 
     try:
-        client = YTLive()
-        await client.setup() # Perform async setup
+        # Configuration is loaded and passed to the client's constructor.
+        channel_id = get_env_var("YT_CHANNEL_ID", var_type=str)
+        secret_file = get_env_var("YT_OAUTH2_JSON", var_type=str)
+        
+        client = YTLive(channel_id=channel_id, client_secret_file=secret_file)
+        await client.setup()
 
         if client.live_chat_id:
             print(f"Successfully connected to live chat: {client.live_chat_id}")
             
-            # In a real app, this token would be stored and reused between calls
             test_page_token = None 
             
             print("\nFetching first page of messages...")

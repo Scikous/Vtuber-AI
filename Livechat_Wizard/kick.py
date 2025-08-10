@@ -12,10 +12,8 @@ from typing import Optional, Tuple, List
 # Use the async-native version of curl_cffi
 from curl_cffi.requests import AsyncSession, RequestsError
 
-# It's good practice to set up logging for a library or worker component.
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# The parent application is responsible for configuring the root logger.
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class KickChatUser:
@@ -84,13 +82,13 @@ class KickClient:
                 raise KickApiError(f"Could not find 'id' in channel data for '{self.username}'. Response: {data}")
             
             self._channel_id = str(channel_id)
-            logging.info(f"Successfully fetched Kick channel ID for '{self.username}': {self._channel_id}")
+            logger.info(f"Successfully fetched Kick channel ID for '{self.username}': {self._channel_id}")
             return self._channel_id
         except RequestsError as e:
-            logging.error(f"Network error while getting channel ID for '{self.username}': {e}")
+            logger.error(f"Network error while getting channel ID for '{self.username}': {e}")
             raise KickApiError(f"Could not retrieve channel ID for '{self.username}'.") from e
         except Exception as e:
-            logging.error(f"An unexpected error occurred while getting channel ID for '{self.username}': {e}")
+            logger.error(f"An unexpected error occurred while getting channel ID for '{self.username}': {e}")
             raise KickApiError(f"Could not retrieve channel ID for '{self.username}'.") from e
 
     async def fetch_new_messages(self, last_seen_timestamp: datetime) -> List[KickChatMessage]:
@@ -140,11 +138,11 @@ class KickClient:
             # This was already logged in _get_channel_id, re-raise to notify the controller
             raise
         except RequestsError as e:
-            logging.error(f"Network error fetching messages for '{self.username}': {e}")
+            logger.error(f"Network error fetching messages for '{self.username}': {e}")
             # Return an empty list to make the caller resilient to transient API errors.
             return []
         except Exception as e:
-            logging.error(f"Failed to parse messages for channel '{self.username}': {e}")
+            logger.error(f"Failed to parse messages for channel '{self.username}': {e}")
             return []
 
 ### The section below is for standalone testing and can be commented out later.

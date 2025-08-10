@@ -3,29 +3,29 @@ import asyncio
 import json
 import logging
 import random
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Deque
 from collections import deque
 
 import twitchio
 from twitchio import authentication, eventsub
 from twitchio.ext import commands
-from dotenv import load_dotenv, set_key, find_dotenv
 
 # Import our standardized data model
 from data_models import UnifiedMessage
-from general_utils import get_env_var
+# from dotenv import load_dotenv, set_key, find_dotenv
+# from general_utils import get_env_var
 
-# Load environment variables
-load_dotenv()
-CHANNEL = get_env_var("TW_CHANNEL", var_type=str)
-BOT_NAME = get_env_var("TW_BOT_NAME", var_type=str)
-CLIENT_ID = get_env_var("TW_CLIENT_ID", var_type=str)
-CLIENT_SECRET = get_env_var("TW_CLIENT_SECRET", var_type=str)
-# These may be empty on first run, we will fetch them.
-BOT_ID = get_env_var("TW_BOT_ID", var_type=str)
-OWNER_ID = get_env_var("TW_OWNER_ID", var_type=str)
+# # Load environment variables
+# load_dotenv()
+# CHANNEL = get_env_var("TW_CHANNEL", var_type=str)
+# BOT_NAME = get_env_var("TW_BOT_NAME", var_type=str)
+# CLIENT_ID = get_env_var("TW_CLIENT_ID", var_type=str)
+# CLIENT_SECRET = get_env_var("TW_CLIENT_SECRET", var_type=str)
+# # These may be empty on first run, we will fetch them.
+# self.BOT_ID = get_env_var("TW_self.BOT_ID", var_type=str)
+# OWNER_ID = get_env_var("TW_OWNER_ID", var_type=str)
 
-LOGGER: logging.Logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 def _hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     """Converts a hex color string to an (R, G, B) tuple."""
@@ -38,10 +38,11 @@ def _hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
         return (255, 255, 255)
 
 class Bot(commands.Bot):
-    def __init__(self, message_list: deque[UnifiedMessage], **kwargs: Any) -> None:
+    def __init__(self, message_list: Deque[UnifiedMessage], **kwargs: Any) -> None:
         super().__init__(**kwargs)
         # This list is shared with the LiveChatController
         self.message_list = message_list
+        # self.BOT_ID = bot_id
 
     async def setup_hook(self) -> None:
         """The setup hook for the bot, responsible for subscribing to events."""
@@ -53,25 +54,25 @@ class Bot(commands.Bot):
             tokens = json.load(fp)
 
         for user_id in tokens:
-            if user_id == BOT_ID:
+            if user_id == self.bot_id:
                 continue
 
             # Subscribe to chat for everyone we have a token...
-            chat = eventsub.ChatMessageSubscription(broadcaster_user_id=user_id, user_id=BOT_ID)
+            chat = eventsub.ChatMessageSubscription(broadcaster_user_id=user_id, user_id=self.bot_id)
             await self.subscribe_websocket(chat)
 
     async def event_ready(self) -> None:
-        LOGGER.info(f"Logged in as: {self.user}")
+        logger.info(f"Logged in as: {self.user}")
 
     async def event_oauth_authorized(self, payload: authentication.UserTokenPayload) -> None:
         # Stores tokens in .tio.tokens.json by default; can be overriden to use a DB for example
         # Adds the token to our Client to make requests and subscribe to EventSub...
         await self.add_token(payload.access_token, payload.refresh_token)
 
-        if payload.user_id == BOT_ID:
+        if payload.user_id == self.bot_id:
             return
         # Subscribe to chat for new authorizations...
-        chat = eventsub.ChatMessageSubscription(broadcaster_user_id=payload.user_id, user_id=BOT_ID)
+        chat = eventsub.ChatMessageSubscription(broadcaster_user_id=payload.user_id, user_id=self.bot_id)
         await self.subscribe_websocket(chat)
 
 class GeneralCommands(commands.Component):
@@ -117,78 +118,84 @@ class GeneralCommands(commands.Component):
         
         # Append the message to the shared list
         self.bot.message_list.append(unified_msg)
-        LOGGER.info(f"Twitch message captured from {unified_msg.username}: {unified_msg.content}")
+        logger.info(f"Twitch message captured from {unified_msg.username}: {unified_msg.content}")
 
-async def update_owner_bot_ids() -> Tuple[str, str]:
+async def fetch_twitch_user_ids(client_id: str, client_secret: str, channel_name: str, bot_name: str) -> Tuple[str, str]:
     """
-    Fetches user IDs for the channel owner and the bot, updating .env if necessary.
-    This is a crucial first-time setup utility.
+    Fetches and returns user IDs for the channel owner and the bot using App credentials.
+    This is a pure utility function without side effects.
     """
-    global OWNER_ID, BOT_ID
-    # Only run if one of the IDs is missing.
-    if OWNER_ID and BOT_ID:
-        return OWNER_ID, BOT_ID
-
-    print("OWNER_ID or BOT_ID not found in .env, fetching from Twitch API...")
+    logger.info(f"Fetching Twitch user IDs for channel '{channel_name}' and bot '{bot_name}'...")
     try:
-        async with twitchio.Client(client_id=CLIENT_ID, client_secret=CLIENT_SECRET) as client:
+        async with twitchio.Client(client_id=client_id, client_secret=client_secret) as client:
             await client.login()
-            users = await client.fetch_users(logins=[CHANNEL, BOT_NAME])
+            users = await client.fetch_users(logins=[channel_name, bot_name])
+            if len(users) < 2:
+                raise ValueError("Could not fetch both channel and bot users. Check names.")
             
-            owner_id = users[0].id
-            bot_id = users[1].id
+            # Assuming the first name in the list corresponds to the first user found
+            name_map = {user.name.lower(): user.id for user in users}
+            owner_id = name_map.get(channel_name.lower())
+            bot_id = name_map.get(bot_name.lower())
 
-            dotenv_path = find_dotenv()
-            set_key(dotenv_path, "TW_OWNER_ID", owner_id)
-            set_key(dotenv_path, "TW_BOT_ID", bot_id)
-            
-            print(f"Updated .env: TW_OWNER_ID={owner_id}, TW_BOT_ID={bot_id}")
+            if not owner_id or not bot_id:
+                raise ValueError(f"Could not resolve both user IDs from response. Got: {name_map}")
+
+            logger.info(f"Fetched IDs: Owner={owner_id}, Bot={bot_id}")
             return owner_id, bot_id
     except Exception as e:
-        LOGGER.critical(f"Could not fetch owner/bot IDs. Please check TW_CHANNEL and TW_BOT_NAME. Error: {e}")
+        logger.critical(f"Could not fetch owner/bot IDs. Please check credentials and names. Error: {e}")
         raise
+
 
 ### The section below is for standalone testing.
 
 async def _test_twitch_bot():
     """Main function to run the bot as a standalone application for testing."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     print("--- Running Twitch Bot Standalone Test ---")
-    # Use CRITICAL to avoid leaking tokens in logs during normal operation.
-    # Use INFO for debugging setup issues.
-    twitchio.utils.setup_logging(level=logging.INFO)
+    
+    from dotenv import load_dotenv
+    from general_utils import get_env_var
+    load_dotenv()
 
     try:
-        owner_id, bot_id = await update_owner_bot_ids()
+        # Load all configuration from environment for the test
+        client_id = get_env_var("TW_CLIENT_ID", str)
+        client_secret = get_env_var("TW_CLIENT_SECRET", str)
+        channel_name = get_env_var("TW_CHANNEL", str)
+        bot_name = get_env_var("TW_BOT_NAME", str)
         
-        # For testing, we create a dummy list to catch the messages.
-        test_message_list: List[UnifiedMessage] = []
+        # In a real app, these would be fetched once and stored persistently.
+        owner_id, bot_id = await fetch_twitch_user_ids(client_id, client_secret, channel_name, bot_name)
         
+        test_message_list: Deque[UnifiedMessage] = Deque(maxlen=100)
+        
+        print(bot_id, "OHSIII"*100)
         bot_instance = Bot(
             message_list=test_message_list,
-            client_id=CLIENT_ID,
-            client_secret=CLIENT_SECRET,
+            client_id=client_id,
+            client_secret=client_secret,
             bot_id=bot_id,
             owner_id=owner_id,
             prefix="!",
-            logger=None
         )
         
-        # Start the bot and a task to print received messages.
         async def print_messages():
             while True:
                 if test_message_list:
-                    msg = test_message_list.pop(0)
+                    msg = test_message_list.popleft()
                     print(f"  -> [TEST] Message received and captured: {msg}")
                 await asyncio.sleep(1)
 
         await asyncio.gather(bot_instance.start(), print_messages())
 
     except Exception as e:
-        LOGGER.error(f"An error occurred during standalone test: {e}")
+        logger.error(f"An error occurred during standalone test: {e}")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(_test_twitch_bot())
     except KeyboardInterrupt:
-        LOGGER.warning("Shutting down test due to KeyboardInterrupt.")
+        logger.warning("Shutting down test due to KeyboardInterrupt.")

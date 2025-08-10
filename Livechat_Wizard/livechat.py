@@ -4,97 +4,97 @@ import logging
 import random
 from datetime import datetime, timezone
 from collections import deque
-
+from typing import List, Optional, Tuple
 from curl_cffi.requests import AsyncSession
 
 # Import our refactored clients and data model
 from data_models import UnifiedMessage
 from general_utils import get_env_var
 from youtube import YTLive, YouTubeApiError
-from twitch import Bot as TwitchBot, update_owner_bot_ids, CLIENT_ID, CLIENT_SECRET, BOT_ID, OWNER_ID
-from kick import KickClient, KickApiError
+from twitch import Bot as TwitchBot, fetch_twitch_user_ids#update_owner_bot_ids, CLIENT_ID, CLIENT_SECRET, BOT_ID, OWNER_ID
+from kick import KickClient
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [%(name)s] %(message)s')
+
+logger = logging.getLogger(__name__)
 
 class LiveChatController:
     """
     An asyncio-based controller to manage and fetch messages from multiple live chat platforms.
     """
-    def __init__(self, fetch_youtube=False, fetch_twitch=False, fetch_kick=False):
+    def __init__(self, config: dict):
         self.logger = logging.getLogger(self.__class__.__name__)
-        
-        self._fetch_youtube = fetch_youtube
-        self._fetch_twitch = fetch_twitch
-        self._fetch_kick = fetch_kick
+        self.config = config
+
+        # Unpack configuration
+        self.youtube_config = self.config.get('youtube', {})
+        self.twitch_config = self.config.get('twitch', {})
+        self.kick_config = self.config.get('kick', {})
+
+        self._fetch_youtube = self.youtube_config.get('enabled', False)
+        self._fetch_twitch = self.twitch_config.get('enabled', False)
+        self._fetch_kick = self.kick_config.get('enabled', False)
 
         # Central pool for randomly selecting a message
-        self._all_messages = []
-        # Dedicated dequeue for the Twitch bot to push messages to
-        twitch_max_messages = get_env_var("TWITCH_MAX_MESSAGES", var_type=int)
-        self.twitch_messages: deque[UnifiedMessage] = deque(maxlen=twitch_max_messages)
+        self._all_messages: List[UnifiedMessage] = []
+        # Dedicated deque for the Twitch bot to push messages to
+        twitch_max_len = self.twitch_config.get('max_messages', 100)
+        self.twitch_messages: deque[UnifiedMessage] = deque(maxlen=twitch_max_len)
+        
+        # State management for polling clients
+        self.yt_next_page_token: Optional[str] | None = get_env_var("LAST_NEXT_PAGE_TOKEN", var_type=str)
+        if self._fetch_kick:
+            self.kick_last_timestamp = datetime.now(timezone.utc)
 
         # Asynchronous clients
-        self.http_session: AsyncSession | None = None
-        self.youtube: YTLive | None = None
-        self.kick: KickClient | None = None
-        self.twitch_bot: TwitchBot | None = None
-        self.twitch_task: asyncio.Task | None = None
+        self.http_session: Optional[AsyncSession] = None
+        self.youtube: Optional[YTLive] = None
+        self.kick: Optional[KickClient] = None
+        self.twitch_bot: Optional[TwitchBot] = None
+        self.twitch_task: Optional[asyncio.Task] = None
 
-        # State management for polling clients
-        self.yt_next_page_token: str | None = get_env_var("LAST_NEXT_PAGE_TOKEN", var_type=str)
-        self.kick_last_timestamp = datetime.now(timezone.utc)
-
-        self.logger.info(f"Controller initialized with settings: YouTube={fetch_youtube}, Twitch={fetch_twitch}, Kick={fetch_kick}")
-
-    @classmethod
-    def create(cls):
-        """Factory method to create a controller based on environment variables."""
-        fetch_youtube = get_env_var("YT_FETCH", var_type=bool)
-        fetch_twitch = get_env_var("TW_FETCH", var_type=bool)
-        fetch_kick = get_env_var("KI_FETCH", var_type=bool)
-
-        if not any([fetch_youtube, fetch_twitch, fetch_kick]):
-            logging.warning("No fetch variables are set. LiveChatController will not fetch from any platform.")
-            return None
-
-        return cls(fetch_youtube=fetch_youtube, fetch_twitch=fetch_twitch, fetch_kick=fetch_kick)
+        self.logger.info(f"Controller initialized with settings: YouTube={self._fetch_youtube}, Twitch={self._fetch_twitch}, Kick={self._fetch_kick}")
 
     async def setup_clients(self):
         """Initializes and prepares all enabled clients for operation."""
         self.logger.info("Setting up clients...")
-        self.http_session = AsyncSession()
 
         if self._fetch_youtube:
             try:
-                self.youtube = YTLive()
+                self.youtube = YTLive(
+                    channel_id=self.youtube_config['channel_id'],
+                    client_secret_file=self.youtube_config['client_secret_file']
+                )
                 await self.youtube.setup()
             except (YouTubeApiError, ValueError, FileNotFoundError) as e:
                 self.logger.error(f"Failed to setup YouTube client: {e}")
                 self.youtube = None # Disable on failure
 
         if self._fetch_kick:
-            kick_channel = get_env_var("KI_CHANNEL")
+            self.http_session = AsyncSession()
+            kick_channel = self.kick_config.get('channel_name')
             if kick_channel and self.http_session:
                 self.kick = KickClient(username=kick_channel, session=self.http_session)
             else:
-                self.logger.error("KI_CHANNEL not set, cannot initialize Kick client.")
+                self.logger.error("Kick channel_name not in config, cannot initialize client.")
                 self.kick = None
 
         if self._fetch_twitch:
             try:
-                owner_id, bot_id = await update_owner_bot_ids()
+                # Ensure all required Twitch config keys are present
+                required_keys = ['client_id', 'client_secret', 'bot_id', 'owner_id']
+                if not all(key in self.twitch_config for key in required_keys):
+                    raise ValueError(f"Missing one or more required Twitch config keys: {required_keys}")
+
                 self.twitch_bot = TwitchBot(
                     message_list=self.twitch_messages,
-                    client_id=CLIENT_ID,
-                    client_secret=CLIENT_SECRET,
-                    bot_id=bot_id,
-                    owner_id=owner_id,
-                    prefix="!",
-                    logger=None
+                    bot_id=self.twitch_config['bot_id'],
+                    client_id=self.twitch_config['client_id'],
+                    client_secret=self.twitch_config['client_secret'],
+                    owner_id=self.twitch_config['owner_id'],
+                    prefix=self.twitch_config['prefix'] or '!'
                 )
-            except Exception as e:
-                self.logger.error(f"Failed to setup Twitch bot: {e}")
+            except (Exception, ValueError) as e:
+                self.logger.error(f"Failed to setup Twitch bot: {e}. Disabling.")
                 self.twitch_bot = None
 
     async def start_services(self):
@@ -183,31 +183,80 @@ class LiveChatController:
             return message, self._all_messages
         
         self.logger.info("No new messages found in this fetch cycle.")
-        return None
+        return None, None
 
 ### The section below demonstrates how to use the controller.
 async def main():
-    """Main execution function."""
+    """Main execution function demonstrating controller usage."""
+    # The parent application is responsible for setting up logging.
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [%(name)s] %(message)s')
+    
     from dotenv import load_dotenv
-    import time
+    from general_utils import get_env_var
     load_dotenv()
 
     print("--- Live Chat Controller ---")
-    controller = LiveChatController.create()
-    if not controller:
-        print("Controller could not be created. Check your .env configuration. Exiting.")
+    
+    # 1. Build the configuration dictionary from a source like .env files.
+    # This is the responsibility of the application's entry point.
+    config = {
+        "youtube": {
+            "enabled": get_env_var("YT_FETCH", bool, False),
+            "channel_id": get_env_var("YT_CHANNEL_ID", str),
+            "client_secret_file": get_env_var("YT_OAUTH2_JSON", str),
+            "initial_page_token": get_env_var("LAST_NEXT_PAGE_TOKEN", str)
+        },
+        "twitch": {
+            "enabled": get_env_var("TW_FETCH", bool, False),
+            "channel_name": get_env_var("TW_CHANNEL", str),
+            "bot_name": get_env_var("TW_BOT_NAME", str),
+            "client_id": get_env_var("TW_CLIENT_ID", str),
+            "client_secret": get_env_var("TW_CLIENT_SECRET", str),
+            "bot_id": get_env_var("TW_BOT_ID", str), # May be empty on first run
+            "owner_id": get_env_var("TW_OWNER_ID", str), # May be empty on first run
+            "prefix": "!",
+            "max_messages": get_env_var("TWITCH_MAX_MESSAGES", int, 100)
+        },
+        "kick": {
+            "enabled": get_env_var("KI_FETCH", bool, False),
+            "channel_name": get_env_var("KI_CHANNEL", str)
+        }
+    }
+
+    # 2. Handle any first-time setup, like fetching Twitch IDs.
+    if config["twitch"]["enabled"] and (not config["twitch"]["bot_id"] or not config["twitch"]["owner_id"]):
+        print("Twitch Bot ID or Owner ID not found. Attempting to fetch them...")
+        try:
+            owner_id, bot_id = await fetch_twitch_user_ids(
+                client_id=config["twitch"]["client_id"],
+                client_secret=config["twitch"]["client_secret"],
+                channel_name=config["twitch"]["channel_name"],
+                bot_name=config["twitch"]["bot_name"]
+            )
+            config["twitch"]["owner_id"] = owner_id
+            config["twitch"]["bot_id"] = bot_id
+            print(f"Successfully fetched IDs. Please add TW_OWNER_ID={owner_id} and TW_BOT_ID={bot_id} to your .env file for future runs.")
+        except Exception as e:
+            print(f"FATAL: Could not fetch Twitch IDs. Twitch support will be disabled. Error: {e}")
+            config["twitch"]["enabled"] = False
+
+    # 3. Instantiate and run the controller.
+    if not any([c.get('enabled') for c in config.values()]):
+        print("All fetch services are disabled in the configuration. Exiting.")
         return
 
+    controller = LiveChatController(config)
     await controller.setup_clients()
     await controller.start_services()
 
     try:
-        # Example loop to fetch a message every 15 seconds
-        for i in range(10): # Run 10 times for this example
+        for i in range(10):
             print(f"\n--- Fetch Cycle {i+1} ---")
-            message = await controller.fetch_chat_message()
+            message, remaining = await controller.fetch_chat_message()
             if message:
                 print(f"--> Winner: [{message.platform}] {message.username}: {message.content}")
+                if remaining:
+                    print(f"    ({len(remaining)} other messages were also received in this batch)")
             else:
                 print("--> No message was selected.")
             
