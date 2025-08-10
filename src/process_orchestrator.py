@@ -115,7 +115,7 @@ class ProcessOrchestrator:
 
     def start_workers(self):
         self.logger.info("Starting worker processes...")
-        worker_startup_order = ["gpu_manager", "stt_client", "livechat", "context_llm", "llm", "tts"]
+        worker_startup_order = ["gpu_manager", "llm", "tts", "stt_client", "livechat", "context_llm"]
         for name in worker_startup_order:
             if name in self.worker_definitions:
                 target, args = self.worker_definitions[name]

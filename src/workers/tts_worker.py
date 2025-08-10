@@ -17,8 +17,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
     tts_settings = config.get("tts_settings", {})
     tts_engine_name = tts_settings.get("tts_engine", "piper")
     TERMINATE_OUTPUT = config.get("TERMINATE_OUTPUT", "w1zt3r")
-    # Model loading (low priority)
-    gpu_request_queue.put({"type": "acquire", "priority": 5, "worker_id":  worker_id})
+    gpu_request_queue.put({"type": "acquire", "priority": 1, "worker_id":  worker_id})
     worker_event.wait()
     try:
         if tts_engine_name == "piper":
