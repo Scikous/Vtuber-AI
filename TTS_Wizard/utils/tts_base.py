@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 import logging
 
 class TTSBase(ABC):
@@ -10,12 +10,12 @@ class TTSBase(ABC):
     different underlying engines can be used interchangeably by the application.
     """
     @abstractmethod
-    def __init__(self, logger: Optional[logging.Logger] = None, **kwargs: Any):
+    def __init__(self, **kwargs: Any):
         """
         Initializes the TTS system.
         Subclasses will handle specific engine configurations and setup.
         """
-        self.logger = logger or logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
         print("Initializing BaseTTS.")
         pass
 

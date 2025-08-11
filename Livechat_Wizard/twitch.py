@@ -12,18 +12,6 @@ from twitchio.ext import commands
 
 # Import our standardized data model
 from data_models import UnifiedMessage
-# from dotenv import load_dotenv, set_key, find_dotenv
-# from general_utils import get_env_var
-
-# # Load environment variables
-# load_dotenv()
-# CHANNEL = get_env_var("TW_CHANNEL", var_type=str)
-# BOT_NAME = get_env_var("TW_BOT_NAME", var_type=str)
-# CLIENT_ID = get_env_var("TW_CLIENT_ID", var_type=str)
-# CLIENT_SECRET = get_env_var("TW_CLIENT_SECRET", var_type=str)
-# # These may be empty on first run, we will fetch them.
-# self.BOT_ID = get_env_var("TW_self.BOT_ID", var_type=str)
-# OWNER_ID = get_env_var("TW_OWNER_ID", var_type=str)
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +30,6 @@ class Bot(commands.Bot):
         super().__init__(**kwargs)
         # This list is shared with the LiveChatController
         self.message_list = message_list
-        # self.BOT_ID = bot_id
 
     async def setup_hook(self) -> None:
         """The setup hook for the bot, responsible for subscribing to events."""
@@ -103,11 +90,9 @@ class GeneralCommands(commands.Component):
     async def event_message(self, payload: twitchio.ChatMessage) -> None:
         """
         This event is triggered when a new chat message is received via EventSub.
-        This is the core of our message fetching for Twitch.
+        This is the core of the message fetching for Twitch.
         """
-        # The actual message data is in the 'data' attribute of the payload
-        
-        # Transform the message into our UnifiedMessage format
+        # Transform the message into UnifiedMessage format
         unified_msg = UnifiedMessage(
             platform='Twitch',
             username=payload.chatter.name,
@@ -152,8 +137,8 @@ async def fetch_twitch_user_ids(client_id: str, client_secret: str, channel_name
 
 async def _test_twitch_bot():
     """Main function to run the bot as a standalone application for testing."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    print("--- Running Twitch Bot Standalone Test ---")
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - [%(filename)s - %(funcName)s] %(message)s")
+    logger.info("--- Running Twitch Bot Standalone Test ---")
     
     from dotenv import load_dotenv
     from general_utils import get_env_var
@@ -171,7 +156,6 @@ async def _test_twitch_bot():
         
         test_message_list: Deque[UnifiedMessage] = Deque(maxlen=100)
         
-        print(bot_id, "OHSIII"*100)
         bot_instance = Bot(
             message_list=test_message_list,
             client_id=client_id,
@@ -185,7 +169,7 @@ async def _test_twitch_bot():
             while True:
                 if test_message_list:
                     msg = test_message_list.popleft()
-                    print(f"  -> [TEST] Message received and captured: {msg}")
+                    logger.info(f"  -> [TEST] Message received and captured: {msg}")
                 await asyncio.sleep(1)
 
         await asyncio.gather(bot_instance.start(), print_messages())

@@ -3,6 +3,8 @@ import time
 import logging
 from collections import deque
 
+internal_logger = logging.getLogger(__name__)
+
 # Attempt to import necessary libraries for the new STT solution
 try:
     from faster_whisper import WhisperModel
@@ -13,8 +15,8 @@ try:
     import webrtcvad
     
 except ImportError as e:
-    print(f"Error importing necessary libraries for STT: {e}")
-    print("Please ensure 'faster-whisper', 'sounddevice', 'numpy', 'webrtcvad-wheels' (or 'webrtcvad') are installed.")
+    internal_logger.error(f"Error importing necessary libraries for STT: {e}")
+    internal_logger.error("Please ensure 'faster-whisper', 'sounddevice', 'numpy', 'webrtcvad-wheels' (or 'webrtcvad') are installed.")
     # Fallback or raise error if critical components are missing
     WhisperModel = None # Placeholder to avoid immediate crash if script is imported but not run
 
@@ -164,13 +166,13 @@ class WhisperSTT(STTBase):
 
 def list_available_input_devices():
     """Lists available audio input devices usingmaking devices."""
-    print("Available audio input devices:")
+    internal_logger.info("Available audio input devices:")
     devices = sd.query_devices()
     input_devices = []
     for i, device in enumerate(devices):
         if device['max_input_channels'] > 0:
-            print(f"  Device ID {i}: {device['name']} (Sample Rate: {device['default_samplerate']})")
+            internal_logger.info(f"  Device ID {i}: {device['name']} (Sample Rate: {device['default_samplerate']})")
             input_devices.append({'id': i, 'name': device['name'], 'sample_rate': device['default_samplerate']})
     if not input_devices:
-        print("No input devices found. Ensure microphone is connected and drivers are installed.")
+        internal_logger.warning("No input devices found. Ensure microphone is connected and drivers are installed.")
     return input_devices

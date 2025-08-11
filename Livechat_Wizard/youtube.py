@@ -14,7 +14,6 @@ from googleapiclient.errors import HttpError
 from livechat_utils import retry_with_backoff
 # Set up logging
 logger = logging.getLogger(__name__)
-
 class YouTubeApiError(Exception):
     """Custom exception for YouTube API-related errors."""
     pass
@@ -57,10 +56,10 @@ class YTLive:
         
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                logging.info("Refreshing expired YouTube credentials.")
+                logger.info("Refreshing expired YouTube credentials.")
                 creds.refresh(Request())
             else:
-                logging.info("Fetching new YouTube credentials via OAuth flow.")
+                logger.info("Fetching new YouTube credentials via OAuth flow.")
                 if not os.path.exists(self.client_secret_file):
                     raise FileNotFoundError(f"YouTube client secret JSON not found at path: {self.client_secret_file}")
                 flow = InstalledAppFlow.from_client_secrets_file(self.client_secret_file, SCOPES)
@@ -69,7 +68,7 @@ class YTLive:
             with open('token.pickle', 'wb') as token:
                 pickle.dump(creds, token)
         
-        logging.info("YouTube credentials loaded successfully.")
+        logger.info("YouTube credentials loaded successfully.")
         return creds
 
     async def setup(self):
@@ -77,11 +76,11 @@ class YTLive:
         Asynchronously fetches the livestream and chat IDs.
         This should be called once after initialization.
         """
-        logging.info("Setting up YTLive client...")
+        logger.info("Setting up YTLive client...")
         self.livestream_id = await self._get_livestream_id()
         self.live_chat_id = await self._get_live_chat_id()
         if self.live_chat_id:
-            logging.info(f"Successfully setup YouTube client. Live Chat ID: {self.live_chat_id}")
+            logger.info(f"Successfully setup YouTube client. Live Chat ID: {self.live_chat_id}")
 
     @retry_with_backoff(max_retries=5, initial_delay=5, backoff_factor=2, exceptions=(YouTubeApiError,))
     async def _get_livestream_id(self) -> str:
@@ -101,7 +100,7 @@ class YTLive:
                 raise YouTubeApiError("No active livestreams found for the channel.")
             return response['items'][0]['id']['videoId']
         except HttpError as e:
-            logging.error(f"HTTP error while fetching livestream ID: {e}")
+            logger.error(f"HTTP error while fetching livestream ID: {e}")
             raise YouTubeApiError(f"HTTP error fetching livestream ID: {e.status_code}") from e
 
     async def _get_live_chat_id(self) -> Optional[str]:
@@ -118,11 +117,11 @@ class YTLive:
         try:
             response = await asyncio.to_thread(_execute_request)
             if not response.get('items') or 'liveStreamingDetails' not in response['items'][0]:
-                logging.warning("Livestream found, but it has no live chat details. It may have ended.")
+                logger.warning("Livestream found, but it has no live chat details. It may have ended.")
                 return None
             return response['items'][0]['liveStreamingDetails']['activeLiveChatId']
         except HttpError as e:
-            logging.error(f"HTTP error while fetching live chat ID: {e}")
+            logger.error(f"HTTP error while fetching live chat ID: {e}")
             raise YouTubeApiError(f"HTTP error fetching live chat ID: {e.status_code}") from e
 
     async def get_live_chat_messages(self, next_page_token: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[str]]:
@@ -136,7 +135,7 @@ class YTLive:
             A tuple containing a list of raw message items and the next page token.
         """
         if not self.live_chat_id:
-            logging.warning("No live chat ID available. Cannot fetch messages.")
+            logger.warning("No live chat ID available. Cannot fetch messages.")
             return [], None
 
         def _execute_request():
@@ -154,17 +153,17 @@ class YTLive:
         except HttpError as e:
             # A 403 error often means the chat has ended. This is not a critical failure.
             if e.status_code == 403:
-                logging.warning(f"Could not fetch YouTube chat messages (HTTP 403). The livestream or chat may have ended.")
+                logger.warning(f"Could not fetch YouTube chat messages (HTTP 403). The livestream or chat may have ended.")
                 return [], None
-            logging.error(f"HTTP error while fetching live chat messages: {e}")
+            logger.error(f"HTTP error while fetching live chat messages: {e}")
             return [], None # Return empty list to be resilient
 
 ### The section below is for standalone testing.
 
 async def _test_youtube_client():
     """Demonstrates the new on-demand, async usage of the YTLive client."""
-    print("--- Running YTLive Standalone Test ---")
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - [%(filename)s - %(funcName)s] %(message)s")
+    logger.info("--- Running YTLive Standalone Test ---")
 
     from dotenv import load_dotenv
     load_dotenv()
@@ -181,32 +180,32 @@ async def _test_youtube_client():
         await client.setup()
 
         if client.live_chat_id:
-            print(f"Successfully connected to live chat: {client.live_chat_id}")
+            logger.info(f"Successfully connected to live chat: {client.live_chat_id}")
             
             test_page_token = None 
             
-            print("\nFetching first page of messages...")
+            logger.info("\nFetching first page of messages...")
             messages, next_page_token = await client.get_live_chat_messages(test_page_token)
             
             if messages:
                 for msg in messages:
-                    print(f"  -> {msg['authorDetails']['displayName']}: {msg['snippet']['displayMessage']}")
-                print(f"\nSuccessfully fetched {len(messages)} messages.")
-                print(f"Next page token is: {next_page_token}")
+                    logger.info(f"  -> {msg['authorDetails']['displayName']}: {msg['snippet']['displayMessage']}")
+                logger.info(f"\nSuccessfully fetched {len(messages)} messages.")
+                logger.info(f"Next page token is: {next_page_token}")
             else:
-                print("No new messages found on this poll.")
+                logger.warning("No new messages found on this poll.")
         else:
-            print("Could not set up YouTube client. Check logs for errors.")
+            logger.info("Could not set up YouTube client. Check logs for errors.")
 
     except (ValueError, FileNotFoundError, YouTubeApiError) as e:
-        print(f"🚨 An error occurred during the test: {e}")
+        logger.error(f"🚨 An error occurred during the test: {e}")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(_test_youtube_client())
     except KeyboardInterrupt:
-        print("\nExiting test.")
+        logger.info("\nExiting test.")
 
 ### LEGACY -- Incase you don't have OAuth2 or don't want to set it up (not recommended)
 # from googleapiclient.discovery import build
@@ -251,7 +250,7 @@ if __name__ == "__main__":
 #         type="video",
 #         order="date",
 #     ).execute()
-#             print(response)
+#             logger.(response)
 #             if not response['items']:
 #                 raise ValueError("No active livestreams found!")
 
@@ -294,4 +293,4 @@ if __name__ == "__main__":
 #     yt_messages = []
 #     yt_live_controller = YTLive(yt_messages)
 #     yt_live_controller.get_live_chat_messages()
-#     print(len(yt_messages))
+#     logger.(len(yt_messages))

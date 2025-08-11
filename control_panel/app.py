@@ -16,6 +16,9 @@ from src.utils.env_utils import setup_project_root
 # This ensures we can import from the 'src' directory
 project_root = setup_project_root()
 app_logger.setup_logging()
+logger = app_logger.get_logger("AppManager")
+
+# --- Load Environment Variables ---
 dotenv_path = os.path.join(project_root, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 # --- Import Your Existing Modules ---
@@ -51,7 +54,7 @@ class AppManager:
         self.last_text_received_time = None # For detecting pauses between outputs
 
         self.initialized = True
-        print("AppManager Initialized.")
+        logger.info("AppManager Initialized.")
 
     def _load_config(self):
         """Loads configuration from the JSON file."""
@@ -68,10 +71,10 @@ class AppManager:
 
     def start_workers(self):
         if self.is_running():
-            print("Workers are already running.")
+            logger.info("Workers are already running.")
             return
 
-        print("Starting worker processes...")
+        logger.info("Starting worker processes...")
         # We create a new ProcessOrchestrator instance, passing it our control objects
         self.orchestrator = ProcessOrchestrator(
             llm_output_display_queue=self.llm_output_display_queue,
@@ -82,35 +85,35 @@ class AppManager:
         )
         self.orchestrator_thread = threading.Thread(target=self.orchestrator.run, daemon=True)
         self.orchestrator_thread.start()
-        print("Orchestrator thread started.")
+        logger.info("Orchestrator thread started.")
         return "Workers started."
 
     def stop_workers(self):
         if not self.is_running():
-            print("Workers are not running.")
+            logger.info("Workers are not running.")
             return "Workers already stopped."
         
-        print("Stopping worker processes...")
+        logger.info("Stopping worker processes...")
         self.orchestrator.shutdown_event.set()
         self.orchestrator_thread.join(timeout=20)
         
         if self.orchestrator_thread.is_alive():
-            print("Warning: Orchestrator thread did not terminate gracefully.")
+            logger.warning("Warning: Orchestrator thread did not terminate gracefully.")
         
         self.orchestrator = None
         self.orchestrator_thread = None
-        print("Workers stopped.")
+        logger.info("Workers stopped.")
         return "Workers stopped."
 
     def restart_workers(self, config_data):
-        print("Restarting workers...")
+        logger.info("Restarting workers...")
         self.stop_workers()
         # Give processes time to release resources
         time.sleep(2)
         # Save the new config before starting again
         self._save_config(config_data)
         self.start_workers()
-        print("Workers restarted with new configuration.")
+        logger.info("Workers restarted with new configuration.")
         return "Workers restarted."
 
     def terminate_current_job(self):
@@ -145,7 +148,7 @@ class AppManager:
 
     def clear_llm_output(self):
             """Clears the displayed LLM output text and resets the component state."""
-            print("Clearing LLM output display.")
+            logger.info("Clearing LLM output display.")
             self.full_text = ""
             self.last_text_received_time = None
             

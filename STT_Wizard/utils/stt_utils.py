@@ -3,9 +3,6 @@ from .config import load_config
 import numpy as np
 import math
 import logging
-
-import asyncio
-import threading
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import Callable, Awaitable, Any
@@ -19,7 +16,7 @@ class STTBase(ABC):
     the core transcription methods that subclasses must implement.
     """
 
-    def __init__(self, model_path: str = None, language: str = None, device: str = None, compute_type: str = None, logger: logging.Logger = None, **stt_settings):
+    def __init__(self, model_path: str = None, language: str = None, device: str = None, compute_type: str = None, **stt_settings):
         """
         Initializes the STT engine.
 
@@ -31,7 +28,7 @@ class STTBase(ABC):
             **stt_settings: Additional keyword arguments for the specific implementation. Namely STT settings
         """
         self.model_path = model_path
-        self.logger = logger or logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
         if device is None or compute_type is None:
             try:
                 import torch

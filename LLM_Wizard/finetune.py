@@ -10,6 +10,10 @@ from transformers import TrainingArguments
 from unsloth import FastLanguageModel, FastVisionModel, is_bf16_supported
 from unsloth.trainer import UnslothVisionDataCollator
 import argparse
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - [%(filename)s - %(funcName)s] %(message)s")
+logger = logging.getLogger(__name__)
 
 # ======================================================================================
 # 1️⃣ CONFIGURATION
@@ -33,13 +37,13 @@ SAVE_DIR = f"LLM_Wizard/qwen2.5-vl-finetune-merged-{FINETUNING_MODE}"
 
 # Load the dataset once
 dataset = load_dataset("parquet", data_files={"train": DATASET_PATH})
-print(f"✅ Successfully loaded dataset from {DATASET_PATH}")
+logger.info(f"✅ Successfully loaded dataset from {DATASET_PATH}")
 
 # ======================================================================================
 # 3️⃣ MODE-SPECIFIC SETUP: Model Loading and PEFT Configuration
 # ======================================================================================
 if FINETUNING_MODE == "vision":
-    print("🚀 Initializing VISION fine-tuning mode...")
+    logger.info("🚀 Initializing VISION fine-tuning mode...")
     # Load model and tokenizer using FastVisionModel
     model, tokenizer = FastVisionModel.from_pretrained(
         MODEL_ID,
@@ -95,7 +99,7 @@ if FINETUNING_MODE == "vision":
     }
     
 elif FINETUNING_MODE == "language":
-    print("🚀 Initializing LANGUAGE fine-tuning mode...")
+    logger.info("🚀 Initializing LANGUAGE fine-tuning mode...")
     # Load model and tokenizer using FastLanguageModel
     model, tokenizer = FastLanguageModel.from_pretrained(
         MODEL_ID,
@@ -170,11 +174,11 @@ trainer = SFTTrainer(
 # ======================================================================================
 # 5️⃣ TRAIN AND SAVE
 # ======================================================================================
-print(f"🏁 Starting training for {FINETUNING_MODE} mode...")
+logger.info(f"🏁 Starting training for {FINETUNING_MODE} mode...")
 trainer.train()
-print("✅ Training complete.")
+logger.info("✅ Training complete.")
 
 # Save the final merged model
-print(f"💾 Saving merged model to {SAVE_DIR}...")
+logger.info(f"💾 Saving merged model to {SAVE_DIR}...")
 model.save_pretrained_merged(SAVE_DIR, tokenizer, save_method="merged_16bit")
-print(f"✅ Model successfully saved to {SAVE_DIR}")
+logger.info(f"✅ Model successfully saved to {SAVE_DIR}")

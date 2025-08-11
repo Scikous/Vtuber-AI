@@ -6,6 +6,10 @@ import json # For model_utils placeholder
 from model_utils import load_character, prompt_wrapper
 import os
 from PIL import Image
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - [%(filename)s - %(funcName)s] %(message)s")
+logger = logging.getLogger(__name__)
 
 # --- Configuration & Setup ---
 # MODEL_PATH = "NousResearch/Meta-Llama-3-8B" # Using a more common model for example
@@ -21,7 +25,7 @@ except:
     # from huggingface_hub import snapshot_download
     # hf_model_path = snapshot_download(repo_id=MODEL_PATH)
     # TOKENIZER = AutoTokenizer.from_pretrained(hf_model_path)
-    print(f"Could not load tokenizer for {MODEL_PATH}. Ensure you are logged in or the model is available.")
+    logger.error(f"Could not load tokenizer for {MODEL_PATH}. Ensure you are logged in or the model is available.")
     sys.exit(1)
 
 # Define paths (consider making these configurable, e.g., via argparse)
@@ -53,17 +57,17 @@ def prepare_finetuning_input_parquet(csv_path: str, output_parquet_path: str):
 
         df_finetuning = df[required_cols]
         df_finetuning.to_parquet(output_parquet_path, engine="pyarrow")
-        print(f"Successfully saved raw fine-tuning data to {output_parquet_path}")
-        print(f"Columns in raw fine-tuning data: {df_finetuning.columns.tolist()}")
+        logger.info(f"Successfully saved raw fine-tuning data to {output_parquet_path}")
+        logger.info(f"Columns in raw fine-tuning data: {df_finetuning.columns.tolist()}")
         if not df_finetuning.empty:
-            print("First row of raw fine-tuning data:")
-            print(df_finetuning.head(1))
+            logger.info("First row of raw fine-tuning data:")
+            logger.info(df_finetuning.head(1))
     except FileNotFoundError:
-        print(f"Error: CSV file not found at {csv_path}")
+        logger.error(f"Error: CSV file not found at {csv_path}")
     except ValueError as ve:
-        print(f"Error: {ve}")
+        logger.error(f"Error: {ve}")
     except Exception as e:
-        print(f"An unexpected error occurred in prepare_finetuning_input_parquet: {e}")
+        logger.error(f"An unexpected error occurred in prepare_finetuning_input_parquet: {e}")
 
 
 def _build_language_messages(conversation_data: list, instructions: str):
@@ -172,18 +176,18 @@ def prepare_exllamav2_calibration_parquet(csv_path: str, output_parquet_path: st
 
         df_calibration = df[['character']].rename(columns={'character': 'text'})
         df_calibration.to_parquet(output_parquet_path, engine="pyarrow")
-        print(f"Successfully saved ExLlamaV2 calibration data to {output_parquet_path}")
+        logger.info(f"Successfully saved ExLlamaV2 calibration data to {output_parquet_path}")
         if not df_calibration.empty:
             # with pd.option_context('display.max_rows', None):
-            #     print(df_calibration)
-            print("First few rows of calibration data ('text' column):")
-            print(df_calibration.head())
+            #     logger.info(df_calibration)
+            logger.info("First few rows of calibration data ('text' column):")
+            logger.info(df_calibration.head())
     except FileNotFoundError:
-        print(f"Error: CSV file not found at {csv_path}")
+        logger.error(f"Error: CSV file not found at {csv_path}")
     except ValueError as ve:
-        print(f"Error: {ve}")
+        logger.error(f"Error: {ve}")
     except Exception as e:
-        print(f"An unexpected error occurred in prepare_exllamav2_calibration_parquet: {e}")
+        logger.error(f"An unexpected error occurred in prepare_exllamav2_calibration_parquet: {e}")
 
 def _group_conversations_by_id(dataset, max_turns: int = None):
     """
@@ -205,7 +209,7 @@ def _group_conversations_by_id(dataset, max_turns: int = None):
         # If the conversation is longer than max_turns, create sliding windows
         if max_turns and num_turns > max_turns:
             num_windows = num_turns - max_turns + 1
-            print(f"Conversation '{conv_id}' has {num_turns} turns. Generating {num_windows} sliding window examples of max size {max_turns}.")
+            logger.info(f"Conversation '{conv_id}' has {num_turns} turns. Generating {num_windows} sliding window examples of max size {max_turns}.")
             
             for i in range(num_windows):
                 window_df = group.iloc[i : i + max_turns]
@@ -291,16 +295,16 @@ def load_and_apply_chat_template(
             fn_kwargs={'instructions': instructions, 'tokenizer': tokenizer, 'is_vision_dataset': is_vision_dataset}
         )
         
-        print(f"Successfully applied chat template to {len(formatted_dataset)} conversations from {raw_finetuning_parquet_path}")
+        logger.info(f"Successfully applied chat template to {len(formatted_dataset)} conversations from {raw_finetuning_parquet_path}")
         return formatted_dataset
     except FileNotFoundError:
-        print(f"Error: Parquet file not found at {raw_finetuning_parquet_path}")
+        logger.error(f"Error: Parquet file not found at {raw_finetuning_parquet_path}")
         return None
     except ValueError as ve:
-        print(f"Error: {ve}")
+        logger.error(f"Error: {ve}")
         return None
     except Exception as e:
-        print(f"An unexpected error occurred in load_and_apply_chat_template: {e}")
+        logger.error(f"An unexpected error occurred in load_and_apply_chat_template: {e}")
         return None
 
 # --- Main Execution ---
@@ -312,7 +316,7 @@ def main():
     os.makedirs(os.path.dirname(CHARACTER_JSON_PATH), exist_ok=True)
 
     if not os.path.exists(CSV_PATH):
-        print(f"Creating dummy CSV at {CSV_PATH}")
+        logger.info(f"Creating dummy CSV at {CSV_PATH}")
         # Add more data to test the trimming logic
         dummy_data = {
             'user': [f"Turn {i}" for i in range(1, 18)] + ["Hi", "Hello again"],
@@ -323,7 +327,7 @@ def main():
         pd.DataFrame(dummy_data).to_csv(CSV_PATH, index=False)
 
     if not os.path.exists(CHARACTER_JSON_PATH):
-        print(f"Creating dummy character JSON at {CHARACTER_JSON_PATH}")
+        logger.info(f"Creating dummy character JSON at {CHARACTER_JSON_PATH}")
         dummy_char_info = {
             "instructions": "You are Capybara, a witty and helpful AI assistant specialized in South American wildlife. You are speaking to {user_name}.",
             "user_name": "Researcher",
@@ -342,9 +346,9 @@ def main():
     final_templated_parquet_path = BASE_PATH + "final_templated_finetuning_data.parquet"
 
 
-    print(f"Using tokenizer: {MODEL_PATH}")
-    print(f"BOS token: '{TOKENIZER.bos_token}', EOS token: '{TOKENIZER.eos_token}'")
-    print(f"System Instructions (loaded from {CHARACTER_JSON_PATH}):\n{INSTRUCTIONS}\n")
+    logger.info(f"Using tokenizer: {MODEL_PATH}")
+    logger.info(f"BOS token: '{TOKENIZER.bos_token}', EOS token: '{TOKENIZER.eos_token}'")
+    logger.info(f"System Instructions (loaded from {CHARACTER_JSON_PATH}):\n{INSTRUCTIONS}\n")
 
     # 1. Prepare the raw input Parquet for fine-tuning (user, character, context columns)
     prepare_finetuning_input_parquet(CSV_PATH, raw_finetuning_parquet_path)
@@ -353,10 +357,10 @@ def main():
     prepare_exllamav2_calibration_parquet(CSV_PATH, calibration_parquet_path)
 
     dataset_dict = load_dataset("parquet", data_files={"train": calibration_parquet_path})
-    print("WHEHEE"*10,'\n',dataset_dict["text"])
+    logger.info("WHEHEE"*10,'\n',dataset_dict["text"])
 
     # # 3. Load the raw fine-tuning data and apply the chat template
-    # print(f"\nApplying chat template with a max turn limit of: {MAX_TURNS}")
+    # logger.info(f"\nApplying chat template with a max turn limit of: {MAX_TURNS}")
     # templated_dataset = load_and_apply_chat_template(
     #     raw_finetuning_parquet_path,
     #     INSTRUCTIONS,
@@ -366,32 +370,32 @@ def main():
     # templated_dataset.to_parquet(final_templated_parquet_path)
 
     # if templated_dataset:
-    #     print(f"\n--- Example of templated data (from {raw_finetuning_parquet_path}) ---")
+    #     logger.info(f"\n--- Example of templated data (from {raw_finetuning_parquet_path}) ---")
     #     if len(templated_dataset) > 0:
-    #         # Find and print the long conversation to verify trimming
+    #         # Find and logger.info the long conversation to verify trimming
     #         for example in templated_dataset:
     #             if example['conversation_id'] == 'long_conv':
-    #                 print("\n--- Trimmed 'long_conv' example ---")
-    #                 print(example['text'])
+    #                 logger.info("\n--- Trimmed 'long_conv' example ---")
+    #                 logger.info(example['text'])
     #                 break
-    #         else: # If loop finishes without break, print the first one
-    #             print("\n--- First available example ---")
-    #             print(templated_dataset[28]['text'])
+    #         else: # If loop finishes without break, logger.info the first one
+    #             logger.info("\n--- First available example ---")
+    #             logger.info(templated_dataset[28]['text'])
 
     #         try:
     #             templated_dataset.to_parquet(final_templated_parquet_path)
-    #             print(f"\nSuccessfully saved final templated dataset to {final_templated_parquet_path}")
+    #             logger.info(f"\nSuccessfully saved final templated dataset to {final_templated_parquet_path}")
     #         except Exception as e:
-    #             print(f"Error saving final templated dataset: {e}")
+    #             logger.error(f"Error saving final templated dataset: {e}")
     #     else:
-    #         print("Templated dataset is empty.")
+    #         logger.warning("Templated dataset is empty.")
     # else:
-    #     print("Failed to generate templated dataset.")
+    #     logger.error("Failed to generate templated dataset.")
 
 if __name__ == "__main__":
     # Added a simple check for placeholder functions to allow standalone execution
     if 'model_utils' not in sys.modules:
-        print("Creating dummy model_utils functions to run script.")
+        logger.info("Creating dummy model_utils functions to run script.")
         def load_character(path):
             with open(path, 'r') as f:
                 data = json.load(f)

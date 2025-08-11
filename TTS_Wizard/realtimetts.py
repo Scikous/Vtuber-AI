@@ -16,7 +16,6 @@ class RealTimeTTS(TTSBase):
                 tts_engine: Any,
                 stream_options: Optional[dict]=None,
                 tts_playback_approved_event: Optional[Any]=None,
-                logger: Optional[logging.Logger] = None,
                 **kwargs: Any):
         """
         Initializes the RealtimeTTS system.
@@ -28,7 +27,7 @@ class RealTimeTTS(TTSBase):
             **kwargs: Supports additional arguments, such as events for synchronization.
                     - tts_playback_approved_event: An asyncio.Event to gate playback.
         """
-        super().__init__(logger, **kwargs)
+        super().__init__(**kwargs)
         self.engine = tts_engine
         stream_options = stream_options or {}
 
