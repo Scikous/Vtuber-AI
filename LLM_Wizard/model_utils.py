@@ -12,12 +12,13 @@ import aiohttp
 from PIL import Image
 from transformers import PreTrainedTokenizer
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 def apply_chat_template(
     instructions: str,
     prompt: str,
     tokenizer: PreTrainedTokenizer,
+    assistant_prompt: Optional[str] = None,
     conversation_history: Optional[List[str]] = None,
     tokenize: bool = True,
     add_generation_prompt: bool = True,
@@ -29,6 +30,7 @@ def apply_chat_template(
     Args:
         instructions: System instructions string
         prompt: Current user message string
+        assistant_prompt: Optional prompt for the assistant to use as the base for it's response to complete it
         tokenizer: Tokenizer to use
         conversation_history: List of previous messages in order [user_msg1, assistant_msg1, user_msg2, assistant_msg2, ...]
                             First message should be user, then alternating user/assistant
@@ -46,7 +48,12 @@ def apply_chat_template(
     
     # continue from last LLM generation or create brand new generation
     if continue_final_message:
-        messages.append({"role": "assistant", "content": prompt})
+        if assistant_prompt:
+            messages.append({"role": "user", "content": prompt})
+            messages.append({"role": "assistant", "content": assistant_prompt})
+        else:
+            logger.warning("No assistant prompt provided, using user prompt as assistant prompt")
+            messages.append({"role": "assistant", "content": prompt})
     else:
         messages.append({"role": "user", "content": prompt})
     
@@ -193,7 +200,7 @@ async def get_image(file: Optional[str] = None, url: Optional[str] = None) -> Im
             # Offload the blocking file I/O to a thread pool
             return await asyncio.to_thread(_load_from_disk)
         except Exception as e:
-            log.error(f"Failed to load image from file '{file}': {e}")
+            logger.error(f"Failed to load image from file '{file}': {e}")
             raise
 
     elif url:
@@ -205,5 +212,5 @@ async def get_image(file: Optional[str] = None, url: Optional[str] = None) -> Im
                     image_data = await response.read()
                     return Image.open(io.BytesIO(image_data))
         except aiohttp.ClientError as e:
-            log.error(f"Failed to download image from URL '{url}': {e}")
+            logger.error(f"Failed to download image from URL '{url}': {e}")
             raise

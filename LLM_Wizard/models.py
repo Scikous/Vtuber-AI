@@ -147,7 +147,7 @@ class VtuberExllamav2(VtuberLLMBase):
 
         return instance
 
-    async def _prepare_prompt_and_embeddings(self, prompt: str, conversation_history: Optional[List[str]], images: Optional[List[Dict]],
+    async def _prepare_prompt_and_embeddings(self, prompt: str, assistant_prompt: Optional[str], conversation_history: Optional[List[str]]=None, images: Optional[List[Dict]]=None,
                                             add_generation_prompt: bool = True, continue_final_message: bool = False):
         """Handles image embedding and chat template application."""
         image_embeddings = None
@@ -172,25 +172,26 @@ class VtuberExllamav2(VtuberLLMBase):
         formatted_prompt = apply_chat_template(
             instructions=self.instructions,
             prompt=full_prompt,
+            assistant_prompt=assistant_prompt,
             conversation_history=conversation_history,
             tokenizer=self.resources.tokenizer,
             tokenize=False,
             add_generation_prompt=add_generation_prompt,
             continue_final_message=continue_final_message,
         )
-        
         input_ids = self.resources.exll2tokenizer.encode(
             formatted_prompt, add_bos=True, encode_special_tokens=True, embeddings=image_embeddings
         )
         
         return input_ids, image_embeddings
 
-    async def dialogue_generator(self, prompt: str, conversation_history: Optional[List[str]] = None, images: Optional[List[Dict]] = None, max_tokens: int = 200, add_generation_prompt: bool = True, continue_final_message: bool = False):
+    async def dialogue_generator(self, prompt: str, assistant_prompt: Optional[str]=None, conversation_history: Optional[List[str]] = None, images: Optional[List[Dict]] = None, max_tokens: int = 200, add_generation_prompt: bool = True, continue_final_message: bool = False):
         """
         Generates character's response asynchronously.
         
         Args:
             prompt: Current user message string
+            assistant_prompt: Optional prompt for the assistant to use as the base for it's response to complete it
             conversation_history: List of previous messages in order [user_msg1, assistant_msg1, user_msg2, assistant_msg2, ...]
             images: List of image dictionaries for vision model
             max_tokens: Maximum number of tokens to generate
@@ -200,7 +201,7 @@ class VtuberExllamav2(VtuberLLMBase):
         from exllamav2.generator import ExLlamaV2DynamicJobAsync
 
         input_ids, image_embeddings = await self._prepare_prompt_and_embeddings(
-            prompt, conversation_history, images, add_generation_prompt, continue_final_message
+            prompt, assistant_prompt, conversation_history, images, add_generation_prompt, continue_final_message
         )
         
         self.current_async_job = ExLlamaV2DynamicJobAsync(
