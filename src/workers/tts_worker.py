@@ -25,7 +25,7 @@ async def tts_runner(shutdown_event, llm_to_tts_queue,
         else:
             tts_engine = coquitts_engine(use_deepspeed=tts_settings.get("use_deepspeed", True))
         voice_to_clone = tts_settings.get("voice_to_clone_file", None)#implement this dumbo
-        tts_model = RealTimeTTS(tts_engine, tts_playback_approved_event=user_has_stopped_speaking_event, logger=logger)
+        tts_model = RealTimeTTS(tts_engine, tts_playback_approved_event=user_has_stopped_speaking_event)
         logger.info("✅ TTS model loaded.")
     finally:
         gpu_request_queue.put({"type": "release", "worker_id": worker_id})
