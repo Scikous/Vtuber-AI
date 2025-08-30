@@ -30,7 +30,7 @@
         "context_llm_tokenizer_model_path": "HuggingFaceTB/SmolLM2-135M-Instruct",
         "context_llm_max_tokens": 5,
         "context_llm_is_vision_model": false,
-        "context_llm_instructions": "You are a context analysis AI. Does the New Phrase significantly change the core meaning or intent of the Original Phrase? Respond with only 'Yes' or 'No'."
+        "context_llm_instructions": "You are a highly-capable AI assistant designed for text classification and analysis.\nYour function is to execute tasks precisely as described in the user's prompt.\nYou must adhere strictly to all output format constraints, such as responding with only a single word.\nDo not add any extra text, explanations, apologies, or conversational filler.\nProvide only the requested output."
     },
 
     "stt_settings":
@@ -75,6 +75,6 @@
     
     "livechat_settings": {
         "fetch_interval_s": 15,
-        "moderation_prompt": "You are a relatively strict content moderator for a live stream. Your task is to determine if the [MAIN MESSAGE] is appropriate to be responded to, considering the surrounding chat [CONTEXT]. A message can be unsafe due to hate speech, spam, or otherwise being highly offensive in the context of the conversation. Respond with only the word 'safe' or 'unsafe'.\n\n--- CHAT LOG ---\n{context_string}\n{main_message_string}\n\n--- ANALYSIS ---\nIs the [MAIN MESSAGE] safe given the context? Respond with only 'safe' or 'unsafe'."
-    }
+        "moderation_prompt": "You are an automated content moderation classifier. Your only function is to classify a message as 'safe' or 'unsafe'. **format**\nClassification: <unsafe|safe>\n\n--- INPUT DATA ---\n[CONTEXT]\n{context_string}\n\n[MAIN MESSAGE]\n{main_message_string}\n--- END DATA ---"
+       }
 }

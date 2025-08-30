@@ -18,6 +18,10 @@ async def context_runner(shutdown_event, stt_stream_queue, llm_control_queue, li
 
     livechat_settings = config.get("livechat_settings", {})
     moderation_prompt = livechat_settings.get("moderation_prompt", "Is the following message appropriate? Answer with 'safe' or 'unsafe'. Message: {content}")
+    moderation_assistant_prompt = "Classification: "
+    
+    context_analysis_prompt_template = """Task: Determine if the [NEW PHRASE] significantly changes the core meaning or intent of the [ORIGINAL PHRASE].\nA significant change means a reasonable person would interpret the core request or statement differently.\nRespond with only 'Yes' or 'No'. **format**\nAnswer: <Yes|No>.\n\n--- INPUT DATA ---\n[ORIGINAL PHRASE]: "{initial_prompt}"\n[NEW PHRASE]: "{transcript}"\n--- END DATA ---"""
+    context_assistant_prompt = "Meaning Change Detected: "
     
     await asyncio.to_thread(gpu_ready_event.wait)
     logger.info("Context Worker: GPU worker ready, proceeding with model loading.")
@@ -45,6 +49,8 @@ async def context_runner(shutdown_event, stt_stream_queue, llm_control_queue, li
                     tts_playback_approved = False
                     logger.info("Context Worker: User speech detected, interrupting current job.")
 
+                #######
+                #fetch from livechat and validate appropriateness
                 if initial_prompt is None and not livechat_output_queue.empty():
                     try:
                         message_bundle = livechat_output_queue.get_nowait()
@@ -53,26 +59,30 @@ async def context_runner(shutdown_event, stt_stream_queue, llm_control_queue, li
                         user_has_stopped_speaking_event.set()
                         # Create a background task to process the message without blocking the main loop
                         asyncio.create_task(process_chat_message(
-                            message_bundle, context_model, moderation_prompt, llm_control_queue,
+                            message_bundle, context_model, moderation_prompt, moderation_assistant_prompt, llm_control_queue,
                             gpu_request_queue, worker_event, worker_id
                         ))
                     except mp.queues.Empty:
                         pass # Race condition, another process/thread got it. Safe to ignore.
 
+                #######
+                #approve playback regardless of livechat or user speech
                 if user_has_stopped_speaking_event.is_set() and not tts_playback_approved:
                     logger.info("Context Worker: User stopped speaking. Approving TTS playback.")
                     tts_playback_approved = True
                     try:
-                        if initial_prompt and initial_prompt is not None:
+                        if initial_prompt:
                             transcript = stt_stream_queue.get(timeout=0.8)
                             logger.info("Context Worker: Sending finalized transcript")
                             llm_control_queue.put({"action": "start", "prompt": transcript, "add_generation_prompt": False, "continue_final_message": True})
                     except mp.queues.Empty:
                         pass
                     initial_prompt = None
-
+                #######
+                #fetch from STT and validate context rigidness
                 if not stt_stream_queue.empty():
                     tts_playback_approved = False
+                    response_text = ""
                     transcript = stt_stream_queue.get_nowait()
                     logger.info(f"Context Worker: Received sentence: '{transcript}'")
                     if initial_prompt is None:
@@ -83,17 +93,18 @@ async def context_runner(shutdown_event, stt_stream_queue, llm_control_queue, li
                         except mp.queues.Full:
                             logger.warning("LLM control queue full, dropping message.")
                     else:
-                        prompt = f"""
-                        Original Phrase: "{initial_prompt}"
-                        New Phrase: "{transcript}"
-                        """
+                        prompt = context_analysis_prompt_template.format(
+                            initial_prompt=initial_prompt,
+                            transcript=transcript
+                        )
+
                         change_detected = False
                         try:
                             gpu_request_queue.put({"type": "acquire", "priority": 2, "worker_id":  worker_id})
                             worker_event.wait()
                             await async_check_gpu_memory(logger)
-                            async for result in await context_model.dialogue_generator(prompt, max_tokens=max_tokens):
-                                response_text = result.get("text", "").lower().strip()
+                            async for result in await context_model.dialogue_generator(prompt, assistant_prompt=context_assistant_prompt, max_tokens=max_tokens, add_generation_prompt=False, continue_final_message=True):
+                                response_text += result.get("text", "").lower().strip()
                                 if "yes" in response_text.lower():
                                     change_detected = True
                                     break
@@ -116,6 +127,7 @@ async def process_chat_message(
     payload: dict, # Expects {"winner": UnifiedMessage, "context": list[UnifiedMessage]}
     context_model: VtuberExllamav2,
     moderation_prompt_template: str,
+    assistant_prompt_template: str,
     llm_control_queue: mp.Queue,
     gpu_request_queue: mp.Queue,
     worker_event: mp.Event,
@@ -140,6 +152,7 @@ async def process_chat_message(
         context_string=context_string,
         main_message_string=main_message_string
     )
+    response_text = ""
 
     verdict = "unsafe" # Default to unsafe
     try:
@@ -150,14 +163,17 @@ async def process_chat_message(
         logger.debug("GPU acquired for chat moderation.")
         await async_check_gpu_memory(logger)
         
-        # 3. Run moderation check
-        async for result in await context_model.dialogue_generator(prompt, max_tokens=3):
-            response_text = result.get("text", "").lower().strip()
-            
-            if "safe" in response_text:
-                verdict = "safe"
-                break # We have our answer, no need to generate more
-    
+        # 3. Run moderation check for 3 times -- avoids false negatives/positives also small models will not follow the format
+        for _ in range (3):
+            async for result in await context_model.dialogue_generator(prompt, assistant_prompt=assistant_prompt_template, max_tokens=7, add_generation_prompt=False, continue_final_message=True):
+                response_text += result.get("text", "").lower().strip()
+                
+                # if "safe" in response_text:
+                #     verdict = "safe"
+                #     break # We have our answer, no need to generate more
+            if verdict == "safe":
+                break
+        logger.info(f"Chat message moderation verdict: {verdict}, {response_text}")
     except Exception as e:
         logger.error(f"Error during chat message moderation: {e}", exc_info=True)
     finally:
